@@ -18,8 +18,17 @@ Game -> bridge
     {"t": "scan"}     look for newly connected controllers now
     {"t": "reset"}    turn every effect off
 
+State messages also carry "ts" per controller: the bridge's clock (ms) when its newest button/trigger change
+arrived; "hello" carries "now" on the same clock. The game uses them to time a press by when it happened rather
+than by when its (busy, rendering) main thread got round to the message.
+
 Why the bridge also reads input: once a Bluetooth DualSense gets full output reports it switches to its extended
 input report, which browsers' Gamepad API can't parse, so the game reads buttons from here instead.
+
+Latency: pydualsense's report thread reads one input report and then writes one output report, in lockstep. Over
+Bluetooth a write takes longer than the controller's report interval, so input reports pile up in the HID buffer
+and every press reaches the game late (up to ~250 ms once the buffer is full). Pad reads on its own thread and
+writes from a second thread, through its own handle, and only when the output actually changed.
 """
 from __future__ import annotations
 
@@ -52,24 +61,31 @@ class Pad(pydualsense):
         self.path = info.path
         self.on_input = on_input
         self._key = None
+        self.input_ts = 0.0  # perf_counter() in ms when the newest button/trigger change arrived
+        self._out_wake = threading.Event()
+        self._writer = None
         super().__init__()
 
     def readInput(self, inReport) -> None:  # noqa: N802  (pydualsense's name)
         super().readInput(inReport)
-        # wake the WebSocket loop right away when a button or trigger changes (not on stick jitter)
+        # wake the WebSocket loop right away when a button or trigger changes, or a stick is pushed past
+        # half-way (sticks can be mapped as buttons); not on stick jitter
         s = self.state
+        half = lambda v: (v > 64) - (v < -64)  # noqa: E731
         key = (s.cross, s.circle, s.square, s.triangle, s.L1, s.R1, s.L2Btn, s.R2Btn, s.share, s.options, s.L3, s.R3,
                s.DpadUp, s.DpadDown, s.DpadLeft, s.DpadRight, s.ps, s.touchBtn, s.micBtn,
                getattr(s, "L4", 0), getattr(s, "R4", 0), getattr(s, "L5", 0), getattr(s, "R5", 0),
-               s.L2_value >> 3, s.R2_value >> 3)
+               s.L2_value >> 3, s.R2_value >> 3, half(s.LX), half(s.LY), half(s.RX), half(s.RY))
         if key != self._key:
             self._key = key
+            self.input_ts = time.perf_counter() * 1000
             if self.on_input:
                 self.on_input()
 
     # pydualsense.init() calls self.__find_device() -> name-mangled to this
     def _pydualsense__find_device(self):
-        return hidapi.Device(path=self._info.path), self._info.product_id == 0x0DF2
+        # non-blocking handle: every read passes its own timeout, so the report thread can always stop
+        return hidapi.Device(path=self._info.path, blocking=False), self._info.product_id == 0x0DF2
 
     def determineConnectionType(self) -> ConnectionType:
         """Like pydualsense's, but tolerant: a Bluetooth controller in 'simple' mode sends short reports until it
@@ -93,12 +109,52 @@ class Pad(pydualsense):
                     pass
         return ConnectionType.ERROR
 
-    def sendReport(self) -> None:  # noqa: N802  (pydualsense's name)
+    def sendReport(self) -> None:  # noqa: N802  (pydualsense's report thread runs this)
+        """Input thread: parse every report the moment it arrives. Output goes out from _write_loop."""
         try:
-            super().sendReport()
-        except Exception as e:  # noqa: BLE001  (never let the report thread die silently)
+            self._writer = hidapi.Device(path=self._info.path, blocking=False)
+        except Exception:  # noqa: BLE001  (no second handle allowed: share the reading one)
+            self._writer = self.device
+        threading.Thread(target=self._write_loop, daemon=True).start()
+        try:
+            while self.ds_thread:
+                report = self.device.read(self.input_report_length, timeout_ms=100)
+                if report:
+                    self.readInput(report)
+        except Exception as e:  # noqa: BLE001  (unplugged / out of range: never let the thread die silently)
             log.warning("report loop stopped: %s", e)
         self.connected = False
+        self._out_wake.set()
+
+    def _write_loop(self) -> None:
+        """Output thread: send the output report when it changed, plus a keep-alive every 2 s. Changes made
+        while a write is still in flight go out together in the next report."""
+        last, last_at = None, 0.0
+        while self.ds_thread and self.connected:
+            self._out_wake.wait(0.5)
+            self._out_wake.clear()
+            if not (self.ds_thread and self.connected):
+                break
+            report = bytes(self.prepareReport())
+            now = time.perf_counter()
+            if report == last and now - last_at < 2.0:
+                continue
+            try:
+                self._writer.write(report)
+            except Exception as e:  # noqa: BLE001
+                log.warning("output to controller failed: %s", e)
+                self.connected = False
+                break
+            last, last_at = report, now
+        if self._writer is not None and self._writer is not self.device:
+            try:
+                self._writer.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def kick(self) -> None:
+        """The output state changed: wake the writer."""
+        self._out_wake.set()
 
     # ---------------------------------------------------------------- output helpers
     def apply(self, msg: dict) -> None:
@@ -118,6 +174,7 @@ class Pad(pydualsense):
         if isinstance(motor, list) and len(motor) == 2:
             self.leftMotor = max(0, min(255, int(motor[0])))
             self.rightMotor = max(0, min(255, int(motor[1])))
+        self.kick()
 
     def reset(self) -> None:
         self.triggerL.mode = TriggerModes.Off
@@ -126,6 +183,7 @@ class Pad(pydualsense):
         self.triggerR.forces = [0] * 7
         self.leftMotor = self.rightMotor = 0
         self.light.playerNumber = PlayerID(0)
+        self.kick()
 
     # ---------------------------------------------------------------- input snapshot
     def snapshot(self) -> dict | None:
@@ -149,7 +207,8 @@ class Pad(pydualsense):
                 tp[k * 3] = 0 if st[o] & 0x80 else 1
                 tp[k * 3 + 1] = st[o + 1] | ((st[o + 2] & 0x0F) << 8)
                 tp[k * 3 + 2] = (st[o + 2] >> 4) | (st[o + 3] << 4)
-        return {"id": self.path_id, "b": bits, "a": [s.LX, s.LY, s.RX, s.RY], "tr": [s.L2_value, s.R2_value], "tp": tp}
+        return {"id": self.path_id, "b": bits, "a": [s.LX, s.LY, s.RX, s.RY], "tr": [s.L2_value, s.R2_value], "tp": tp,
+                "ts": round(self.input_ts, 2)}
 
     @property
     def path_id(self) -> str:
@@ -225,6 +284,7 @@ class Bridge:
                 continue
             pad.light.setBrightness(Brightness.high)
             pad.light.TouchpadColor = (255, 45, 122)
+            pad.kick()
             with self.lock:
                 self.pads[info.path] = pad
             d = pad.describe()
@@ -250,6 +310,7 @@ class Bridge:
                 try:
                     p.reset()
                     p.light.TouchpadColor = (0, 0, 64)
+                    p.kick()
                     time.sleep(0.05)
                     p.close()
                 except Exception:  # noqa: BLE001
@@ -258,7 +319,7 @@ class Bridge:
     # ---------------------------------------------------------------- websocket
     async def handler(self, ws) -> None:
         self.clients.add(ws)
-        await ws.send(json.dumps({"t": "hello", "version": 1, "devices": self.devices()}))
+        await ws.send(json.dumps({"t": "hello", "version": 2, "now": round(time.perf_counter() * 1000, 2), "devices": self.devices()}))
         try:
             async for raw in ws:
                 try:
@@ -308,7 +369,8 @@ class Bridge:
             now = time.time()
             if payload != last or now - last_sent > 0.25:
                 last, last_sent = payload, now
-                await self._send_all(payload)
+                # "now": send time on the bridge clock, so the game can map "ts" onto its own clock
+                await self._send_all(payload[:-1] + f',"now":{time.perf_counter() * 1000:.2f}}}')
             # battery / connection changes ride along with the device list every few seconds
             if int(now) % 5 == 0 and now - getattr(self, "_bat_at", 0) > 4.5:
                 self._bat_at = now

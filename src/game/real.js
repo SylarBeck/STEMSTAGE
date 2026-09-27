@@ -40,7 +40,7 @@ export class RealPlayer extends Player {
     } else {
       sharedInput ||= new Mic(this.s.engine.ctx);
       sharedInput.start(settings.instrumentInput || '', { raw: true, lowHz: this.inst === 'bass' ? 38 : 70 })
-        .catch((e) => { this.hud.callout('No instrument input — check Settings → Real instruments', '#ff3b3b'); console.warn(e); });
+        .catch((e) => { this.hud.callout(e?.name === 'NotAllowedError' ? 'Microphone blocked — see Settings → Real instruments → Test' : 'No instrument input — check Settings → Real instruments', '#ff3b3b'); console.warn(e); });
     }
   }
 

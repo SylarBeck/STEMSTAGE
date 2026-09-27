@@ -88,7 +88,8 @@ export class DualSenseDevice {
   get live() { return this.connected && performance.now() - this.lastReport < 1500; }
   get label() { return `${this.edge ? 'DualSense Edge' : 'DualSense'} · ${this.bt ? 'Bluetooth' : 'USB'}`; }
 
-  applyState(s, t) {
+  /** t: when the newest button/trigger change happened (on performance.now()'s clock); now: arrival. */
+  applyState(s, t, now = t) {
     const B = this.pad.buttons;
     for (let i = 0; i < HAT_BUTTONS; i++) {
       const on = (s.b >>> i) & 1;
@@ -107,7 +108,7 @@ export class DualSenseDevice {
       }
     }
     this.pad.timestamp = t;
-    this.lastReport = t;
+    this.lastReport = now;
     this.reports++;
   }
 
@@ -210,7 +211,7 @@ export class DualSenseManager {
     let ws;
     try { ws = new WebSocket(this.url); } catch { this._scheduleRetry(); return; }
     this.ws = ws;
-    ws.onopen = () => { this.online = true; this.everOnline = true; this.tries = 0; this.emit(); };
+    ws.onopen = () => { this.online = true; this.everOnline = true; this.tries = 0; this.clockOff = this._winMin = null; this.emit(); };
     ws.onmessage = (e) => this._message(e);
     ws.onclose = () => {
       if (this.ws !== ws) return;
@@ -242,10 +243,27 @@ export class DualSenseManager {
     if (m.t === 'hello' || m.t === 'devices') { this._devices(m.devices || []); return; }
     if (m.t === 's') {
       const now = performance.now();
-      for (const s of m.d) this.devices.find((d) => d.id === s.id)?.applyState(s, now);
+      if (m.now != null) this._clock(m.now, now);
+      for (const s of m.d) {
+        // time the change by when the bridge read it, not by when this (busy, rendering) thread got the message
+        const t = s.ts > 0 && this.clockOff != null ? Math.max(now - 100, Math.min(now, s.ts + this.clockOff)) : now;
+        this.devices.find((d) => d.id === s.id)?.applyState(s, t, now);
+      }
       // heartbeat keeps idle controllers "live"
       for (const d of this.devices) if (d.present && now - d.lastReport > 200) d.lastReport = now;
+      this.onState?.();
     }
+  }
+
+  /**
+   * Bridge clock → performance.now(). The quickest delivery seen is the one that waited least in the main
+   * thread's queue, so the smallest (arrival − send) is the clock offset; re-measured every few seconds.
+   */
+  _clock(sent, now) {
+    const off = now - sent;
+    if (this.clockOff == null || off < this.clockOff) this.clockOff = off;
+    if (this._winMin == null || off < this._winMin) this._winMin = off;
+    if (now - (this._winAt || 0) > 4000) { this.clockOff = this._winMin; this._winMin = null; this._winAt = now; }
   }
 
   _devices(list) {

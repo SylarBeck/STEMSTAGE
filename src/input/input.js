@@ -67,6 +67,7 @@ export class Input {
     window.addEventListener('keyup', (e) => this._key(e, false));
     window.addEventListener('blur', () => { this.keysDown.clear(); this.releaseAll(); });
     setInterval(() => this.poll(), 4);
+    dualsense.onState = () => this.poll(); // bridged DualSense: react the moment its state arrives
     this._autoMidi();
   }
 

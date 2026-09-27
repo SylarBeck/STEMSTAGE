@@ -53,9 +53,17 @@ export class Mic {
   async start(deviceId = '', { raw = false, lowHz = 70 } = {}) {
     if (this.stream) return;
     this.lowHz = lowHz;
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: !raw, noiseSuppression: false, autoGainControl: false },
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Audio input is not available here (the page needs http://127.0.0.1 or https)');
+    const open = (id) => navigator.mediaDevices.getUserMedia({
+      audio: { deviceId: id ? { exact: id } : undefined, echoCancellation: !raw, noiseSuppression: false, autoGainControl: false },
     });
+    try {
+      this.stream = await open(deviceId);
+    } catch (e) {
+      // the chosen input was unplugged or renamed: fall back to the system default
+      if (!deviceId || !['OverconstrainedError', 'NotFoundError'].includes(e?.name)) throw Mic.explain(e);
+      try { this.stream = await open(''); } catch (e2) { throw Mic.explain(e2); }
+    }
     this.source = this.ctx.createMediaStreamSource(this.stream);
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = lowHz < 60 ? 4096 : 2048; // YIN needs two periods: 4096 reaches a bass's low E (41 Hz)
@@ -88,6 +96,19 @@ export class Mic {
     else this.smooth = midi;
     this.midi = this.smooth;
     return { midi: this.midi, level: this.level, rms };
+  }
+
+  /** getUserMedia errors → what to do about them. */
+  static explain(e) {
+    const win = /Windows/i.test(navigator.userAgent);
+    const msg = {
+      NotAllowedError: win
+        ? 'Microphone access is blocked. In Windows: Settings → Privacy & security → Microphone → turn on "Microphone access" and "Let desktop apps access your microphone"'
+        : 'Microphone access is blocked. Allow it for STEMSTAGE in your system privacy settings (or the browser\'s site permissions)',
+      NotFoundError: 'No microphone or audio input found — plug one in and try again',
+      NotReadableError: 'The audio input is busy or was switched off — close other apps using it and try again',
+    }[e?.name];
+    return msg ? Object.assign(new Error(msg), { name: e.name, cause: e }) : e;
   }
 
   static async devices() {

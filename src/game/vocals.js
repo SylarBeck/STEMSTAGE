@@ -89,7 +89,7 @@ export class VocalPlayer {
     this.track = new VocalTrack(this);
     if (!this.replayer) {
       sharedMic ||= new Mic(this.s.engine.ctx);
-      try { await sharedMic.start(settings.micDevice || ''); } catch (e) { this.hud.callout('No microphone — check Settings → Singing', '#ff3b3b'); console.warn(e); }
+      try { await sharedMic.start(settings.micDevice || ''); } catch (e) { this.hud.callout(e?.name === 'NotAllowedError' ? 'Microphone blocked — see Settings → Singing → Test' : 'No microphone — check Settings → Singing', '#ff3b3b'); console.warn(e); }
     }
   }
 

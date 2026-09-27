@@ -269,10 +269,59 @@ export function createMeta() {
     return result;
   }
 
+  // ---------------------------------------------------------------- lyrics (LRCLIB: free, no key, time-synced)
+  const lyricsCache = new Map();
+  const lrclib = async (pathAndQuery) => {
+    const r = await fetch(`https://lrclib.net/api/${pathAndQuery}`, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error(`LRCLIB ${r.status}`);
+    return r.json();
+  };
+  const pickLyrics = (x) => x && ({
+    source: 'LRCLIB', id: x.id, title: x.trackName, artist: x.artistName, album: x.albumName || null, duration: x.duration || null,
+    instrumental: !!x.instrumental, synced: x.syncedLyrics || null, plain: x.plainLyrics || null,
+  });
+
+  /** The best lyrics for a song: exact match (artist + title + duration) first, then a search ranked like lookup(). */
+  async function lyrics(artist, title, album, duration) {
+    const key = `${norm(artist)}|${norm(title)}|${Math.round(duration || 0)}`;
+    if (lyricsCache.has(key)) return lyricsCache.get(key);
+    let best = null;
+    if (artist && duration) {
+      const qs = new URLSearchParams({ artist_name: artist, track_name: title, duration: String(Math.round(duration)) });
+      if (album) qs.set('album_name', album);
+      best = pickLyrics(await lrclib(`get?${qs}`).catch(() => null));
+    }
+    if (!best || (!best.synced && !best.plain && !best.instrumental)) {
+      const qs = new URLSearchParams({ track_name: title });
+      if (artist) qs.set('artist_name', artist);
+      let list = (await lrclib(`search?${qs}`)) || [];
+      if (!list.length && artist) list = (await lrclib(`search?${new URLSearchParams({ q: `${artist} ${title}` })}`)) || [];
+      const scored = list.filter((x) => x.syncedLyrics || x.plainLyrics).map((x) => {
+        let score = 0;
+        if (norm(x.trackName) === norm(title)) score += 1; else if (norm(x.trackName).includes(norm(title))) score += 0.5;
+        if (artist && norm(x.artistName) === norm(artist)) score += 1; else if (artist && norm(x.artistName).includes(norm(artist))) score += 0.6;
+        if (duration && x.duration) score -= Math.min(1.5, Math.abs(x.duration - duration) / 8);
+        if (x.syncedLyrics) score += 0.4; // timing makes the cross-check much more reliable
+        return { x, score };
+      }).sort((a, b) => b.score - a.score);
+      if (scored[0] && scored[0].score >= 0.8) best = pickLyrics(scored[0].x);
+    }
+    const result = { best: best && (best.synced || best.plain || best.instrumental) ? best : null };
+    lyricsCache.set(key, result);
+    return result;
+  }
+
   return async function handler(req, res) {
     try {
       if (!isLocal(req)) return send(res, 403, { error: 'local only' });
       const url = new URL(req.url, 'http://local');
+      if (url.pathname.replace(/\/$/, '') === '/lyrics') {
+        const title = (url.searchParams.get('title') || '').trim();
+        if (!title) return send(res, 400, { error: 'title required' });
+        const p = (k) => (url.searchParams.get(k) || '').trim();
+        return send(res, 200, await lyrics(p('artist'), title, p('album'), +p('duration') || 0));
+      }
       if (url.pathname.replace(/\/$/, '') === '/lookup') {
         const title = (url.searchParams.get('title') || '').trim();
         if (!title) return send(res, 400, { error: 'title required' });

@@ -3,10 +3,15 @@
 //! The game itself is the web app in `dist/`, served by a small Node server (`server/app.js`) that also
 //! runs the song library, yt-dlp, metadata and LAN rooms. On start the launcher:
 //!   1. starts that game server on 127.0.0.1:5173 (unless one is already running),
-//!   2. starts the Python services from %LOCALAPPDATA%\stemstage\venv if installed: the Demucs AI splitter
-//!      (:8765) and the DualSense controller bridge built on pydualsense (:8766),
+//!   2. starts the Python services from the STEMSTAGE venv if installed (%LOCALAPPDATA%\stemstage\venv on
+//!      Windows, ~/.local/share/stemstage/venv on Linux): the Demucs AI splitter (:8765) and the DualSense
+//!      controller bridge built on pydualsense (:8766),
 //!   3. shows the splash screen, which switches to the game as soon as the server answers.
-//! Everything it started is stopped again when the window closes. Logs: %LOCALAPPDATA%\stemstage\logs.
+//! Everything it started is stopped again when the window closes. Logs: <that folder>\stemstage\logs.
+//!
+//! The window is created here rather than from tauri.conf.json so the game page can use the microphone (singing,
+//! real guitar / bass) and MIDI without a permission prompt: WebView2 otherwise asks — or, fullscreen, silently
+//! denies — and WebKitGTK (Linux) has media capture switched off altogether.
 
 use serde::Serialize;
 use std::fs::{self, File};
@@ -15,7 +20,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{Manager, RunEvent};
+use tauri::webview::{PermissionKind, PermissionResponse};
+use tauri::{Manager, RunEvent, WebviewWindowBuilder};
 
 const GAME_PORT: u16 = 5173;
 const AI_PORT: u16 = 8765;
@@ -99,7 +105,8 @@ fn launch(app: &tauri::AppHandle) {
         .document_dir()
         .map(|p| p.join("STEMSTAGE"))
         .unwrap_or_else(|_| PathBuf::from("STEMSTAGE"));
-    let local = std::env::var("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|_| home.clone()).join("stemstage");
+    // %LOCALAPPDATA% on Windows, ~/.local/share on Linux
+    let local = app.path().local_data_dir().map(plain_path).unwrap_or_else(|_| home.clone()).join("stemstage");
     let logs = local.join("logs");
     let _ = fs::create_dir_all(&logs);
     let songs = home.join("songs");
@@ -130,13 +137,13 @@ fn launch(app: &tauri::AppHandle) {
     }
 
     // 2. Python services (AI splitter + DualSense bridge)
-    let py = local.join("venv").join("Scripts").join("python.exe");
+    let py = if cfg!(windows) { local.join("venv").join("Scripts").join("python.exe") } else { local.join("venv").join("bin").join("python") };
     let service = |name: &str, script: &str, port: u16| -> String {
         if listening(port) {
             return "running".into();
         }
         if !py.exists() {
-            return "not installed (run server\\setup-ai.ps1)".into();
+            return if cfg!(windows) { "not installed (run server\\setup-ai.ps1)" } else { "not installed (run server/setup-ai.sh)" }.into();
         }
         let mut cmd = Command::new(&py);
         cmd.arg(res.join("server").join(script)).current_dir(res.join("server"));
@@ -244,6 +251,40 @@ async fn install_update(app: tauri::AppHandle, feed: Option<String>) -> Result<(
     app.restart();
 }
 
+/// Pages the launcher trusts with the microphone: the bundled splash screen and the local game server.
+fn is_local_page(url: &tauri::Url) -> bool {
+    matches!(url.scheme(), "tauri" | "asset")
+        || matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "tauri.localhost" | "[::1]"))
+}
+
+/// The main window from tauri.conf.json (`create: false` there), plus microphone / MIDI access for the game.
+fn create_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let cfg = app.config().app.windows.iter().find(|w| w.label == "main").cloned().expect("main window config");
+    let window = WebviewWindowBuilder::from_config(app, &cfg)?
+        .on_permission_request(|webview, kind| {
+            let local = webview.url().map(|u| is_local_page(&u)).unwrap_or(false);
+            match kind {
+                PermissionKind::Microphone | PermissionKind::Midi if local => PermissionResponse::Allow,
+                _ => PermissionResponse::Default,
+            }
+        })
+        .build()?;
+    #[cfg(target_os = "linux")]
+    {
+        // WebKitGTK ships with getUserMedia (and WebRTC) disabled
+        let _ = window.with_webview(|wv| {
+            use webkit2gtk::{SettingsExt, WebViewExt};
+            if let Some(s) = wv.inner().settings() {
+                s.set_enable_media_stream(true);
+                s.set_media_playback_requires_user_gesture(false);
+            }
+        });
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = window;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -251,6 +292,7 @@ pub fn run() {
         .manage(Launcher::default())
         .invoke_handler(tauri::generate_handler![launcher_status, check_update, install_update])
         .setup(|app| {
+            create_main_window(app.handle())?;
             let handle = app.handle().clone();
             std::thread::spawn(move || launch(&handle));
             Ok(())
