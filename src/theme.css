@@ -352,7 +352,7 @@ input[type=range] { accent-color: var(--accent); }
 .slot-row { display: grid; grid-template-columns: 86px 1fr; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 9px; border: 1px solid transparent; cursor: pointer; }
 .slot-row label { font-family: var(--display); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); }
 .slot-row .sv { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-weight: 700; font-size: 16px; text-transform: capitalize; min-width: 0; }
-.slot-row .sv span { flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.slot-row .sv > span { flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .slot-row .arr { font-style: normal; opacity: 0.3; font-size: 18px; padding: 0 4px; }
 .slot-row.focus-row { border-color: var(--pc); background: color-mix(in srgb, var(--pc) 12%, transparent); }
 .slot-row.focus-row .arr { opacity: 1; color: var(--pc); }
@@ -861,7 +861,7 @@ html[data-hud="huge"] #hud .hud-left, html[data-hud="huge"] #hud .hud-right, htm
 .detail-meta .badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- Discord (linked profiles) ---------- */
-.avatar { position: relative; overflow: hidden; }
+.avatar { position: relative; overflow: hidden; flex: none !important; aspect-ratio: 1 / 1; } /* always a circle, whatever flex row it sits in */
 .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .dc-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; font-size: 14px; }
 .dc-line .fa-discord { color: #5865f2; font-size: 16px; }

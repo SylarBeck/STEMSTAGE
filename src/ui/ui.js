@@ -1413,7 +1413,7 @@ export class UI {
         <div class="slot-head"><span class="slot-num">P${i + 1}</span><b>${esc(prof?.name || `Player ${i + 1}`)}</b><button class="slot-x" data-remove="${i}" title="Leave">✕</button></div>
         <div class="slot-art ctl-art">${controllerPicture(det.kind)}</div>
         <div class="slot-dev">${esc(det.name)}${p.device === 'kb2' ? '<small class="slot-keys">U up · I down · O left · P right · [ ready</small>' : ''}</div>
-        ${row('prof', 'Profile', prof ? `${avatarHtml(prof, 16)} ${esc(prof.name)}` : 'Guest')}
+        ${row('prof', 'Profile', prof ? `${avatarHtml(prof, 22)} ${esc(prof.name)}` : 'Guest')}
         ${row('cfg', 'Controls', esc(dv?.profileKey ? bindings.shortLabel(dv.profileKey, padName) : 'Needs mapping'))}
         ${row('inst', 'Instrument', `${INST_ICON[p.instrument]} ${p.instrument}`)}
         ${row('diff', 'Difficulty', p.difficulty)}
