@@ -1,0 +1,20 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "game",
+  "description": "The game page served by the local game server: fullscreen toggle (F11 / Alt+Enter) and app updates",
+  "windows": [
+    "main"
+  ],
+  "remote": {
+    "urls": [
+      "http://127.0.0.1:5173/*",
+      "http://localhost:5173/*"
+    ]
+  },
+  "permissions": [
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen",
+    "allow-check-update",
+    "allow-install-update"
+  ]
+}

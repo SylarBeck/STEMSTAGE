@@ -1,0 +1,32 @@
+{
+  "name": "stemstage",
+  "version": "1.1.0",
+  "private": true,
+  "description": "The rhythm game that plays any song: AI (Demucs) splits it into stems and charts guitar, bass, drums, keys and vocals. Desktop app (Tauri), DualSense via pydualsense, Rock Band gear, MIDI.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "ai": "powershell -ExecutionPolicy Bypass -File server/start-ai.ps1",
+    "ai:setup": "powershell -ExecutionPolicy Bypass -File server/setup-ai.ps1",
+    "bridge": "powershell -ExecutionPolicy Bypass -File server/start-bridge.ps1",
+    "art": "node tools/render-controllers.mjs",
+    "brand": "node tools/render-brand.mjs",
+    "start": "node server/app.js",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "node tools/desktop-build.mjs",
+    "screenshots": "node tools/screenshots.mjs"
+  },
+  "dependencies": {
+    "music-metadata": "^11.16.1",
+    "three": "^0.186.1",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@tauri-apps/cli": "^2.12.0",
+    "puppeteer-core": "^25.12.0",
+    "vite": "^8.3.1"
+  }
+}

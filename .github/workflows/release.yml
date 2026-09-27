@@ -1,0 +1,43 @@
+# Push a tag like v1.1.0 → builds the Windows installer, signs the update files and publishes a GitHub
+# Release with latest.json. Installed copies of STEMSTAGE find the new version there and update themselves.
+#
+# One-time setup: repository → Settings → Secrets and variables → Actions → New secret
+#   TAURI_SIGNING_PRIVATE_KEY = the contents of %USERPROFILE%\.tauri\stemstage.key
+# (the matching public key is already in src-tauri/tauri.conf.json → plugins.updater.pubkey)
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+          STEMSTAGE_UPDATE_REPO: ${{ github.repository }}
+        with:
+          tagName: v__VERSION__
+          releaseName: STEMSTAGE v__VERSION__
+          releaseBody: See the changes below. Installed copies update themselves (Settings → Updates).
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true

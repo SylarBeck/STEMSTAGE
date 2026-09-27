@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>STEMSTAGE</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #05030a; color: #eef0ff; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; user-select: none; }
+    body { display: grid; place-items: center; background: radial-gradient(ellipse at 50% 30%, #2b0f52 0%, #12081f 45%, #05030a 80%); }
+    .wrap { display: flex; flex-direction: column; align-items: center; gap: 26px; animation: in .6s cubic-bezier(.2,.8,.2,1); }
+    .icon { width: 150px; height: 150px; filter: drop-shadow(0 18px 40px rgba(255,45,122,0.35)); }
+    .word { width: min(620px, 80vw); }
+    .eq { display: flex; gap: 6px; height: 34px; align-items: flex-end; }
+    .eq i { width: 8px; border-radius: 4px; background: linear-gradient(0deg, #ff2d7a, #29e0ff); animation: eq 1s ease-in-out infinite; }
+    .eq i:nth-child(2) { animation-delay: -.2s } .eq i:nth-child(3) { animation-delay: -.45s } .eq i:nth-child(4) { animation-delay: -.7s } .eq i:nth-child(5) { animation-delay: -.3s }
+    .status { width: 420px; font-size: 14px; color: #9c9abc; display: flex; flex-direction: column; gap: 6px; }
+    .row { display: flex; justify-content: space-between; gap: 12px; }
+    .row b { color: #eef0ff; font-weight: 600; }
+    .row .ok { color: #3dff8a; } .row .warn { color: #ffcf3a; } .row .err { color: #ff5c7a; }
+    .msg { max-width: 560px; text-align: center; color: #ffb3c0; font-size: 14px; line-height: 1.5; min-height: 20px; }
+    button { font: 600 13px 'Segoe UI', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #fff; background: linear-gradient(95deg, #ff2d7a, #ff6a3d); border: 0; border-radius: 10px; padding: 10px 18px; cursor: pointer; }
+    @keyframes eq { 0%, 100% { height: 20%; } 50% { height: 100%; } }
+    @keyframes in { from { opacity: 0; transform: translateY(10px); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <img class="icon" src="icon.png" alt="" />
+    <img class="word" src="wordmark.png" alt="STEMSTAGE" />
+    <div class="eq"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="status" id="status"></div>
+    <div class="msg" id="msg"></div>
+    <button id="retry" hidden>Retry</button>
+  </div>
+  <script>
+    const LABEL = { game: 'Game server', ai: 'AI stem splitter', bridge: 'DualSense controller bridge' };
+    const cls = (v) => (!v || v === 'starting' ? '' : v === 'running' ? 'ok' : v.startsWith('error') ? 'err' : 'warn');
+    const invoke = window.__TAURI__?.core?.invoke;
+    const t0 = Date.now();
+    let status = {};
+    async function tick() {
+      try { if (invoke) status = await invoke('launcher_status'); } catch { /* not ready yet */ }
+      document.getElementById('status').innerHTML = Object.entries(LABEL).map(([k, l]) =>
+        `<div class="row"><b>${l}</b><span class="${cls(status[k])}">${(status[k] || 'starting').replace(/^error: /, 'error')}</span></div>`).join('');
+      const url = status.url || 'http://127.0.0.1:5173/';
+      try {
+        const r = await fetch(`${url}api/health`, { cache: 'no-store' });
+        if (r.ok) { location.replace(url); return; }
+      } catch { /* still starting */ }
+      if (status.game?.startsWith('error') || Date.now() - t0 > 30000) {
+        document.getElementById('msg').textContent = status.game?.startsWith('error')
+          ? status.game.replace(/^error: /, '')
+          : `The game server did not start. Logs: ${status.logs || '%LOCALAPPDATA%\\stemstage\\logs'}`;
+        document.getElementById('retry').hidden = false;
+        return;
+      }
+      setTimeout(tick, 350);
+    }
+    document.getElementById('retry').onclick = () => location.reload();
+    tick();
+  </script>
+</body>
+</html>

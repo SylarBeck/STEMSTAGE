@@ -1,0 +1,5 @@
+demucs==4.0.1
+numpy
+pydualsense>=0.7.5
+faster-whisper>=1.0
+websockets>=13

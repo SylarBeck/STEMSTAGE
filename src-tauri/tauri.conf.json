@@ -1,0 +1,72 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "STEMSTAGE",
+  "version": "1.1.0",
+  "identifier": "com.stemstage.game",
+  "build": {
+    "frontendDist": "../desktop/splash",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "STEMSTAGE",
+        "width": 1600,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 640,
+        "center": true,
+        "maximized": true,
+        "fullscreen": true,
+        "backgroundColor": "#05030a",
+        "dragDropEnabled": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "STEMSTAGE",
+    "category": "Game",
+    "shortDescription": "The rhythm game that plays any song",
+    "longDescription": "STEMSTAGE splits any song into instrument stems with AI (Demucs) and charts guitar, bass, drums, keys and vocals. DualSense adaptive triggers and haptics, Rock Band / Guitar Hero instruments, MIDI and up to four players.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../dist/": "app/dist/",
+      "../server/": "app/server/",
+      "../node_modules/ws/": "app/node_modules/ws/",
+      "../package.json": "app/package.json"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "installer-hooks.nsh"
+      }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRFMzdBQTBDQkU4NzY1NzQKUldSMFpZZStES28zVG5JVzYzUXIvcEVhUTRqNUM3czJNTllmdi9OaDV6V2JKT3N6RXFWejZIUGoK",
+      "endpoints": [],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

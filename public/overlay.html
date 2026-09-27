@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>STEMSTAGE overlay</title>
+  <!-- OBS Browser Source (1920×1080, transparent). Live data from the game via /api/stream/events. -->
+  <style>
+    @font-face { font-family: 'Orbitron'; src: url('/fonts/Orbitron.ttf') format('truetype'); font-weight: 400 900; }
+    @font-face { font-family: 'Rajdhani'; src: url('/fonts/Rajdhani-SemiBold.ttf') format('truetype'); font-weight: 600; }
+    @font-face { font-family: 'Rajdhani'; src: url('/fonts/Rajdhani-Bold.ttf') format('truetype'); font-weight: 700; }
+    :root { --pink: #ff2d7a; --cyan: #29e0ff; --gold: #ffcf3a; --ink: #eef0ff; --dim: #a9a7c8; --card: rgba(10,8,22,0.86); }
+    html, body { margin: 0; background: transparent; color: var(--ink); font-family: 'Rajdhani', sans-serif; overflow: hidden; }
+    body { width: 100vw; height: 100vh; position: relative; }
+    .card { background: var(--card); border: 1px solid rgba(255,255,255,0.12); border-radius: 18px; box-shadow: 0 18px 50px rgba(0,0,0,0.45); backdrop-filter: blur(6px); }
+    .k { font-family: 'Orbitron'; font-size: 13px; letter-spacing: 0.26em; color: var(--cyan); text-transform: uppercase; }
+    #now { position: absolute; left: 32px; bottom: 32px; display: grid; grid-template-columns: 120px 1fr; gap: 18px; padding: 16px; width: 560px; transition: opacity .4s, transform .4s; }
+    #now.hide { opacity: 0; transform: translateY(20px); }
+    #now .cv { width: 120px; height: 120px; border-radius: 12px; background: linear-gradient(135deg, var(--pink), var(--cyan)) center/cover; }
+    #now h1 { margin: 4px 0 0; font-family: 'Orbitron'; font-weight: 800; font-size: 26px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #now .ar { color: var(--dim); font-size: 20px; }
+    .bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.12); margin-top: 10px; overflow: hidden; } .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--pink), var(--cyan)); }
+    #players { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
+    .pl { display: grid; grid-template-columns: 10px 1fr auto auto; gap: 12px; align-items: center; font-size: 19px; }
+    .pl i { width: 10px; height: 10px; border-radius: 50%; } .pl b { font-family: 'Orbitron'; font-size: 22px; }
+    .pl em { font-style: normal; font-family: 'Orbitron'; color: var(--cyan); font-size: 15px; } .pl em.od { color: var(--gold); } .pl.failed { opacity: .5; }
+    #side { position: absolute; right: 32px; top: 32px; width: 420px; display: flex; flex-direction: column; gap: 14px; }
+    #vote, #reqs, #result { padding: 16px 18px; }
+    .opt { position: relative; display: grid; grid-template-columns: 34px 1fr 40px; gap: 10px; align-items: center; margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.05); overflow: hidden; }
+    .opt .fill { position: absolute; inset: 0 auto 0 0; background: rgba(255,45,122,0.3); transition: width .4s; }
+    .opt > * { position: relative; } .opt .n { font-family: 'Orbitron'; font-size: 22px; color: var(--cyan); } .opt .t { font-weight: 700; font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .opt .c { font-family: 'Orbitron'; text-align: right; }
+    .hint { color: var(--dim); font-size: 17px; margin-top: 8px; } .hint b { color: var(--ink); }
+    .rq { font-size: 18px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .rq small { color: var(--dim); }
+    #result .score { font-family: 'Orbitron'; font-weight: 900; font-size: 44px; } .stars { color: var(--gold); font-size: 24px; letter-spacing: 3px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="now" class="card hide">
+    <div class="cv" id="cv"></div>
+    <div><div class="k">Now playing</div><h1 id="title"></h1><div class="ar" id="artist"></div><div class="bar"><i id="prog" style="width:0"></i></div></div>
+    <div id="players"></div>
+  </div>
+  <div id="side">
+    <div id="vote" class="card" hidden></div>
+    <div id="result" class="card" hidden></div>
+    <div id="reqs" class="card" hidden></div>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const ICON = { guitar: '🎸', bass: '🎸', drums: '🥁', keys: '🎹', vocals: '🎤' };
+    function render(s) {
+      const play = s.mode === 'play';
+      $('now').classList.toggle('hide', !play);
+      if (play) {
+        $('title').textContent = s.song.title;
+        $('artist').textContent = s.song.artist;
+        $('cv').style.backgroundImage = s.song.cover ? `url('${s.song.cover}')` : '';
+        $('prog').style.width = `${Math.round((s.progress || 0) * 100)}%`;
+        $('players').innerHTML = s.players.map((p) => `<div class="pl ${p.failed ? 'failed' : ''}"><i style="background:${p.color || '#ff2d7a'}"></i><span>${esc(p.name)} ${ICON[p.instrument] || ''} <small>${esc(p.difficulty)}</small></span><b>${Number(p.score).toLocaleString()}</b><em class="${p.od ? 'od' : ''}">${p.mult}× · ${p.streak}</em></div>`).join('');
+      }
+      const v = s.vote;
+      $('vote').hidden = !v;
+      if (v) {
+        const total = Math.max(1, v.tallies.reduce((a, b) => a + b, 0));
+        $('vote').innerHTML = `<div class="k">Vote the next song · ${v.left}s</div>${v.options.map((o, i) => `<div class="opt"><div class="fill" style="width:${Math.round((v.tallies[i] / total) * 100)}%"></div><span class="n">${i + 1}</span><span class="t">${esc(o.title)}</span><span class="c">${v.tallies[i]}</span></div>`).join('')}<div class="hint">Type <b>!vote 1</b>–<b>${v.options.length}</b> in chat</div>`;
+      }
+      const r = s.mode === 'results' && s.result;
+      $('result').hidden = !r;
+      if (r) {
+        const best = [...r.players].sort((a, b) => b.score - a.score)[0];
+        $('result').innerHTML = `<div class="k">Results · ${esc(r.song.title)}</div><div class="score">${Number(best.score).toLocaleString()}</div><div class="stars">${'★'.repeat(best.stars)}${'☆'.repeat(5 - best.stars)}</div><div class="hint">${esc(best.name)} · ${Math.round(best.accuracy * 100)}% accuracy</div>`;
+      }
+      const reqs = s.requests || [];
+      $('reqs').hidden = !reqs.length && !s.channel;
+      $('reqs').innerHTML = `<div class="k">Song requests</div>${reqs.map((q) => `<div class="rq">🎵 ${esc(q.title)} <small>— ${esc(q.user)}</small></div>`).join('') || '<div class="hint">Type <b>!sr</b> and a song name</div>'}${s.channel ? '<div class="hint"><b>!hype</b> lights up the stage</div>' : ''}`;
+    }
+    const es = new EventSource('/api/stream/events?role=overlay');
+    es.addEventListener('hello', (e) => render(JSON.parse(e.data)));
+    es.addEventListener('state', (e) => render(JSON.parse(e.data)));
+  </script>
+</body>
+</html>

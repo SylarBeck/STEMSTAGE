@@ -1,0 +1,26 @@
+# dependencies / builds
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# your music library, profiles and scores (never commit these)
+songs/
+data/
+
+# caches and logs
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+Thumbs.db
+
+# local tooling
+.claude/
+.vscode/
+
+# secrets (the updater signing key lives in %USERPROFILE%\.tauri, never here)
+*.key
+*.key.pub
+.env*
+tools/.tmp/

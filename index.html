@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>STEMSTAGE</title>
+  <link rel="icon" type="image/png" href="/icon.png" />
+  <link rel="stylesheet" href="/src/theme.css" />
+</head>
+<body data-family="keyboard">
+  <canvas id="gl"></canvas>
+  <div id="scrim"></div>
+  <div id="vignette"></div>
+
+  <!-- persistent chrome (menus only) -->
+  <header id="topbar">
+    <div class="tb-left"><span class="tb-logo">STEMSTAGE</span><span class="tb-sep"></span><span class="tb-crumb" id="tb-crumb"></span></div>
+    <div class="tb-right">
+      <button class="tb-chip" id="tb-profile" data-action="profiles" title="Switch profile"></button>
+      <div class="tb-chip" id="tb-pad"></div>
+      <div class="tb-clock" id="tb-clock"></div>
+    </div>
+  </header>
+  <footer id="legend"></footer>
+
+  <div id="ui">
+    <!-- TITLE -->
+    <section class="screen" id="screen-title">
+      <div class="title-center">
+        <div class="logo" data-text="STEMSTAGE">STEMSTAGE</div>
+        <div class="tagline">ANY SONG &middot; ANY INSTRUMENT &middot; SPLIT BY AI</div>
+        <div class="press-start">PRESS ANY BUTTON</div>
+        <div class="browser-warn" id="browser-warn" hidden></div>
+      </div>
+      <div class="title-devices" id="title-devices"></div>
+      <div class="title-foot">Guitar &middot; Bass &middot; Drums &middot; Keys &middot; Vocals</div>
+    </section>
+
+    <!-- MAIN MENU -->
+    <section class="screen" id="screen-menu">
+      <div class="menu-col" data-nav-group="menu">
+        <div class="logo small" data-text="STEMSTAGE">STEMSTAGE</div>
+        <nav class="menu-main">
+          <button class="menu-item big" data-nav data-action="solo" data-hero="play"><i class="mi-ico">&#9654;</i><span class="mi-txt"><b>Play</b><em>Pick a song and an instrument</em></span></button>
+          <button class="menu-item big" data-nav data-action="tour" data-hero="tour"><i class="mi-ico">&#9873;</i><span class="mi-txt"><b>Tour</b><em>Gigs, stars and daily challenges</em></span></button>
+          <button class="menu-item big" data-nav data-action="band" data-hero="band"><i class="mi-ico">&#9733;</i><span class="mi-txt"><b>Band</b><em>Local multiplayer · up to 4 players</em></span></button>
+          <button class="menu-item big" data-nav data-action="online" data-hero="online"><i class="mi-ico">&#8651;</i><span class="mi-txt"><b>Online</b><em>Play with friends anywhere</em></span></button>
+          <button class="menu-item big" data-nav data-action="import" data-hero="import"><i class="mi-ico">&#10010;</i><span class="mi-txt"><b>Import Song</b><em>Any audio file or YouTube search</em></span></button>
+        </nav>
+        <nav class="menu-sub">
+          <button class="menu-item" data-nav data-action="setlists" data-hero="setlists"><i class="mi-ico">&#9835;</i><b>Setlists</b></button>
+          <button class="menu-item" data-nav data-action="career" data-hero="career"><i class="mi-ico">&#9819;</i><b>Career</b></button>
+          <button class="menu-item" data-nav data-action="leaderboard" data-hero="leaderboard"><i class="mi-ico">&#9776;</i><b>Leaderboards</b></button>
+          <button class="menu-item" data-nav data-action="stream" data-hero="stream"><i class="mi-ico">&#9673;</i><b>Stream</b></button>
+          <button class="menu-item" data-nav data-action="controller" data-hero="controller"><i class="mi-ico">&#10063;</i><b>Controllers</b></button>
+          <button class="menu-item" data-nav data-action="settings" data-hero="settings"><i class="mi-ico">&#9881;</i><b>Settings</b></button>
+          <button class="menu-item" data-nav data-action="howto" data-hero="howto"><i class="mi-ico">?</i><b>How to play</b></button>
+        </nav>
+      </div>
+      <aside class="menu-hero" id="menu-hero"></aside>
+    </section>
+
+    <!-- LIBRARY -->
+    <section class="screen" id="screen-library">
+      <div class="screen-title"><h1>Setlist</h1><p id="lib-count"></p></div>
+      <div class="library">
+        <div class="lib-col" data-nav-group="songs">
+          <div class="lib-tools">
+            <input type="text" id="lib-search" placeholder="Search title, artist, album, genre..." spellcheck="false" data-osk="Search songs" />
+            <div class="picker compact" data-nav data-picker="lib-sort"><label>Sort</label><div class="picker-options" id="pick-sort"></div></div>
+          </div>
+          <div class="song-list" id="song-list"></div>
+        </div>
+        <div class="song-detail panel" id="song-detail" data-nav-group="detail">
+          <div class="art" id="detail-art"></div>
+          <h2 id="detail-title">&mdash;</h2>
+          <div class="detail-artist" id="detail-artist"></div>
+          <div class="detail-meta" id="detail-meta"></div>
+          <div class="detail-extra" id="detail-extra"></div>
+          <div class="picker" data-nav data-picker="instrument">
+            <label>Instrument <span class="lbl-hint" data-glyph="prevnext"></span></label>
+            <div class="picker-options" id="pick-instrument"></div>
+          </div>
+          <div class="picker" data-nav data-picker="difficulty">
+            <label>Difficulty</label>
+            <div class="picker-options" id="pick-difficulty"></div>
+          </div>
+          <div class="picker" data-nav data-picker="vocal-mode" id="pick-vocal-wrap" hidden>
+            <label>Vocals</label>
+            <div class="picker-options" id="pick-vocal"></div>
+          </div>
+          <div class="band-block" id="detail-band"></div>
+          <div class="best" id="detail-best"></div>
+          <div class="lb-mini" id="detail-lb"></div>
+          <div class="detail-actions">
+            <button class="nav-btn primary big-play" data-nav data-action="play">&#9654; Play</button>
+            <button class="nav-btn" data-nav data-action="song-options">More options</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- IMPORT -->
+    <section class="screen" id="screen-import">
+      <div class="screen-title"><h1>Import Song</h1></div>
+      <div class="import-grid">
+        <div class="import-col" data-nav-group="import">
+          <div class="picker" data-nav data-picker="import-tab"><label>Source</label><div class="picker-options" id="pick-import-tab"></div></div>
+          <div id="import-yt" hidden>
+            <div class="yt-search"><input type="text" id="yt-q" placeholder="Search YouTube, or paste a video or playlist link" spellcheck="false" data-osk="Search YouTube" data-osk-submit="yt-search" /><button class="nav-btn primary" data-nav data-action="yt-search">Search</button></div>
+            <div class="small-note" id="yt-note"></div>
+            <div class="yt-results" id="yt-results"></div>
+          </div>
+          <label class="drop" id="drop" data-nav>
+            <input type="file" id="file-input" accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a,.opus,.aac" multiple hidden />
+            <div class="drop-icon">&#9835;</div>
+            <div class="drop-title">Drop audio files here</div>
+            <div class="drop-sub">MP3 · WAV · FLAC · OGG · M4A</div>
+          </label>
+          <div class="split-choice">
+            <div class="picker" data-nav data-picker="splitter">
+              <label>Stem splitter</label>
+              <div class="picker-options" id="pick-splitter"></div>
+            </div>
+            <p class="small-note" id="splitter-note"></p>
+          </div>
+        </div>
+        <div class="pipeline panel" id="pipeline">
+          <h3>Processing pipeline</h3>
+          <ol id="pipeline-steps"></ol>
+          <div class="pipe-bar"><div id="pipe-fill"></div></div>
+          <div class="pipe-msg" id="pipe-msg">Waiting for a song...</div>
+          <div class="import-queue" id="import-queue"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="screen" id="screen-settings">
+      <div class="screen-title"><h1>Settings</h1></div>
+      <div class="tabs" id="settings-tabs"></div>
+      <div class="settings" id="settings-list" data-nav-group="settings"></div>
+    </section>
+
+    <!-- BAND LOBBY -->
+    <section class="screen" id="screen-band">
+      <div class="screen-title"><h1>Band</h1><p>Press a button on your controller to join</p></div>
+      <div class="lobby">
+        <div class="slots" id="band-slots"></div>
+        <div class="lobby-actions" data-nav-group="lobby">
+          <button class="nav-btn" data-nav data-action="band-add-kb1">+ Keyboard (keys A)</button>
+          <button class="nav-btn" data-nav data-action="band-add-kb2">+ Keyboard (keys B)</button>
+          <button class="nav-btn" data-nav data-action="midi-enable">Enable MIDI devices</button>
+          <button class="nav-btn primary" data-nav data-action="band-go">Choose a song &rarr;</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTROLLERS HUB -->
+    <section class="screen" id="screen-controller">
+      <div class="screen-title"><h1>Controllers</h1></div>
+      <div class="hub">
+        <div class="hub-devices" data-nav-group="devices">
+          <div class="hub-list" id="hub-list"></div>
+          <div class="hub-add">
+            <button class="nav-btn primary" data-nav data-action="ds-connect">Find DualSense</button>
+            <button class="nav-btn" data-nav data-action="midi-enable">Enable MIDI devices</button>
+          </div>
+          <div class="browser-warn inline" id="browser-warn-2" hidden></div>
+        </div>
+        <div class="hub-detail panel" id="hub-detail" data-nav-group="detail"></div>
+      </div>
+      <div class="capture-banner" id="capture-banner"></div>
+    </section>
+
+    <!-- PROFILES -->
+    <section class="screen" id="screen-profiles">
+      <div class="screen-title"><h1>Who's playing?</h1></div>
+      <div class="profiles-wrap">
+        <div class="profile-grid" id="profile-grid"></div>
+        <div class="profile-form panel" id="profile-form" hidden>
+          <h3 id="pf-title">New profile</h3>
+          <input type="text" id="pf-name" maxlength="20" placeholder="Name" spellcheck="false" data-osk="Profile name" />
+          <div class="picker" data-nav data-picker="pf-color"><label>Colour</label><div class="swatches" id="pf-colors"></div></div>
+          <input type="password" id="pf-pin" inputmode="numeric" maxlength="8" placeholder="PIN (optional, 4-8 digits)" data-osk="PIN (optional)" data-osk-type="number" />
+          <div class="btn-row"><button class="nav-btn primary" data-nav data-action="pf-save">Create profile</button><button class="nav-btn" data-nav data-action="pf-cancel">Cancel</button></div>
+          <div class="pf-error" id="pf-error"></div>
+        </div>
+        <div class="profile-form panel" id="pin-pad" hidden>
+          <h3 id="pin-title">Enter PIN</h3>
+          <input type="password" id="pin-input" inputmode="numeric" maxlength="8" placeholder="PIN" data-osk="PIN" data-osk-type="number" data-osk-submit="pin-ok" />
+          <div class="btn-row"><button class="nav-btn primary" data-nav data-action="pin-ok">Sign in</button><button class="nav-btn" data-nav data-action="pin-cancel">Cancel</button></div>
+          <div class="pf-error" id="pin-error"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CAREER -->
+    <section class="screen" id="screen-career">
+      <div class="screen-title"><h1>Career</h1></div>
+      <div class="career" id="career"></div>
+    </section>
+
+    <!-- LEADERBOARDS -->
+    <section class="screen" id="screen-leaderboard">
+      <div class="screen-title"><h1>Leaderboards</h1></div>
+      <div class="leaderboards">
+        <div class="picker" data-nav data-picker="lb-tab"><label>Board</label><div class="picker-options" id="lb-tabs"></div></div>
+        <div id="lb-filters"></div>
+        <div id="lb-content"></div>
+      </div>
+    </section>
+
+    <!-- ONLINE -->
+    <section class="screen" id="screen-online">
+      <div class="screen-title"><h1>Online</h1><p>Play with friends anywhere — no port forwarding</p></div>
+      <div class="online-grid">
+        <div class="online-connect" id="online-connect" data-nav-group="connect">
+          <div class="panel">
+            <h3>Host</h3>
+            <div class="btn-row">
+              <button class="nav-btn primary" data-nav data-action="ol-host">Host online</button>
+              <button class="nav-btn" data-nav data-action="ol-host-lan">Local network</button>
+              <button class="nav-btn danger" data-nav data-action="ol-stop" hidden>Stop hosting</button>
+            </div>
+            <div class="host-addr" id="ol-host-addr"></div>
+          </div>
+          <div class="panel">
+            <h3>Join</h3>
+            <div class="yt-search"><input type="text" id="ol-addr" placeholder="Invite code" spellcheck="false" data-osk="Invite code" data-osk-submit="ol-join" /><button class="nav-btn primary" data-nav data-action="ol-join">Join</button></div>
+            <div class="small-note" id="ol-join-status"></div>
+          </div>
+        </div>
+        <div class="online-lobby panel" id="online-lobby" data-nav-group="lobby" hidden>
+          <div class="lobby-head"><b id="ol-room">Room</b><span id="ol-status"></span><button class="nav-btn danger" data-nav data-action="ol-leave">Leave</button></div>
+          <div class="ol-song" id="ol-song"></div>
+          <div class="ol-players" id="ol-players"></div>
+          <div class="picker" data-nav data-picker="ol-inst"><label>Your instrument</label><div class="picker-options" id="ol-pick-inst"></div></div>
+          <div class="picker" data-nav data-picker="ol-diff"><label>Difficulty</label><div class="picker-options" id="ol-pick-diff"></div></div>
+          <div class="btn-row">
+            <button class="nav-btn" data-nav data-action="ol-ready" id="ol-ready">Ready</button>
+            <button class="nav-btn" data-nav data-action="ol-choose" id="ol-choose">Choose song</button>
+            <button class="nav-btn primary" data-nav data-action="ol-start" id="ol-start">Start match</button>
+          </div>
+          <div class="ol-chat"><div class="ol-log" id="ol-log"></div><input type="text" id="ol-chat-input" placeholder="Chat (Enter to send)" spellcheck="false" data-osk="Chat message" data-osk-submit="ol-chat" /></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRACTICE -->
+    <section class="screen overlay" id="screen-practice">
+      <div class="modal wide">
+        <h1>Practice</h1>
+        <p class="small-note" id="pr-song"></p>
+        <div class="picker" data-nav data-picker="pr-speed"><label>Speed (pitch preserved)</label><div class="picker-options" id="pr-speed"></div></div>
+        <div class="picker" data-nav data-picker="pr-start"><label>Start at</label><div class="pr-start"><input type="range" id="pr-start-range" min="0" max="95" step="1" value="0" tabindex="-1" /><b id="pr-start-label">0:00</b></div></div>
+        <p class="small-note">No fail · nothing saved</p>
+        <div class="btn-row"><button class="nav-btn primary" data-nav data-action="pr-go">Start practice</button><button class="nav-btn" data-nav data-action="pr-cancel">Cancel</button></div>
+      </div>
+    </section>
+
+    <!-- SONG INFO -->
+    <section class="screen overlay" id="screen-songinfo">
+      <div class="modal wide songinfo">
+        <h1>Song info</h1>
+        <div class="si-grid">
+          <div class="si-cover" id="si-cover"></div>
+          <div class="si-fields">
+            <label>Title<input type="text" id="si-title" spellcheck="false" data-osk="Title" /></label>
+            <label>Artist<input type="text" id="si-artist" spellcheck="false" data-osk="Artist" /></label>
+            <label>Album<input type="text" id="si-album" spellcheck="false" data-osk="Album" /></label>
+            <div class="si-row"><label>Year<input type="text" id="si-year" maxlength="4" data-osk="Year" data-osk-type="number" /></label><label>Genre<input type="text" id="si-genre" spellcheck="false" data-osk="Genre" /></label></div>
+          </div>
+        </div>
+        <div class="small-note" id="si-note"></div>
+        <div class="btn-row">
+          <button class="nav-btn" data-nav data-action="si-lookup">Look up online</button>
+          <button class="nav-btn primary" data-nav data-action="si-save">Save</button>
+          <button class="nav-btn" data-nav data-action="si-cancel">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW TO -->
+    <section class="screen" id="screen-howto">
+      <div class="screen-title"><h1>How to Play</h1></div>
+      <div class="howto">
+        <div class="howto-card" data-nav><h3>1 &middot; Import</h3><p>Drop any song or search YouTube. AI splits it into drums, bass, guitar, keys and vocals.</p></div>
+        <div class="howto-card" data-nav><h3>2 &middot; Pick a part</h3><p>Every stem is charted automatically in four difficulties.</p></div>
+        <div class="howto-card" data-nav><h3>3 &middot; Play</h3><p>Hit gems as they cross the line. Miss and your part drops out of the mix.</p></div>
+        <div class="howto-card" data-nav><h3>Overdrive</h3><p>Clear silver phrases, then press &#x25B3; / Enter to double your score.</p></div>
+        <div class="howto-card" data-nav><h3>Sustains</h3><p>Hold long notes and wiggle the stick or whammy bar to bend them.</p></div>
+        <div class="howto-card" data-nav><h3>Band</h3><p>Up to 4 players. Overdrive saves failed bandmates.</p></div>
+        <div class="howto-card" data-nav><h3>Strum mode</h3><p>Guitar controllers: hold frets and strum. White-topped gems are hammer-ons.</p></div>
+        <div class="howto-card" data-nav><h3>Controllers</h3><p>Each controller keeps its own profile. Rebind and test it in Controllers.</p></div>
+      </div>
+    </section>
+
+    <!-- CALIBRATION -->
+    <section class="screen" id="screen-calibrate">
+      <div class="calib">
+        <h1>Audio Calibration</h1>
+        <p>Tap any lane button on every click.</p>
+        <div class="calib-beat" id="calib-beat"></div>
+        <div class="calib-result" id="calib-result">Get ready...</div>
+      </div>
+    </section>
+
+    <!-- HUD -->
+    <section class="screen hud" id="hud">
+      <div class="hud-top">
+        <div class="hud-song"><b id="hud-title"></b><span id="hud-sub"></span></div>
+        <div class="hud-progress"><div id="hud-progress-fill"></div></div>
+      </div>
+      <div class="hud-left">
+        <div class="score" id="hud-score">0</div>
+        <div class="mult-wrap">
+          <svg viewBox="0 0 100 100" class="mult-ring"><circle cx="50" cy="50" r="42" class="ring-bg"/><circle cx="50" cy="50" r="42" class="ring-fg" id="mult-ring"/></svg>
+          <div class="mult" id="hud-mult">1&times;</div>
+        </div>
+        <div class="streak"><span id="hud-streak">0</span> STREAK</div>
+      </div>
+      <div class="hud-right">
+        <div class="meter-label">OVERDRIVE</div>
+        <div class="od-meter"><div id="od-fill"></div><i></i><i></i><i></i></div>
+        <div class="meter-label">CROWD</div>
+        <div class="rock-meter"><div class="rock-zones"></div><div id="rock-needle"></div></div>
+      </div>
+      <div class="band-score" id="hud-band"></div>
+      <div class="hud-fail" id="hud-fail">FAILED<small>Keep playing &mdash; No Fail is off</small></div>
+      <div class="judge" id="hud-judge"></div>
+      <div class="callout" id="hud-callout"></div>
+      <div class="countdown" id="hud-countdown"></div>
+    </section>
+
+    <!-- PAUSE -->
+    <section class="screen overlay" id="screen-pause">
+      <div class="modal">
+        <h1>Paused</h1>
+        <button class="nav-btn" data-nav data-action="resume">Resume</button>
+        <button class="nav-btn" data-nav data-action="restart">Restart</button>
+        <button class="nav-btn" data-nav data-action="quit">Quit to setlist</button>
+      </div>
+    </section>
+
+    <!-- CHART EDITOR -->
+    <section class="screen" id="screen-editor">
+      <div class="ed-head"><div><h1 id="ed-title"></h1><p id="ed-sub"></p></div><div class="ed-status" id="ed-status"></div></div>
+      <canvas id="ed-canvas"></canvas>
+      <div class="ed-help">✕ / Enter note · ↑↓ scroll · ←→ lane · L1/R1 snap · L2/R2 measure · ▢ sustain · Share undo · △ tools · Options play
+        <br><small>Keyboard: Space play · 1–5 place notes (live while playing) · Del delete · [ ] sustain · P overdrive · Ctrl+Z/Y · Ctrl+S save · mouse: click / right-click / wheel</small></div>
+    </section>
+
+    <!-- STREAM -->
+    <section class="screen" id="screen-stream">
+      <div class="screen-title"><h1>Stream</h1><p>Twitch chat votes, requests and hypes · OBS overlay</p></div>
+      <div class="stream" id="stream"></div>
+    </section>
+
+    <!-- TOUR -->
+    <section class="screen" id="screen-tour">
+      <div class="screen-title"><h1>Tour</h1><p>From the Garage to the Festival main stage</p></div>
+      <div class="tour" id="tour"></div>
+    </section>
+
+    <!-- SETLISTS -->
+    <section class="screen" id="screen-setlists">
+      <div class="screen-title"><h1>Setlists</h1><p>Play songs back to back as a marathon</p></div>
+      <div class="setlists">
+        <div class="sl-col panel" data-nav-group="lists">
+          <div class="sl-lists" id="sl-lists"></div>
+          <div class="btn-row"><button class="nav-btn primary" data-nav data-action="sl-new">+ New setlist</button><button class="nav-btn" data-nav data-action="sl-random">🎲 Random 5</button></div>
+        </div>
+        <div class="sl-detail panel" id="sl-detail" data-nav-group="detail"></div>
+      </div>
+    </section>
+
+    <!-- MARATHON (break between songs + summary) -->
+    <section class="screen" id="screen-marathon">
+      <div class="marathon" id="marathon"></div>
+    </section>
+
+    <!-- RESULTS -->
+    <section class="screen" id="screen-results">
+      <div class="results">
+        <div class="res-head">
+          <div class="res-cover" id="res-cover"></div>
+          <div><div class="res-title" id="res-title"></div><div class="res-sub" id="res-sub"></div></div>
+        </div>
+        <div class="stars" id="res-stars"></div>
+        <div class="res-score" id="res-score">0</div>
+        <div class="res-new" id="res-new">NEW HIGH SCORE</div>
+        <div class="res-ghost" id="res-ghost" hidden></div>
+        <div class="res-grid" id="res-grid"></div>
+        <div class="res-players" id="res-players"></div>
+        <div class="res-progress" id="res-progress"></div>
+        <div class="btn-row center">
+          <button class="nav-btn primary" data-nav data-action="retry">Play again</button>
+          <button class="nav-btn" data-nav data-action="watch-replay">Watch replay</button>
+          <button class="nav-btn" data-nav data-action="library">Setlist</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="sheet" hidden></div>
+  <div id="osk" hidden></div>
+  <div id="toasts"></div>
+  <div id="fatal" hidden></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

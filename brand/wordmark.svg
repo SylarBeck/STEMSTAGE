@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 260" width="1400" height="260">
+  <defs>
+    <linearGradient id="wm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#ffe3ef"/><stop offset="1" stop-color="#ffb3cf"/></linearGradient>
+    <filter id="wg" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="wc" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="40"/></filter>
+  </defs>
+  <text x="700" y="170" text-anchor="middle" font-family="Orbitron" font-weight="900" font-size="168" letter-spacing="10" fill="#29e0ff" filter="url(#wc)" opacity=".45">STEMSTAGE</text>
+  <text x="700" y="170" text-anchor="middle" font-family="Orbitron" font-weight="900" font-size="168" letter-spacing="10" fill="#ff2d7a" filter="url(#wg)" opacity=".9">STEMSTAGE</text>
+  <text x="695" y="170" text-anchor="middle" font-family="Orbitron" font-weight="900" font-size="168" letter-spacing="10" fill="#29e0ff" opacity=".55">STEMSTAGE</text>
+  <text x="700" y="170" text-anchor="middle" font-family="Orbitron" font-weight="900" font-size="168" letter-spacing="10" fill="url(#wm)">STEMSTAGE</text>
+  <text x="700" y="238" text-anchor="middle" font-family="Orbitron" font-weight="700" font-size="30" letter-spacing="14" fill="#29e0ff">ANY SONG · ANY INSTRUMENT · SPLIT BY AI</text>
+</svg>
