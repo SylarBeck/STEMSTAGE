@@ -263,8 +263,8 @@ export function installEditor(ui) {
     ui.openSheet({
       title: 'Chart tools', sub: `${E.song.title} · ${E.inst} · ${E.diff}${E.dirty ? ' · unsaved' : ''}`,
       items: [
-        { label: '💾 Save', desc: 'Write the chart into the song', run: () => save() },
-        { label: E.playing ? '⏸ Pause' : '▶ Play from cursor', desc: `Speed ${Math.round(E.speed * 100)}% · Space on the keyboard`, run: () => (E.playing ? stop() : play()) },
+        { label: 'Save', icon: 'floppy-disk', desc: 'Write the chart into the song', run: () => save() },
+        { label: E.playing ? 'Pause' : 'Play from cursor', icon: E.playing ? 'pause' : 'play', desc: `Speed ${Math.round(E.speed * 100)}% · Space on the keyboard`, run: () => (E.playing ? stop() : play()) },
         { label: `Playback speed: ${Math.round(E.speed * 100)}%`, desc: 'Slower playback for tricky parts', run: () => { E.speed = SPEEDS[(SPEEDS.indexOf(E.speed) + 1) % SPEEDS.length]; if (E.playing) { stop(); play(); } status(); } },
         { label: `Note ticks: ${E.ticks ? 'on' : 'off'}`, desc: 'Click on every note during playback', run: () => { E.ticks = !E.ticks; status(); } },
         { label: 'Longer sustain', desc: 'On the note at the cursor ( ] )', disabled: !n || E.drums, run: () => sustain(1) },
@@ -480,7 +480,7 @@ export function installEditor(ui) {
       `<span><b>${E.notes.length}</b>notes</span>`, `<span><b>${E.phrases.length}</b>overdrive</span>`,
       `<span><b>${Math.round(E.speed * 100)}%</b>speed</span>`,
       n ? `<span><b>${n.len ? `${n.len.toFixed(2)}s` : 'tap'}</b>note</span>` : '',
-      E.dirty ? '<span class="dirty"><b>●</b>unsaved</span>' : '<span class="saved"><b>✓</b>saved</span>',
+      E.dirty ? '<span class="dirty"><b><i class="fa-solid fa-circle"></i></b>unsaved</span>' : '<span class="saved"><b><i class="fa-solid fa-check"></i></b>saved</span>',
     ].join('');
   }
 

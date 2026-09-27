@@ -298,7 +298,7 @@ class Profiles {
       accuracy: mine.length ? mine.reduce((s, x) => s + x.accuracy, 0) / mine.length : 0,
     };
     const topScores = [...mine].sort((a, b) => b.score - a.score).slice(0, 8);
-    return { profile: p, level: levelInfo(p.xp), totals, byInst, favorite: fav, recent: mine.slice(0, 12), topScores };
+    return { profile: p, level: levelInfo(p.xp), totals, byInst, favorite: fav, recent: mine.slice(0, 9), topScores };
   }
 }
 

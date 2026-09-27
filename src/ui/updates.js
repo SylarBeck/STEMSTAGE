@@ -17,7 +17,7 @@ export async function checkForUpdates(ui, { quiet = false } = {}) {
   const pick = await ui.openSheet({
     title: `Update to ${info.version}`, sub: `You have ${info.current}${info.notes ? ` · ${info.notes.slice(0, 140)}` : ''}`,
     items: [
-      { id: 'now', label: '⬇ Install now', desc: 'Downloads, closes the game and restarts on the new version' },
+      { id: 'now', label: 'Install now', icon: 'download', desc: 'Downloads, closes the game and restarts on the new version' },
       { id: 'later', label: 'Later', desc: 'Ask again next time the game starts' },
     ],
   });

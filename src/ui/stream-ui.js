@@ -5,6 +5,7 @@
 //   !hype         pyro + crowd roar during a song (shared 15 s cooldown)
 import { settings } from '../settings.js';
 import { coverUrl } from '../storage/library.js';
+import { fa } from './icons.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -66,7 +67,7 @@ export function installStream(ui) {
         if (st.requests.some((r) => r.id === s.id)) { log(user, `"${s.title}" is already requested`); break; }
         st.requests.push({ id: s.id, title: s.title, artist: s.artist, user });
         log(user, `requested ${s.title}`);
-        if (ui.screen !== 'stream' && !app.game.running) ui.toast(`🎵 ${user} requested "${s.title}"`);
+        if (ui.screen !== 'stream' && !app.game.running) ui.toast(`${user} requested "${s.title}"`, '', 'music');
         break;
       }
       case '!hype': {
@@ -107,7 +108,7 @@ export function installStream(ui) {
     const winner = top[Math.floor(Math.random() * top.length)];
     st.requests = st.requests.filter((r) => r.id !== winner.id);
     st.lastWinner = { title: winner.title, artist: winner.artist, votes: max };
-    ui.toast(`🏆 Chat picked "${winner.title}" (${max} vote${max === 1 ? '' : 's'})`, 'ok');
+    ui.toast(`Chat picked "${winner.title}" (${max} vote${max === 1 ? '' : 's'})`, 'ok', 'trophy');
     refresh();
     publish(true);
     playSong(winner, settings.streamAutoPlay);
@@ -163,7 +164,7 @@ export function installStream(ui) {
   function render(keep = false) {
     const s = st.status;
     const el = $('#stream');
-    const statusText = s.status === 'connected' ? `✓ Reading chat in #${esc(s.channel)}` : s.status === 'connecting' ? `Connecting to #${esc(s.channel)}…` : s.channel ? `Not connected${s.error ? ` — ${esc(s.error)}` : ''}` : 'Not connected';
+    const statusText = s.status === 'connected' ? `${fa('check')} Reading chat in #${esc(s.channel)}` : s.status === 'connecting' ? `Connecting to #${esc(s.channel)}…` : s.channel ? `Not connected${s.error ? ` — ${esc(s.error)}` : ''}` : 'Not connected';
     const v = st.vote;
     el.innerHTML = `
       <div class="st-col">
@@ -195,7 +196,7 @@ export function installStream(ui) {
         </div>
         <div class="panel">
           <h3>Requests · ${st.requests.length}</h3>
-          <div class="st-reqs">${st.requests.map((r, i) => `<div class="st-req" data-nav data-req="${i}"><div><b>${esc(r.title)}</b><small>${esc(r.artist)} · from ${esc(r.user)}</small></div><span>▶</span></div>`).join('') || '<p class="small-note">Viewers type !sr and a song name.</p>'}</div>
+          <div class="st-reqs">${st.requests.map((r, i) => `<div class="st-req" data-nav data-req="${i}"><div><b>${esc(r.title)}</b><small>${esc(r.artist)} · from ${esc(r.user)}</small></div><span>${fa('play')}</span></div>`).join('') || '<p class="small-note">Viewers type !sr and a song name.</p>'}</div>
         </div>
         <div class="panel st-log"><h3>Chat commands</h3>${st.log.map((l) => `<div><b>${esc(l.user)}</b> ${esc(l.text)}</div>`).join('') || '<p class="small-note">Nothing yet.</p>'}</div>
       </div>`;
@@ -212,7 +213,7 @@ export function installStream(ui) {
     ui.openSheet({
       title: r.title, sub: `${r.artist} · requested by ${r.user}`,
       items: [
-        { label: '▶ Play now', run: () => { st.requests.splice(i, 1); playSong(r, true); } },
+        { label: 'Play now', icon: 'play', run: () => { st.requests.splice(i, 1); playSong(r, true); } },
         { label: 'Remove request', danger: true, run: () => { st.requests.splice(i, 1); render(true); publish(true); } },
       ],
     });

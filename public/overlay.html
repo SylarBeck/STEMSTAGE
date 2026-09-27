@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>STEMSTAGE overlay</title>
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
   <!-- OBS Browser Source (1920×1080, transparent). Live data from the game via /api/stream/events. -->
   <style>
     @font-face { font-family: 'Orbitron'; src: url('/fonts/Orbitron.ttf') format('truetype'); font-weight: 400 900; }
@@ -49,7 +50,9 @@
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const ICON = { guitar: '🎸', bass: '🎸', drums: '🥁', keys: '🎹', vocals: '🎤' };
+    const fa = (n) => `<i class="fa-solid fa-${n}"></i>`;
+    const ICON = { guitar: fa('guitar'), bass: fa('guitar'), drums: fa('drum'), keys: fa('music'), vocals: fa('microphone') };
+    const stars = (n) => Array.from({ length: 5 }, (_, i) => `<i class="fa-${i < n ? 'solid' : 'regular'} fa-star"></i>`).join('');
     function render(s) {
       const play = s.mode === 'play';
       $('now').classList.toggle('hide', !play);
@@ -70,11 +73,11 @@
       $('result').hidden = !r;
       if (r) {
         const best = [...r.players].sort((a, b) => b.score - a.score)[0];
-        $('result').innerHTML = `<div class="k">Results · ${esc(r.song.title)}</div><div class="score">${Number(best.score).toLocaleString()}</div><div class="stars">${'★'.repeat(best.stars)}${'☆'.repeat(5 - best.stars)}</div><div class="hint">${esc(best.name)} · ${Math.round(best.accuracy * 100)}% accuracy</div>`;
+        $('result').innerHTML = `<div class="k">Results · ${esc(r.song.title)}</div><div class="score">${Number(best.score).toLocaleString()}</div><div class="stars">${stars(best.stars)}</div><div class="hint">${esc(best.name)} · ${Math.round(best.accuracy * 100)}% accuracy</div>`;
       }
       const reqs = s.requests || [];
       $('reqs').hidden = !reqs.length && !s.channel;
-      $('reqs').innerHTML = `<div class="k">Song requests</div>${reqs.map((q) => `<div class="rq">🎵 ${esc(q.title)} <small>— ${esc(q.user)}</small></div>`).join('') || '<div class="hint">Type <b>!sr</b> and a song name</div>'}${s.channel ? '<div class="hint"><b>!hype</b> lights up the stage</div>' : ''}`;
+      $('reqs').innerHTML = `<div class="k">Song requests</div>${reqs.map((q) => `<div class="rq">${fa('music')} ${esc(q.title)} <small>— ${esc(q.user)}</small></div>`).join('') || '<div class="hint">Type <b>!sr</b> and a song name</div>'}${s.channel ? '<div class="hint"><b>!hype</b> lights up the stage</div>' : ''}`;
     }
     const es = new EventSource('/api/stream/events?role=overlay');
     es.addEventListener('hello', (e) => render(JSON.parse(e.data)));

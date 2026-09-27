@@ -5,7 +5,8 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const initials = (n) => String(n || '?').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
-const ICON = { guitar: '🎸', bass: '🎸', drums: '🥁', keys: '🎹', vocals: '🎤' };
+import { instIcon, fa, starsOnly, achIcon } from './icons.js';
+const ICON = { guitar: instIcon('guitar'), bass: instIcon('bass'), drums: instIcon('drums'), keys: instIcon('keys'), vocals: instIcon('vocals') };
 const DIFFS = ['easy', 'medium', 'hard', 'expert'];
 const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'];
 const fmtDur = (s) => (s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m` : `${Math.floor(s / 60)}m`);
@@ -20,7 +21,8 @@ const ago = (t) => {
 export const avatarHtml = (p, size = 40) => `<span class="avatar" style="--pc:${p?.color || '#555'};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px">${esc(initials(p?.name || 'G'))}</span>`;
 
 export function installSocial(ui) {
-  const state = { formColor: PROFILE_COLORS[0], pinFor: null, lbTab: 'overall', lbSong: 0, lbInst: 'guitar', lbDiff: 'expert', careerId: null, afterSignIn: 'menu' };
+  const state = { formColor: PROFILE_COLORS[0], pinFor: null, lbTab: 'overall', lbSong: 0, lbInst: 'guitar', lbDiff: 'expert', careerId: null, afterSignIn: 'menu', careerTab: 'overview' };
+  const CAREER_TABS = [['overview', 'Overview'], ['history', 'History'], ['achievements', 'Achievements']];
 
   // ---------------------------------------------------------------- profiles screen
   function renderProfiles() {
@@ -30,7 +32,7 @@ export function installSocial(ui) {
     grid.hidden = false;
     grid.innerHTML = profiles.list.map((p) => {
       const lv = levelInfo(p.xp);
-      return `<div class="profile-card" data-nav data-profile="${p.id}" style="--pc:${p.color}">${avatarHtml(p, 84)}<b>${esc(p.name)}</b><span>Level ${lv.level} · ${esc(lv.rank)}${p.pinHash ? ' · 🔒' : ''}</span></div>`;
+      return `<div class="profile-card" data-nav data-profile="${p.id}" style="--pc:${p.color}">${avatarHtml(p, 84)}<b>${esc(p.name)}</b><span>Level ${lv.level} · ${esc(lv.rank)}${p.pinHash ? ` · ${fa('lock')}` : ''}</span></div>`;
     }).join('') + `<div class="profile-card add" data-nav data-action="pf-new">${'<span class="avatar" style="width:84px;height:84px;font-size:40px">+</span>'}<b>New profile</b><span>Name, colour, optional PIN</span></div>
       <div class="profile-card add" data-nav data-action="pf-guest"><span class="avatar" style="width:84px;height:84px;font-size:30px">?</span><b>Guest</b><span>Nothing is saved</span></div>`;
     $$('[data-profile]', grid).forEach((c) => c.addEventListener('click', () => pick(c.dataset.profile)));
@@ -117,6 +119,7 @@ export function installSocial(ui) {
     }
     const { profile: p, level: lv, totals: t, byInst, recent, topScores } = c;
     const mine = profiles.current?.id === p.id;
+    root.dataset.tab = state.careerTab; // the big profile header only shows on Overview
     root.innerHTML = `
       <div class="career-head" style="--pc:${p.color}">
         ${avatarHtml(p, 96)}
@@ -129,6 +132,8 @@ export function installSocial(ui) {
           ${mine ? '<button class="nav-btn danger" data-nav data-action="pf-delete">Delete</button>' : ''}
         </div>
       </div>
+      <div class="picker row career-tabs" data-nav data-picker="career-tab"><label>View</label><div class="picker-options">${CAREER_TABS.map(([v, l]) => `<div class="opt ${state.careerTab === v ? 'sel' : ''}" data-ct="${v}">${l}</div>`).join('')}</div></div>
+      <div class="career-page" data-page="overview" ${state.careerTab === 'overview' ? '' : 'hidden'}>
       <div class="tiles">
         ${[['Songs played', t.plays], ['Different songs', t.songs], ['Career score', t.score.toLocaleString()], ['Notes hit', t.notes.toLocaleString()],
     ['Stars earned', t.stars], ['Full combos', t.fcs], ['Best streak', t.bestStreak], ['Avg accuracy', `${Math.round(t.accuracy * 100)}%`],
@@ -139,17 +144,22 @@ export function installSocial(ui) {
         <div class="card"><h3>Instruments</h3><table class="tbl"><tr><th>Instrument</th><th>Plays</th><th>Best</th><th>Accuracy</th><th>FCs</th></tr>
           ${INSTS.map((i) => { const s = byInst[i]; return `<tr><td>${ICON[i]} ${i}</td><td>${s?.plays || 0}</td><td>${s ? s.best.toLocaleString() : '—'}</td><td>${s ? `${Math.round(s.acc * 100)}%` : '—'}</td><td>${s?.fcs || 0}</td></tr>`; }).join('')}
         </table></div>
-        <div class="card"><h3>Top scores</h3><table class="tbl"><tr><th>Song</th><th>Part</th><th>Score</th><th>★</th></tr>
-          ${topScores.map((x) => `<tr><td>${esc(x.songTitle)}</td><td>${ICON[x.instrument]} ${x.difficulty[0].toUpperCase()}</td><td>${x.score.toLocaleString()}</td><td>${x.stars}${x.fc ? ' 💎' : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="small-note">No plays yet</td></tr>'}
+        <div class="card"><h3>Top scores</h3><table class="tbl"><tr><th>Song</th><th>Part</th><th>Score</th><th>Stars</th></tr>
+          ${topScores.map((x) => `<tr><td>${esc(x.songTitle)}</td><td>${ICON[x.instrument]} ${x.difficulty[0].toUpperCase()}</td><td>${x.score.toLocaleString()}</td><td>${starsOnly(x.stars)}${x.fc ? ` ${fa('gem')}` : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="small-note">No plays yet</td></tr>'}
         </table></div>
       </div>
+      </div>
+      <div class="career-page" data-page="history" ${state.careerTab === 'history' ? '' : 'hidden'}>
       <div class="card"><h3>Recent</h3><table class="tbl"><tr><th>When</th><th>Song</th><th>Part</th><th>Mode</th><th>Score</th><th>Accuracy</th><th>Streak</th></tr>
         ${recent.map((x) => `<tr><td>${ago(x.date)}</td><td>${esc(x.songTitle)} <small>${esc(x.songArtist || '')}</small></td><td>${ICON[x.instrument]} ${x.instrument} · ${x.difficulty}</td><td>${x.mode}</td><td>${x.score.toLocaleString()}${x.failed ? ' <small>(failed)</small>' : ''}</td><td>${Math.round(x.accuracy * 100)}%</td><td>${x.maxStreak}</td></tr>`).join('') || '<tr><td colspan="7" class="small-note">Play a song to start your career.</td></tr>'}
       </table></div>
+      </div>
+      <div class="career-page" data-page="achievements" ${state.careerTab === 'achievements' ? '' : 'hidden'}>
       <div class="card"><h3>Achievements</h3><div class="ach-grid">
-        ${ACHIEVEMENTS.map((a) => `<div class="ach ${p.achievements?.[a.id] ? 'on' : ''}" title="${p.achievements?.[a.id] ? `Unlocked ${new Date(p.achievements[a.id]).toLocaleDateString()}` : 'Locked'}"><span class="i">${a.icon}</span><div><b>${esc(a.name)}</b><span>${esc(a.desc)}</span></div></div>`).join('')}
-      </div></div>`;
+        ${ACHIEVEMENTS.map((a) => `<div class="ach ${p.achievements?.[a.id] ? 'on' : ''}" title="${p.achievements?.[a.id] ? `Unlocked ${new Date(p.achievements[a.id]).toLocaleDateString()}` : 'Locked'}"><span class="i">${achIcon(a.id)}</span><div><b>${esc(a.name)}</b><span>${esc(a.desc)}</span></div></div>`).join('')}
+      </div></div></div>`;
     $$('[data-action]', root).forEach((b) => b.addEventListener('click', () => ui.action(b.dataset.action)));
+    $$('[data-ct]', root).forEach((o) => o.addEventListener('click', () => { state.careerTab = o.dataset.ct; renderCareer(); }));
     ui.focus = 0;
     ui.applyFocus(false);
   }
@@ -180,7 +190,7 @@ export function installSocial(ui) {
       $$('[data-d]', filters).forEach((o) => o.addEventListener('click', () => { state.lbDiff = o.dataset.d; renderLeaderboard(); }));
       const rows = profiles.leaderboard(s.id, state.lbInst, state.lbDiff, 25);
       content.innerHTML = `<div class="card"><table class="tbl"><tr><th>#</th><th>Player</th><th>Score</th><th>Stars</th><th>Accuracy</th><th>Streak</th><th>Mode</th><th>When</th></tr>
-        ${rows.map((r, i) => `<tr class="${r.profileId === meId ? 'me' : ''}"><td>${i + 1}</td><td>${avatarHtml(r.profile, 24)} ${esc(r.profileName)}</td><td>${r.score.toLocaleString()}</td><td>${'★'.repeat(r.stars)}${r.fc ? ' 💎' : ''}</td><td>${Math.round(r.accuracy * 100)}%</td><td>${r.maxStreak}</td><td>${r.mode}</td><td>${ago(r.date)}</td></tr>`).join('') || '<tr><td colspan="8" class="small-note">No scores on this chart yet.</td></tr>'}
+        ${rows.map((r, i) => `<tr class="${r.profileId === meId ? 'me' : ''}"><td>${i + 1}</td><td>${avatarHtml(r.profile, 24)} ${esc(r.profileName)}</td><td>${r.score.toLocaleString()}</td><td>${starsOnly(r.stars)}${r.fc ? ` ${fa('gem')}` : ''}</td><td>${Math.round(r.accuracy * 100)}%</td><td>${r.maxStreak}</td><td>${r.mode}</td><td>${ago(r.date)}</td></tr>`).join('') || '<tr><td colspan="8" class="small-note">No scores on this chart yet.</td></tr>'}
       </table></div>`;
     }
     ui.applyFocus(false);
@@ -210,9 +220,9 @@ export function installSocial(ui) {
       const lv = levelInfo(p.xp);
       return `<div class="rp-prof" style="--pc:${p.color}">${avatarHtml(p, 40)}<div class="info"><b>${esc(p.name)}</b> +${s.xpGained} XP · level ${lv.level} ${s.levelAfter > s.levelBefore ? '<span class="lvlup">LEVEL UP!</span>' : ''}
         <div class="xpbar"><div style="width:${Math.round(lv.progress * 100)}%"></div></div>
-        ${s.achievements.length ? `<div class="rp-ach">${s.achievements.map((a) => `<span>${a.icon} ${esc(a.name)}</span>`).join('')}</div>` : ''}</div></div>`;
+        ${s.achievements.length ? `<div class="rp-ach">${s.achievements.map((a) => `<span>${achIcon(a.id)} ${esc(a.name)}</span>`).join('')}</div>` : ''}</div></div>`;
     }).join('');
-    for (const s of summaries) for (const a of s.achievements) ui.toast(`🏆 ${s.name}: ${a.name} — ${a.desc}`, 'ok');
+    for (const s of summaries) for (const a of s.achievements) ui.toast(`${s.name}: ${a.name} — ${a.desc}`, 'ok', 'trophy');
   }
 
   // ---------------------------------------------------------------- wiring
@@ -249,6 +259,14 @@ export function installSocial(ui) {
     },
   });
   ui.pickerHooks.push((which, d) => {
+    if (which === 'career-tab') {
+      const i = CAREER_TABS.findIndex(([v]) => v === state.careerTab);
+      state.careerTab = CAREER_TABS[(i + d + CAREER_TABS.length) % CAREER_TABS.length][0];
+      renderCareer();
+      ui.focus = Math.max(0, ui.navItems().findIndex((x) => x.dataset.picker === 'career-tab'));
+      ui.applyFocus(false);
+      return true;
+    }
     if (which.startsWith('lb-')) { lbPicker(which, d); return true; }
     if (which === 'pf-color') {
       state.formColor = PROFILE_COLORS[(PROFILE_COLORS.indexOf(state.formColor) + d + PROFILE_COLORS.length) % PROFILE_COLORS.length];

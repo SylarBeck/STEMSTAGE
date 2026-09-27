@@ -22,6 +22,7 @@ import { checkForUpdates, autoCheck } from './updates.js';
 import { padName, isDualSensePad, srcKey } from '../input/input.js';
 import { bindings } from '../input/bindings.js';
 import { PLAYER_COLORS } from '../game/player.js';
+import { fa, instIcon, stars as starsHtml, starsOnly, achIcon } from './icons.js';
 import { pickGhost, replaysFor, loadReplay, saveReplay } from '../game/replay.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -30,11 +31,11 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 const INSTRUMENTS = [
-  { id: 'guitar', label: 'Guitar', ico: '🎸' },
-  { id: 'bass', label: 'Bass', ico: '🎸' },
-  { id: 'drums', label: 'Drums', ico: '🥁' },
-  { id: 'keys', label: 'Keys', ico: '🎹' },
-  { id: 'vocals', label: 'Vocals', ico: '🎤' },
+  { id: 'guitar', label: 'Guitar', ico: instIcon('guitar') },
+  { id: 'bass', label: 'Bass', ico: instIcon('bass') },
+  { id: 'drums', label: 'Drums', ico: instIcon('drums') },
+  { id: 'keys', label: 'Keys', ico: instIcon('keys') },
+  { id: 'vocals', label: 'Vocals', ico: instIcon('vocals') },
 ];
 const SORTS = [['recent', 'Recent'], ['title', 'Title'], ['artist', 'Artist'], ['bpm', 'BPM'], ['length', 'Length']];
 const SPEEDS = [0.5, 0.6, 0.7, 0.8, 0.9, 1];
@@ -578,10 +579,11 @@ export class UI {
     }).join('');
   }
 
-  toast(msg, kind = '') {
+  toast(msg, kind = '', icon = null) {
     const t = document.createElement('div');
     t.className = `toast ${kind}`;
-    t.textContent = msg;
+    if (icon) t.innerHTML = fa(icon, 'toast-ico');
+    t.append(msg);
     $('#toasts').appendChild(t);
     setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 350); }, 3800);
   }
@@ -593,7 +595,7 @@ export class UI {
     this._saved = { screen: this.screen, index: this.focus, el: this.navItems()[this.focus] };
     const el = $('#sheet');
     el.innerHTML = `<div class="sheet-card"><div class="sheet-title">${esc(title)}</div>${sub ? `<div class="sheet-sub">${esc(sub)}</div>` : ''}
-      <div class="sheet-items">${items.map((it, i) => `<button class="sheet-item ${it.danger ? 'danger' : ''}" data-nav data-i="${i}" ${it.disabled ? 'disabled' : ''}><b>${esc(it.label)}</b>${it.desc ? `<small>${esc(it.desc)}</small>` : ''}</button>`).join('')}</div></div>`;
+      <div class="sheet-items">${items.map((it, i) => `<button class="sheet-item ${it.danger ? 'danger' : ''}" data-nav data-i="${i}" ${it.disabled ? 'disabled' : ''}><b>${it.icon ? fa(it.icon, 'sheet-ico') : ''}${esc(it.label)}</b>${it.desc ? `<small>${esc(it.desc)}</small>` : ''}</button>`).join('')}</div></div>`;
     el.hidden = false;
     return new Promise((resolve) => {
       this.sheet = { items, resolve };
@@ -748,13 +750,13 @@ export class UI {
         if (!p) { body = '<div class="hero-k">Tour</div><h2>Hit the road</h2><p>Sign in to play gigs from the Garage to the Festival main stage.</p>'; break; }
         const ch = this.tour.daily();
         const stars = tourStars(p);
-        body = `<div class="hero-k">Tour</div><h2>★ ${stars} <small>/ ${TOUR_MAX}</small></h2><div class="xpbar"><div style="width:${Math.round((stars / TOUR_MAX) * 100)}%"></div></div>${ch ? `<p><b>Daily challenge${dailyDone(p) ? ' ✓' : ''}</b><br>${esc(ch.title)} · ${ch.instrument} · ${esc(ch.text)}</p>` : ''}`;
+        body = `<div class="hero-k">Tour</div><h2>${fa('star')} ${stars} <small>/ ${TOUR_MAX}</small></h2><div class="xpbar"><div style="width:${Math.round((stars / TOUR_MAX) * 100)}%"></div></div>${ch ? `<p><b>Daily challenge${dailyDone(p) ? ' ✓' : ''}</b><br>${esc(ch.title)} · ${ch.instrument} · ${esc(ch.text)}</p>` : ''}`;
         break;
       }
       case 'stream': body = `<div class="hero-k">Stream mode</div><h2>Let chat play along</h2><p>Twitch chat votes for songs, requests with !sr and hypes the crowd. OBS overlay included.</p>${settings.twitchChannel ? `<p class="dim">Channel: #${esc(settings.twitchChannel)}</p>` : ''}`; break;
       case 'setlists': {
         const lists = this.setlists.lists();
-        body = `<div class="hero-k">Setlists</div><h2>Marathon mode</h2><p>Build setlists and play them back to back for one big score.</p>${lists.length ? lists.slice(0, 3).map((l) => `<div class="hero-row"><b>♫</b><span>${esc(l.name)}</span><em>${l.songs.length} songs</em></div>`).join('') : ''}`;
+        body = `<div class="hero-k">Setlists</div><h2>Marathon mode</h2><p>Build setlists and play them back to back for one big score.</p>${lists.length ? lists.slice(0, 3).map((l) => `<div class="hero-row"><b>${fa('list-ol')}</b><span>${esc(l.name)}</span><em>${l.songs.length} songs</em></div>`).join('') : ''}`;
         break;
       }
       case 'career': {
@@ -903,10 +905,10 @@ export class UI {
       `<span class="badge">${fmtTime(s.duration)}</span>`,
       `<span class="badge">${(s.stemNames || []).length} stems</span>`,
       neural ? '<span class="badge ai">neural notes</span>' : '',
-      ...(s.remarks || []).map((r) => `<div class="small-note" style="width:100%;margin:2px 0 0">${esc(r)}</div>`),
+      (s.remarks || []).length ? `<span class="badge" title="${esc(s.remarks.join('\n'))}">${s.remarks.length} note${s.remarks.length === 1 ? '' : 's'}</span>` : '',
     ].join('');
-    const extra = [s.album && `💿 ${esc(s.album)}`, s.year && esc(s.year), s.genre && esc(s.genre)].filter(Boolean);
-    if (s.source?.type === 'youtube' && s.source.url) extra.push(`<a href="${esc(s.source.url)}" target="_blank" rel="noopener">▶ YouTube</a>`);
+    const extra = [s.album && `${fa('compact-disc')} ${esc(s.album)}`, s.year && esc(s.year), s.genre && esc(s.genre)].filter(Boolean);
+    if (s.source?.type === 'youtube' && s.source.url) extra.push(`<a href="${esc(s.source.url)}" target="_blank" rel="noopener">${fa('play')} YouTube</a>`);
     
     $('#detail-extra').innerHTML = extra.map((x) => `<span>${x}</span>`).join('');
     $$('#song-detail .picker').forEach((p) => { p.style.display = band ? 'none' : ''; });
@@ -940,22 +942,22 @@ export class UI {
       $$('#pick-instrument .opt').forEach((o) => o.addEventListener('click', () => { this.instrument = o.dataset.val; settings.lastInstrument = this.instrument; this.renderDetail(s); }));
       const rw = $('#pick-real-wrap');
       rw.hidden = !['guitar', 'bass', 'keys'].includes(this.instrument);
-      $('#pick-real').innerHTML = [[false, '🎮 Controller'], [true, this.instrument === 'keys' ? '🎹 Real keyboard' : `🎸 Real ${this.instrument}`]].map(([v, l]) => `<div class="opt ${!!settings.realInstrument === v ? 'sel' : ''}" data-val="${v}">${l}</div>`).join('');
+      $('#pick-real').innerHTML = [[false, `${fa('gamepad')} Controller`], [true, this.instrument === 'keys' ? `${instIcon('keys')} Real keyboard` : `${instIcon(this.instrument)} Real ${this.instrument}`]].map(([v, l]) => `<div class="opt ${!!settings.realInstrument === v ? 'sel' : ''}" data-val="${v}">${l}</div>`).join('');
       $$('#pick-real .opt').forEach((o) => o.addEventListener('click', () => { settings.realInstrument = o.dataset.val === 'true'; this.renderDetail(s); }));
       const vw = $('#pick-vocal-wrap');
       vw.hidden = this.instrument !== 'vocals';
-      $('#pick-vocal').innerHTML = [['mic', '🎤 Sing'], ['buttons', '🎮 Buttons']].map(([v, l]) => `<div class="opt ${settings.vocalMode === v ? 'sel' : ''}" data-val="${v}">${l}${v === 'mic' && !s.lyrics?.words?.length ? '<small>no lyrics yet</small>' : ''}</div>`).join('');
+      $('#pick-vocal').innerHTML = [['mic', `${fa('microphone')} Sing`], ['buttons', `${fa('gamepad')} Buttons`]].map(([v, l]) => `<div class="opt ${settings.vocalMode === v ? 'sel' : ''}" data-val="${v}">${l}${v === 'mic' && !s.lyrics?.words?.length ? '<small>no lyrics yet</small>' : ''}</div>`).join('');
       $$('#pick-vocal .opt').forEach((o) => o.addEventListener('click', () => { settings.vocalMode = o.dataset.val; this.renderDetail(s); }));
       $$('#pick-difficulty .opt').forEach((o) => o.addEventListener('click', () => { this.difficulty = o.dataset.val; settings.lastDifficulty = this.difficulty; this.renderDetail(s); }));
     }
-    const lb = band || pickForRoom ? [] : profiles.leaderboard(s.id, this.instrument, this.difficulty, 5);
+    const lb = band || pickForRoom ? [] : profiles.leaderboard(s.id, this.instrument, this.difficulty, 3);
     const meId = profiles.current?.id;
     $('#detail-lb').innerHTML = band || pickForRoom ? '' : `<h4>Leaderboard · ${this.instrument} · ${this.difficulty}</h4>` + (lb.length
-      ? lb.map((r, i) => `<div class="lb-row ${r.profileId === meId ? 'me' : ''}"><span class="pos">${i + 1}</span><span>${avatarHtml(r.profile, 20)} ${esc(r.profileName)}</span><b>${r.score.toLocaleString()}</b><small>${'★'.repeat(r.stars)}${r.fc ? ' 💎' : ''}</small></div>`).join('')
+      ? lb.map((r, i) => `<div class="lb-row ${r.profileId === meId ? 'me' : ''}"><span class="pos">${i + 1}</span><span>${avatarHtml(r.profile, 20)} ${esc(r.profileName)}</span><b>${r.score.toLocaleString()}</b><small>${starsOnly(r.stars)}${r.fc ? ` ${fa('gem')}` : ''}</small></div>`).join('')
       : '<div class="small-note">No scores yet — be the first.</div>');
     const best = band || pickForRoom ? null : getBest(s.id, this.instrument, this.difficulty);
-    $('#detail-best').innerHTML = best && !lb.length ? `Best (guest): <b>${best.score.toLocaleString()}</b> · ${'★'.repeat(best.stars)}` : '';
-    $('[data-action="play"]').innerHTML = pickForRoom ? '✓ Select for match' : this.mode === 'setlist-add' ? '+ Add to setlist' : '▶ Play';
+    $('#detail-best').innerHTML = best && !lb.length ? `Best (guest): <b>${best.score.toLocaleString()}</b> · ${starsOnly(best.stars)}` : '';
+    $('[data-action="play"]').innerHTML = pickForRoom ? `${fa('check')} Select for match` : this.mode === 'setlist-add' ? `${fa('plus')} Add to setlist` : `${fa('play')} Play`;
     $('[data-action="song-options"]').style.display = pickForRoom ? 'none' : '';
     this.applyFocus(false);
   }
@@ -967,7 +969,7 @@ export class UI {
     this.openSheet({
       title: s.title, sub: `${s.artist} · ${fmtTime(s.duration)}`,
       items: [
-        { label: '▶ Play', desc: band ? `${this.party.length}-player band` : `${this.instrument} · ${this.difficulty}`, run: () => this.play() },
+        { label: 'Play', icon: 'play', desc: band ? `${this.party.length}-player band` : `${this.instrument} · ${this.difficulty}`, run: () => this.play() },
         ...(band ? [] : [{ label: 'Practice', desc: 'Slow it down (pitch preserved) and start anywhere', run: () => this.openPractice() }]),
         { label: 'Replays & ghosts', desc: 'Watch a recorded run, or race it as a ghost', run: () => this.replaysSheet(s) },
         { label: 'Add to setlist…', desc: 'Put it in a setlist for a marathon', run: () => this.setlists.addToSheet(s) },
@@ -1091,17 +1093,17 @@ export class UI {
   async replaysSheet(s) {
     const list = await replaysFor(s.id);
     if (!list.length) { this.toast('No replays for this song yet — every run you finish is recorded'); return; }
-    const who = (r) => `${r.name} · ${INST_ICON[r.instrument] || ''} ${r.instrument} · ${r.difficulty}`;
+    const who = (r) => `${r.name} · ${r.instrument} · ${r.difficulty}`; // plain text: sheet titles are escaped
     this.openSheet({
       title: 'Replays & ghosts', sub: s.title,
       items: list.slice(0, 14).map((r) => ({
-        label: `${r.score.toLocaleString()} · ${'★'.repeat(r.stars)}${r.fc ? ' 💎' : ''}${r.failed ? ' · failed' : ''}`,
+        label: `${r.score.toLocaleString()} · ${r.stars} star${r.stars === 1 ? '' : 's'}${r.fc ? ' · full combo' : ''}${r.failed ? ' · failed' : ''}`, icon: r.fc ? 'gem' : 'film',
         desc: `${who(r)} · ${new Date(r.date).toLocaleDateString()}`,
         run: () => setTimeout(() => this.openSheet({
           title: who(r), sub: `${r.score.toLocaleString()} · ${Math.round(r.accuracy * 100)}%`,
           items: [
-            { label: '▶ Watch replay', desc: 'See the run played back exactly', run: () => this.watchReplay(r.id) },
-            { label: '👻 Race this ghost', desc: r.failed ? 'Failed runs can not be raced' : `Play ${r.instrument} · ${r.difficulty} against this score`, disabled: r.failed, run: () => this.raceGhost(r.id) },
+            { label: 'Watch replay', icon: 'play', desc: 'See the run played back exactly', run: () => this.watchReplay(r.id) },
+            { label: 'Race this ghost', icon: 'ghost', desc: r.failed ? 'Failed runs can not be raced' : `Play ${r.instrument} · ${r.difficulty} against this score`, disabled: r.failed, run: () => this.raceGhost(r.id) },
           ],
         }), 0),
       })),
@@ -1128,7 +1130,7 @@ export class UI {
     this.app.menuMusic(false);
     this.stopPreview();
     this.lastPlay = { mode: 'replay', replay };
-    if (profiles.current) profiles.award(profiles.current.id, 'replay_watch').then((f) => f.forEach((a) => this.toast(`🏆 ${a.name} — ${a.desc}`, 'ok')));
+    if (profiles.current) profiles.award(profiles.current.id, 'replay_watch').then((f) => f.forEach((a) => this.toast(`${a.name} — ${a.desc}`, 'ok', 'trophy')));
     this.show('hud');
     const cfg = {
       name: replay.name, color: replay.color, profileId: replay.profileId, device: 'any', instrument: replay.instrument, difficulty: replay.difficulty,
@@ -1384,13 +1386,13 @@ export class UI {
       html.push(`<div class="slot filled ${p.ready ? 'ready' : ''}" style="--pc:${prof?.color || PLAYER_COLORS[i]}">
         <div class="slot-head"><span class="slot-num">P${i + 1}</span><b>${esc(prof?.name || `Player ${i + 1}`)}</b><button class="slot-x" data-remove="${i}" title="Leave">✕</button></div>
         <div class="slot-art ctl-art">${controllerPicture(det.kind)}</div>
-        <div class="slot-dev">${esc(det.name)}${p.device === 'kb2' ? '<small class="slot-keys">U ▲ · I ▼ · O ◀ · P ▶ · [ ready</small>' : ''}</div>
+        <div class="slot-dev">${esc(det.name)}${p.device === 'kb2' ? '<small class="slot-keys">U up · I down · O left · P right · [ ready</small>' : ''}</div>
         ${row('prof', 'Profile', prof ? `${avatarHtml(prof, 16)} ${esc(prof.name)}` : 'Guest')}
         ${row('cfg', 'Controls', esc(dv?.profileKey ? bindings.shortLabel(dv.profileKey, padName) : 'Needs mapping'))}
         ${row('inst', 'Instrument', `${INST_ICON[p.instrument]} ${p.instrument}`)}
         ${row('diff', 'Difficulty', p.difficulty)}
         ${five ? row('strum', 'Frets', p.strum ? 'Strum' : 'Tap') : ''}
-        <div class="slot-ready ${focusRow === 'ready' ? 'focus-row' : ''}" data-slot="${i}" data-row="ready">${p.ready ? '✓ READY' : 'Ready up'}</div>
+        <div class="slot-ready ${focusRow === 'ready' ? 'focus-row' : ''}" data-slot="${i}" data-row="ready">${p.ready ? `${fa('check')} READY` : 'Ready up'}</div>
         <div class="slot-leave ${focusRow === 'leave' ? 'focus-row' : ''}" data-slot="${i}" data-row="leave">Leave</div>
       </div>`);
     }
@@ -1448,7 +1450,7 @@ export class UI {
 
   renderImportTab() {
     const yt = this.importTab === 'youtube';
-    $('#pick-import-tab').innerHTML = [['file', '📁 Audio file'], ['youtube', '▶ YouTube search']].map(([v, l]) => `<div class="opt ${v === this.importTab ? 'sel' : ''}" data-v="${v}">${l}</div>`).join('');
+    $('#pick-import-tab').innerHTML = [['file', `${fa('file-audio')} Audio file`], ['youtube', `${fa('play')} YouTube search`]].map(([v, l]) => `<div class="opt ${v === this.importTab ? 'sel' : ''}" data-v="${v}">${l}</div>`).join('');
     $$('#pick-import-tab .opt').forEach((o) => o.addEventListener('click', () => { this.importTab = o.dataset.v; this.renderImportTab(); }));
     $('#import-yt').hidden = !yt;
     $('#drop').style.display = yt ? 'none' : '';
@@ -1536,10 +1538,10 @@ export class UI {
       const song = youtube
         ? await importFromYouTube(ytItem, this.splitter, this.app.engine, report)
         : await importFile(file, this.splitter, this.app.engine, report);
-      const bits = [song.method === 'ai' ? 'AI split' : 'DSP split', `${song.bpm} BPM`, song.album && `💿 ${song.album}`].filter(Boolean);
+      const bits = [song.method === 'ai' ? 'AI split' : 'DSP split', `${song.bpm} BPM`, song.album && `album ${song.album}`].filter(Boolean);
       this.toast(`"${song.title}" by ${song.artist} is ready — ${bits.join(' · ')}`, 'ok');
       const fresh = await profiles.count(youtube ? 'youtube_import' : 'import');
-      for (const a of fresh) this.toast(`🏆 ${a.name} — ${a.desc}`, 'ok');
+      for (const a of fresh) this.toast(`${a.name} — ${a.desc}`, 'ok', 'trophy');
       this.busy = false;
       this.importBatch?.ids.push(song.id);
       if (this.aiStatus?.lyrics && (song.stemNames || []).includes('vocals') && song.charts?.vocals?.available) this.getLyrics(song, true);
@@ -1662,8 +1664,8 @@ export class UI {
       const devs = await Mic.devices();
       this.openSheet({
         title: 'Microphone', sub: 'The input you sing into',
-        items: [{ label: `System default${!settings.micDevice ? ' ✓' : ''}`, run: () => { settings.micDevice = ''; } },
-          ...devs.filter((d) => d.deviceId && d.deviceId !== 'default').map((d) => ({ label: `${d.label || 'Microphone'}${settings.micDevice === d.deviceId ? ' ✓' : ''}`, run: () => { settings.micDevice = d.deviceId; this.toast(`Singing into ${d.label || 'that microphone'}`, 'ok'); } }))],
+        items: [{ label: 'System default', icon: !settings.micDevice ? 'check' : 'microphone', run: () => { settings.micDevice = ''; } },
+          ...devs.filter((d) => d.deviceId && d.deviceId !== 'default').map((d) => ({ label: d.label || 'Microphone', icon: settings.micDevice === d.deviceId ? 'check' : 'microphone', run: () => { settings.micDevice = d.deviceId; this.toast(`Singing into ${d.label || 'that microphone'}`, 'ok'); } }))],
       });
     }
     if (a === 'testMic') this.testMic();
@@ -1673,8 +1675,8 @@ export class UI {
       const devs = await Mic.devices();
       this.openSheet({
         title: 'Instrument input', sub: 'Where your guitar or bass comes in',
-        items: [{ label: `System default${!settings.instrumentInput ? ' ✓' : ''}`, run: () => { settings.instrumentInput = ''; } },
-          ...devs.filter((d) => d.deviceId && d.deviceId !== 'default').map((d) => ({ label: `${d.label || 'Audio input'}${settings.instrumentInput === d.deviceId ? ' ✓' : ''}`, run: () => { settings.instrumentInput = d.deviceId; this.toast(`Instrument input: ${d.label || 'that input'}`, 'ok'); } }))],
+        items: [{ label: 'System default', icon: !settings.instrumentInput ? 'check' : 'guitar', run: () => { settings.instrumentInput = ''; } },
+          ...devs.filter((d) => d.deviceId && d.deviceId !== 'default').map((d) => ({ label: d.label || 'Audio input', icon: settings.instrumentInput === d.deviceId ? 'check' : 'guitar', run: () => { settings.instrumentInput = d.deviceId; this.toast(`Instrument input: ${d.label || 'that input'}`, 'ok'); } }))],
       });
     }
     if (a === 'checkUpdate') checkForUpdates(this);
@@ -1787,7 +1789,7 @@ export class UI {
     const gold = band ? r.players.every((p) => p.gold) : solo.gold;
     const starsEl = $('#res-stars');
     starsEl.className = `stars ${gold ? 'gold' : ''}`;
-    starsEl.innerHTML = [0, 1, 2, 3, 4].map((i) => `<span class="s ${i < stars ? 'on' : ''}" style="animation-delay:${0.25 + i * 0.18}s">★</span>`).join('');
+    starsEl.innerHTML = [0, 1, 2, 3, 4].map((i) => `<span class="s ${i < stars ? 'on' : ''}" style="animation-delay:${0.25 + i * 0.18}s">${fa('star')}</span>`).join('');
     const target = band ? r.bandScore : solo.score;
     const scoreEl = $('#res-score');
     const start = performance.now();
@@ -1801,7 +1803,7 @@ export class UI {
     const gh = $('#res-ghost');
     if (r.ghost && !band) {
       const d = solo.score - r.ghost.score;
-      gh.innerHTML = d >= 0 ? `👻 Beat ${esc(r.ghost.name)}'s ghost by <b>${d.toLocaleString()}</b>` : `👻 ${esc(r.ghost.name)}'s ghost won by <b>${(-d).toLocaleString()}</b>`;
+      gh.innerHTML = d >= 0 ? `${fa('ghost')} Beat ${esc(r.ghost.name)}'s ghost by <b>${d.toLocaleString()}</b>` : `${fa('ghost')} ${esc(r.ghost.name)}'s ghost won by <b>${(-d).toLocaleString()}</b>`;
       gh.className = `res-ghost ${d >= 0 ? 'won' : 'lost'}`;
       gh.hidden = false;
     } else gh.hidden = true;
@@ -1817,7 +1819,7 @@ export class UI {
       <div class="res-player" style="--pc:${p.color}">
         <b>${r.mode === 'online' ? `#${i + 1} ` : ''}${esc(p.name)}</b> <small>${INST_ICON[p.instrument] || ''} ${p.instrument} · ${p.difficulty}${p.remote ? ' · online' : ''}</small>
         <div class="rp-score">${p.score.toLocaleString()}</div>
-        <div class="rp-stars">${'★'.repeat(p.stars)}${'☆'.repeat(5 - p.stars)}${p.newBest && p.prevBest ? ' · NEW BEST' : ''}</div>
+        <div class="rp-stars">${starsHtml(p.stars)}${p.newBest && p.prevBest ? ' · NEW BEST' : ''}</div>
         <div class="rp-line">${Math.round(p.accuracy * 100)}% · ${p.hits}/${p.total} notes · streak ${p.maxStreak}${p.failed ? ' · failed' : ''}</div>
       </div>`).join('') : '';
     this.focus = 0;
