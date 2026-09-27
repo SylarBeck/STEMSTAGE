@@ -168,7 +168,7 @@ export class Session {
     this.hud.replayBadge(false);
     this.input.setMenu();
     this.ds.offAll();
-    this.engine.setCrowd(0.15);
+    this.engine.setCrowd(0); // no crowd noise in the menus
     discord.menus();
   }
 
@@ -378,6 +378,7 @@ export class Session {
     }
     await new Promise((r) => setTimeout(r, failed ? 1400 : this.online ? 600 : 1800));
     this.running = false;
+    this.engine.setCrowd(0); // the results screen is a menu: crowd noise fades out
     this.offOnline?.forEach((f) => f());
     this.offOnline = null;
     this.renderer.setHighways([]);

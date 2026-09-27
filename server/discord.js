@@ -73,9 +73,9 @@ class DiscordIpc {
         const sock = await new Promise((resolve) => {
           const s = net.createConnection(p);
           const fail = () => { s.destroy(); resolve(null); };
-          s.once('connect', () => { s.off('error', fail); resolve(s); });
-          s.once('error', fail);
-          setTimeout(fail, 800);
+          const timer = setTimeout(fail, 800);
+          s.once('connect', () => { clearTimeout(timer); s.off('error', fail); resolve(s); });
+          s.once('error', () => { clearTimeout(timer); fail(); });
         });
         if (!sock) continue;
         const ready = await this._handshake(sock, clientId);

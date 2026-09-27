@@ -3,10 +3,10 @@
 // this PC). The local server (server/discord.js) does the Discord calls; this is the game-side API.
 //
 // Both use STEMSTAGE's own Discord application. Its ID is public (not a secret) and baked in at build time, so
-// players set nothing up. Build with VITE_DISCORD_CLIENT_ID=<id> or fill in DISCORD_APP_ID below.
+// players set nothing up. Forks: build with VITE_DISCORD_CLIENT_ID=<your application id>.
 import { settings } from '../settings.js';
 
-export const DISCORD_APP_ID = import.meta.env?.VITE_DISCORD_CLIENT_ID || '';
+export const DISCORD_APP_ID = import.meta.env?.VITE_DISCORD_CLIENT_ID || '1553872601603117127';
 const appId = () => settings.discordClientId || DISCORD_APP_ID;
 const OAUTH_KEY = 'stemstage.discord.oauth';
 export const CALLBACK_PATH = '/discord/callback';

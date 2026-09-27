@@ -42,4 +42,4 @@ Setting up the application (maintainers, once):
 1. <https://discord.com/developers/applications> → **New Application** → name it **STEMSTAGE** (Discord shows this name: "Playing STEMSTAGE").
 2. **OAuth2 → Redirects**, add: `http://127.0.0.1:5173/discord/callback`, `http://localhost:5173/discord/callback`, `http://localhost:5174/discord/callback`
 3. **Rich Presence → Art Assets:** upload `brand/icon-1024.png` with the key **`stemstage`**.
-4. Put the **Application ID** in `DISCORD_APP_ID` in `src/net/discord.js` (or build with `VITE_DISCORD_CLIENT_ID=<id>`). Forks can use their own; players can override it with the `discordClientId` setting.
+4. The **Application ID** is `DISCORD_APP_ID` in `src/net/discord.js` (STEMSTAGE's is `1553872601603117127`). Forks build with `VITE_DISCORD_CLIENT_ID=<id>`, and the `discordClientId` setting overrides it.

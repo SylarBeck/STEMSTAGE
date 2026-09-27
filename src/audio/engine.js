@@ -217,8 +217,7 @@ export class AudioEngine {
     lfo.connect(lfoGain).connect(bp.frequency);
     this.crowdLevel = ctx.createGain(); this.crowdLevel.gain.value = 0;
     src.connect(bp).connect(this.crowdLevel).connect(this.crowdGain);
-    src.start(); lfo.start();
-    this.setCrowd(0.15);
+    src.start(); lfo.start(); // silent until a song starts: the menus have no crowd noise
   }
 
   setCrowd(level) {
