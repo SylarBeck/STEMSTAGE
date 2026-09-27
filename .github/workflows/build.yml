@@ -46,9 +46,9 @@ jobs:
       - run: npm ci
       - name: Build (no update signing)
         shell: bash
-        env:
-          TAURI_CONFIG: '{"bundle":{"createUpdaterArtifacts":false}}'
-        run: npx tauri build --bundles ${{ matrix.bundles }}
+        run: |
+          echo '{"bundle":{"createUpdaterArtifacts":false}}' > "$RUNNER_TEMP/no-updater.json"
+          npx tauri build --bundles ${{ matrix.bundles }} --config "$RUNNER_TEMP/no-updater.json"
       - uses: actions/upload-artifact@v4
         with:
           name: stemstage-${{ runner.os }}

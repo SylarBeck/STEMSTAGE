@@ -1,43 +1,45 @@
 # Discord
 
-STEMSTAGE works with Discord in two directions. None of it needs a bot, a Discord login inside the game, or a secret key.
+Nothing to set up for players: log in with Discord and your status follows what you play.
 
 | | What it does | Needs |
 |---|---|---|
-| **Profile linking** | Your STEMSTAGE profile shows your Discord avatar and name | The Discord app on this PC, or your Discord user ID |
-| **Live status** | Your career page shows your Discord status (online / idle / do not disturb), custom status, and what you're playing or listening to | Joining the [Lanyard](https://github.com/Phineas/lanyard) Discord server once |
-| **Rich Presence** | Your Discord status shows what you're playing in STEMSTAGE: song, artist, part, difficulty and time left | The Discord app on this PC + a Discord application ID |
+| **Log in with Discord** | Links your STEMSTAGE profile to your Discord account: your Discord avatar and name show on your profile | A Discord account |
+| **Automatic status** | While you play, your Discord status shows the song, artist, part, difficulty and time left, then your result | The Discord app running on this PC |
+| **Live status on your profile** | Your career page shows your Discord status (online / idle / do not disturb), custom status, and what you're playing or listening to | Joining the [Lanyard](https://github.com/Phineas/lanyard) Discord server once (optional) |
 
-## Link your profile
+## Log in with Discord
 
 1. Sign in to your STEMSTAGE profile and open **Career**.
-2. Press **Link Discord**. STEMSTAGE asks the Discord app on this PC who's signed in and asks you to confirm.
-3. If the Discord app isn't running (or no application ID is set), you can type your **Discord user ID** instead. In Discord: Settings → Advanced → turn on *Developer Mode*, then right-click your name → *Copy User ID*.
+2. Press **Link Discord** → **Continue**. Discord's login page opens in the game window.
+3. Sign in if needed and press **Authorize**. STEMSTAGE only asks for the `identify` permission: your username and avatar, not your email, servers or messages.
+4. You're back on your Career page with Discord linked.
 
-*Unlink Discord* on the same page removes it. The link is stored with your profile in `Documents/STEMSTAGE/data/profiles.json`: your user ID, username, display name and avatar ID.
+Discord's answer is used once to read your profile and isn't stored. The link (your Discord user ID, username, display name and avatar ID) is saved with your STEMSTAGE profile in `Documents/STEMSTAGE/data/profiles.json`. **Unlink Discord** on the same page removes it.
 
-## Show your live status
+## Automatic status (Rich Presence)
 
-Discord doesn't let other apps read your status directly. STEMSTAGE uses **[Lanyard](https://github.com/Phineas/lanyard)**, a free open-source service that exposes the status of anyone who has joined its Discord server:
-
-1. Join the Lanyard server: <https://discord.gg/lanyard>. You can mute it.
-2. Open your STEMSTAGE career page. It shows your status and refreshes every 30 seconds.
-
-If you haven't joined, the career page says "status hidden" and everything else still works.
-
-## Rich Presence ("Playing STEMSTAGE")
-
-Rich Presence goes through the Discord desktop app's local connection, and Discord wants an **application ID** for it. That's a public number, not a secret. Setting it up takes two minutes:
-
-1. Open <https://discord.com/developers/applications> and click **New Application**. Name it **STEMSTAGE**, because Discord shows this name ("Playing STEMSTAGE").
-2. Copy the **Application ID** from *General Information*.
-3. *Optional:* under **Rich Presence → Art Assets**, upload the STEMSTAGE icon (`brand/icon-1024.png`) with the key **`stemstage`**. Songs with online cover art show the cover instead.
-4. In STEMSTAGE: **Settings → Discord → Discord application ID**, paste it, then **Test Discord connection**.
-
-*Show what I play on Discord* turns Rich Presence on or off. Friends see:
+When the Discord desktop app is running on the same PC, STEMSTAGE updates your status automatically. Friends see:
 
 - **In a song:** "Hotel California — Eagles", "Guitar · Expert", time left, the album cover, and a *Get STEMSTAGE* button
 - **Band:** the band size (for example "3 of 4")
 - **Paused**, **practicing**, **watching a replay**, **results** ("12,345 points · 5★") and **in the menus**
 
-To bake an ID into your own builds, set `STEMSTAGE_DISCORD_CLIENT_ID` in the game server's environment.
+Turn it off with **Settings → Discord → Show what I play on Discord**. *Test Discord status* checks that the Discord app answers. The browser version of Discord can't show game status, and Discord's own setting *Activity Privacy → Share your detected activities* has to be on.
+
+## Live status on your profile
+
+Discord doesn't let other apps read your status directly. STEMSTAGE uses **[Lanyard](https://github.com/Phineas/lanyard)**, a free open-source service that exposes the status of people who have joined its Discord server. Join <https://discord.gg/lanyard> (you can mute it), and your career page shows your status, refreshed every 30 seconds. If you haven't joined, it says "status hidden" and everything else works.
+
+## For developers: the STEMSTAGE Discord application
+
+Login and Rich Presence use one Discord application owned by the project. Its **Application ID is public** (it's in every OAuth URL), and no client secret is used anywhere:
+
+- Login is the OAuth2 **implicit grant** (`response_type=token`, scope `identify`). The redirect goes to `<game origin>/discord/callback`, and the game server calls `GET /users/@me` once with the token (`server/discord.js`, `POST /api/discord/me`).
+- Rich Presence goes through the Discord app's local IPC socket (`discord-ipc-N`) with the same ID.
+
+Setting up the application (maintainers, once):
+1. <https://discord.com/developers/applications> → **New Application** → name it **STEMSTAGE** (Discord shows this name: "Playing STEMSTAGE").
+2. **OAuth2 → Redirects**, add: `http://127.0.0.1:5173/discord/callback`, `http://localhost:5173/discord/callback`, `http://localhost:5174/discord/callback`
+3. **Rich Presence → Art Assets:** upload `brand/icon-1024.png` with the key **`stemstage`**.
+4. Put the **Application ID** in `DISCORD_APP_ID` in `src/net/discord.js` (or build with `VITE_DISCORD_CLIENT_ID=<id>`). Forks can use their own; players can override it with the `discordClientId` setting.

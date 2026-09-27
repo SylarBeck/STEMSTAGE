@@ -53,7 +53,9 @@ jobs:
       - name: Skip update files (no signing key)
         if: env.HAS_SIGNING_KEY != 'true'
         shell: bash
-        run: echo 'TAURI_CONFIG={"bundle":{"createUpdaterArtifacts":false}}' >> "$GITHUB_ENV"
+        run: |
+          echo '{"bundle":{"createUpdaterArtifacts":false}}' > "$RUNNER_TEMP/no-updater.json"
+          echo "EXTRA_ARGS=--config $RUNNER_TEMP/no-updater.json" >> "$GITHUB_ENV"
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -72,4 +74,4 @@ jobs:
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
-          args: --bundles ${{ matrix.bundles }}
+          args: --bundles ${{ matrix.bundles }} ${{ env.EXTRA_ARGS }}

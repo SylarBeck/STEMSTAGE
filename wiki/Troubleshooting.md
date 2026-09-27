@@ -35,8 +35,9 @@ It needs **Node.js 20+** on your PATH (`node --version`). The splash screen show
 ## Discord
 
 - **"Discord is not running on this PC":** start the Discord desktop app (the browser version of Discord has no local connection).
-- **"Discord says the application ID is wrong":** copy the *Application ID* again from the Developer Portal (not the public key or a secret).
-- **Status says "status hidden":** join the Lanyard server, see [Discord](Discord#show-your-live-status).
+- **The login page says "Invalid OAuth2 redirect_uri":** the game runs on an address not registered with the STEMSTAGE Discord application. Use the desktop app, or `npm run dev` on port 5173/5174 (see [Discord](Discord#for-developers-the-stemstage-discord-application)).
+- **Status doesn't change while playing:** in Discord, turn on Settings → Activity Privacy → *Share your detected activities*.
+- **Status says "status hidden":** join the Lanyard server, see [Discord](Discord#live-status-on-your-profile).
 
 ## Online
 

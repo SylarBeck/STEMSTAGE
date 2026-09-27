@@ -196,7 +196,7 @@ export function installSocial(ui) {
     state.dcTimer = setTimeout(() => { if (ui.screen === 'career' && profiles.byId(p.id)?.discord) showPresence(profiles.byId(p.id), true); }, 30000);
   }
 
-  /** Link Discord: the account signed in to the Discord app on this PC, or a user ID typed in. */
+  /** Link Discord: "Log in with Discord" (OAuth). The page goes to discord.com and comes back (finishDiscordLogin). */
   async function linkDiscord() {
     const p = profiles.current;
     if (!p) return;
@@ -207,22 +207,20 @@ export function installSocial(ui) {
       renderCareer();
       return;
     }
-    let user = null;
-    try {
-      ui.toast('Asking the Discord app who is signed in…');
-      user = await discord.currentUser();
-      if (!(await ui.confirmDialog(`Link ${user.globalName || user.username}?`, `Discord account @${user.username}, signed in on this PC. Your profile shows its avatar and live status.`, 'Link'))) return;
-    } catch (e) {
-      // no Discord app / no application ID: a user ID works too
-      const id = await ui.osk.show({ title: 'Discord user ID', hint: `${e.message}. Or type your Discord user ID (Discord → Settings → Advanced → Developer Mode, then right-click your name → Copy User ID)`, type: 'number', max: 21 });
-      if (!id) return;
-      if (!/^\d{15,21}$/.test(id)) { ui.toast('That is not a Discord user ID (15-21 digits)', 'err'); return; }
-      const pr = await discord.presence(id, { fresh: true });
-      user = pr.ok ? pr.user : { id };
-    }
-    await profiles.setDiscord(p.id, user);
-    ui.toast(`Discord linked: ${user.globalName || user.username || user.id}`, 'ok');
-    renderCareer();
+    if (!(await ui.confirmDialog('Log in with Discord?', 'Discord opens so you can sign in and allow STEMSTAGE to see your username and avatar (nothing else). You come back here afterwards.', 'Continue'))) return;
+    try { discord.login(p.id); } catch (e) { ui.toast(e.message, 'err'); }
+  }
+
+  /** Back from the Discord login (start-up): link the account to the profile that asked for it. */
+  async function finishDiscordLogin() {
+    const r = await discord.finishLogin();
+    if (!r) return;
+    if (r.error) { ui.toast(r.error, 'err'); return; }
+    const p = profiles.byId(r.profileId);
+    if (!p) return;
+    await profiles.setDiscord(p.id, r.user);
+    ui.toast(`Discord linked: ${r.user.globalName || r.user.username}`, 'ok');
+    if (profiles.current?.id === p.id) { state.careerId = null; state.careerTab = 'overview'; ui.show('career'); }
   }
 
   // ---------------------------------------------------------------- leaderboards
@@ -343,5 +341,5 @@ export function installSocial(ui) {
     return false;
   });
 
-  return { recordResults, renderCareer, openCareer: (id) => { state.careerId = id; ui.show('career'); } };
+  return { recordResults, renderCareer, finishDiscordLogin, openCareer: (id) => { state.careerId = id; ui.show('career'); } };
 }

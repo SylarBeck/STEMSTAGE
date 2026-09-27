@@ -1,16 +1,17 @@
-// Discord, without a bot, a login or a client secret:
+// Discord, without a bot or a client secret:
+//   - "Log in with Discord": the game does an OAuth2 implicit grant (scope identify) and hands the token to
+//     POST /me once, which reads the profile from Discord's API. The token isn't kept.
 //   - Rich Presence ("Playing STEMSTAGE · Hotel California — Eagles · Guitar · Expert") through the Discord
-//     desktop app's local IPC socket. Its handshake also tells us who is signed in to Discord on this PC,
-//     which is how a STEMSTAGE profile gets linked to a Discord account.
+//     desktop app's local IPC socket, set automatically while you play.
 //   - Live Discord status (online / idle / do not disturb, custom status, what they're playing) from Lanyard
 //     (https://github.com/Phineas/lanyard), which works for anyone who has joined its Discord server.
-// Rich Presence needs a Discord application ID ("client ID", not a secret): create an application named
-// STEMSTAGE at https://discord.com/developers/applications and paste its ID in Settings → Discord (or set
-// STEMSTAGE_DISCORD_CLIENT_ID).
+// OAuth and Rich Presence use STEMSTAGE's Discord application ID (public, not a secret), which the game sends
+// with each request; STEMSTAGE_DISCORD_CLIENT_ID overrides it for the server.
 //
 //   GET  /state                    { connected, user, error, clientId }
 //   POST /connect   { clientId }   connect (or reconnect with another ID) → state
 //   POST /activity  { clientId, activity | null }   set / clear the Rich Presence
+//   POST /me        { token }      the Discord user behind an OAuth token (scope identify)
 //   GET  /presence/<user id>       Lanyard status for that Discord user
 import net from 'node:net';
 import path from 'node:path';
@@ -139,7 +140,7 @@ function toActivity(a) {
   const large = /^https:\/\//.test(a.image || '') ? a.image : 'stemstage';
   act.assets = { large_image: large, large_text: clip(a.imageText || 'STEMSTAGE'), ...(a.small ? { small_image: a.small, small_text: clip(a.smallText) } : {}) };
   if (a.party) act.party = { id: String(a.party.id || 'band'), size: [a.party.size, a.party.max] };
-  act.buttons = [{ label: 'Get STEMSTAGE', url: 'https://sylarbeck.github.io/STEMSTAGE/' }];
+  act.buttons = [{ label: 'Get STEMSTAGE', url: 'https://stemstage.varconstint.com/' }];
   for (const k of Object.keys(act)) if (act[k] === undefined) delete act[k];
   return act;
 }
@@ -188,6 +189,14 @@ export function createDiscord() {
         const body = await readJsonBody(req, 2e4);
         const ok = await ipc.setActivity(idFor(body.clientId), body.activity || null);
         return send(res, 200, { ok, ...ipc.state() });
+      }
+      if (parts[0] === 'me' && req.method === 'POST') {
+        const { token } = await readJsonBody(req, 1e4);
+        if (!/^[A-Za-z0-9._-]{10,200}$/.test(token || '')) return send(res, 400, { error: 'bad token' });
+        const r = await fetch('https://discord.com/api/v10/users/@me', { headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'STEMSTAGE' }, signal: AbortSignal.timeout(10000) });
+        const u = await r.json().catch(() => ({}));
+        if (!r.ok) return send(res, r.status === 401 ? 401 : 502, { error: r.status === 401 ? 'Discord login expired — try again' : `Discord ${r.status}` });
+        return send(res, 200, { id: u.id, username: u.username, globalName: u.global_name || null, avatar: u.avatar || null });
       }
       if (parts[0] === 'presence' && req.method === 'GET') {
         if (!ID_RE.test(parts[1] || '')) return send(res, 400, { error: 'bad Discord user id' });

@@ -1,4 +1,4 @@
-# The website (site/) → the gh-pages branch → https://sylarbeck.github.io/STEMSTAGE/
+# The website (site/) → the gh-pages branch → https://stemstage.varconstint.com
 # (Pages source: Settings → Pages → Deploy from a branch → gh-pages / root)
 name: Website
 
@@ -26,4 +26,5 @@ jobs:
           publish_dir: ./site
           publish_branch: gh-pages
           force_orphan: true
+          cname: stemstage.varconstint.com
           commit_message: 'Website from ${{ github.sha }}'

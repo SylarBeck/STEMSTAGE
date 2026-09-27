@@ -1,7 +1,15 @@
-// Discord for the game: link a profile to the Discord account signed in on this PC, show that account's live
-// status (Lanyard) and put what you're playing in your Discord status (Rich Presence). The work happens in the
-// local server (server/discord.js); this is the game-side API.
+// Discord for the game: log in with Discord (OAuth) to link a profile, show that account's live status (Lanyard)
+// and put what you're playing in your Discord status automatically (Rich Presence through the Discord app on
+// this PC). The local server (server/discord.js) does the Discord calls; this is the game-side API.
+//
+// Both use STEMSTAGE's own Discord application. Its ID is public (not a secret) and baked in at build time, so
+// players set nothing up. Build with VITE_DISCORD_CLIENT_ID=<id> or fill in DISCORD_APP_ID below.
 import { settings } from '../settings.js';
+
+export const DISCORD_APP_ID = import.meta.env?.VITE_DISCORD_CLIENT_ID || '';
+const appId = () => settings.discordClientId || DISCORD_APP_ID;
+const OAUTH_KEY = 'stemstage.discord.oauth';
+export const CALLBACK_PATH = '/discord/callback';
 
 const api = async (path, body) => {
   const r = await fetch(`/api/discord/${path}`, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -28,17 +36,50 @@ class Discord {
     this.timer = null;
   }
 
-  /** Connect to the Discord app → { connected, user, error }. */
-  connect() { return api('connect', { clientId: settings.discordClientId || '' }); }
+  get available() { return !!appId(); }
 
-  /** The Discord account signed in on this PC, for linking a profile. Throws a readable error. */
+  /** Connect to the Discord app on this PC (Rich Presence) → { connected, user, error }. */
+  connect() { return api('connect', { clientId: appId() }); }
+
+  /** The Discord account signed in to the Discord app on this PC. Throws a readable error. */
   async currentUser() {
     const s = await this.connect();
     if (s.user) return s.user;
     const e = s.error || '';
-    if (/application ID/i.test(e)) throw new Error('Set your Discord application ID first (Settings → Discord)');
-    if (/Invalid Client ID/i.test(e)) throw new Error('Discord says the application ID is wrong — copy it again from discord.com/developers');
+    if (/application ID|Invalid Client ID/i.test(e)) throw new Error('Discord isn’t set up in this build of STEMSTAGE');
     throw new Error(e || 'Discord is not running on this PC');
+  }
+
+  /**
+   * "Log in with Discord": OAuth2 implicit grant, scope identify (who you are, nothing else). The page goes to
+   * discord.com and comes back to /discord/callback with a token, which finishLogin() uses once to read the
+   * profile. The token is never stored.
+   */
+  login(profileId) {
+    if (!this.available) throw new Error('Discord login isn’t set up in this build of STEMSTAGE');
+    const state = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+    sessionStorage.setItem(OAUTH_KEY, JSON.stringify({ state, profileId, at: Date.now() }));
+    const q = new URLSearchParams({ client_id: appId(), response_type: 'token', scope: 'identify', state, redirect_uri: location.origin + CALLBACK_PATH });
+    location.assign(`https://discord.com/oauth2/authorize?${q}`);
+  }
+
+  /**
+   * Back from discord.com (call once at start-up). Returns null when this wasn't a login, else
+   * { profileId, user } or { profileId, error }. Puts the address back to / either way.
+   */
+  async finishLogin() {
+    const back = this.callback;
+    this.callback = null;
+    if (!back) return null;
+    let pending = null;
+    try { pending = JSON.parse(sessionStorage.getItem(OAUTH_KEY) || 'null'); } catch { /* none */ }
+    sessionStorage.removeItem(OAUTH_KEY);
+    const q = new URLSearchParams(back.replace(/^[#?]/, ''));
+    if (!pending || q.get('state') !== pending.state || Date.now() - pending.at > 15 * 60000) return { error: 'That Discord login expired — try again' };
+    if (q.get('error')) return { profileId: pending.profileId, error: q.get('error') === 'access_denied' ? 'Discord login cancelled' : q.get('error_description') || q.get('error') };
+    const token = q.get('access_token');
+    if (!token) return { profileId: pending.profileId, error: 'Discord didn’t send a login' };
+    try { return { profileId: pending.profileId, user: await api('me', { token }) }; } catch (e) { return { profileId: pending.profileId, error: e.message }; }
   }
 
   /** Live status of a Discord user (cached 20 s): { ok, status, user, custom, playing, listening } or { ok: false, error }. */
@@ -61,7 +102,7 @@ class Discord {
     const flush = () => {
       this.timer = null;
       const next = this.pending;
-      api('activity', { clientId: settings.discordClientId || '', activity: next }).catch(() => { /* Discord closed: fine */ });
+      api('activity', { clientId: appId(), activity: next }).catch(() => { /* Discord closed: fine */ });
       this.timer = setTimeout(() => { this.timer = null; if (this.pending !== next) flush(); }, 2000);
     };
     flush();
@@ -92,3 +133,9 @@ class Discord {
 }
 
 export const discord = new Discord();
+
+// the OAuth redirect lands on /discord/callback#access_token=…: keep the answer and show the game at / right away
+if (typeof location !== 'undefined' && location.pathname === CALLBACK_PATH) {
+  discord.callback = location.hash || location.search;
+  history.replaceState(null, '', '/');
+}

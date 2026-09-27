@@ -55,6 +55,7 @@ class App {
     await initScores();
     await profiles.load();
     this.ui.refreshStatus();
+    await this.ui.social.finishDiscordLogin(); // back from "Log in with Discord"
     discord.menus();
     if ((await storageMode()) === 'idb') this.ui.toast('Songs folder unavailable (start the game with play.bat) — using browser storage', 'err');
     try {

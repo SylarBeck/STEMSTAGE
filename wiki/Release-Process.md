@@ -6,7 +6,7 @@
 |---|---|---|
 | `build.yml` | Push to `main`, pull requests (not for site/wiki/docs-only changes) | Builds Windows (NSIS) and Linux (AppImage, deb, rpm) and keeps them as workflow artifacts for 7 days |
 | `release.yml` | Tag `v*` | Builds both platforms and publishes one GitHub Release with the installers and `latest.json` for the updater |
-| `pages.yml` | Push to `main` touching `site/` | Publishes `site/` to the `gh-pages` branch → <https://sylarbeck.github.io/STEMSTAGE/> |
+| `pages.yml` | Push to `main` touching `site/` | Publishes `site/` to the `gh-pages` branch → <https://stemstage.varconstint.com/> (custom domain: `site/CNAME` + the workflow's `cname`; DNS points at GitHub Pages) |
 | `wiki.yml` | Push to `main` touching `wiki/` | Copies `wiki/*.md` to the GitHub wiki |
 
 ## Cutting a release
@@ -23,7 +23,7 @@
 Installed copies (Windows, Linux AppImage) check `https://github.com/<repo>/releases/latest/download/latest.json` and only install files signed with the key whose public half is in `tauri.conf.json` → `plugins.updater.pubkey`.
 
 - The private key lives in `%USERPROFILE%\.tauri\stemstage.key` on the maintainer's PC (never commit it) and in the repository secret **`TAURI_SIGNING_PRIVATE_KEY`**.
-- Without the secret, the workflows still build (they set `TAURI_CONFIG={"bundle":{"createUpdaterArtifacts":false}}`), but that release has no update files.
+- Without the secret, the workflows still build (they pass `--config` with `{"bundle":{"createUpdaterArtifacts":false}}`), but that release has no update files.
 - Lose the key and installed copies can't be updated. Back it up.
 
 Builds made by the workflow get `STEMSTAGE_UPDATE_REPO=${{ github.repository }}` baked in, so forks update from their own releases.

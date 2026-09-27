@@ -2,7 +2,7 @@
 
 **STEMSTAGE is the rhythm game that plays any song.** Drop in a track and an AI (Demucs) splits it into stems. Every part becomes a playable chart: guitar, bass, drums, keys and vocals. Play with a controller, Rock Band / Guitar Hero gear, a DualSense, MIDI, or your real guitar, bass and keyboard.
 
-🌐 Website: <https://sylarbeck.github.io/STEMSTAGE/> · ⬇ [Latest release](https://github.com/SylarBeck/STEMSTAGE/releases/latest)
+🌐 Website: <https://stemstage.varconstint.com/> · ⬇ [Latest release](https://github.com/SylarBeck/STEMSTAGE/releases/latest)
 
 ## For players
 
