@@ -10,6 +10,7 @@ import { UI } from './ui/ui.js';
 import { input } from './input/input.js';
 import { dualsense } from './input/dualsense.js';
 import { profiles } from './profile/profiles.js';
+import { discord } from './net/discord.js';
 
 const DEMO_ID = 'demo-neon-overdrive';
 
@@ -54,6 +55,7 @@ class App {
     await initScores();
     await profiles.load();
     this.ui.refreshStatus();
+    discord.menus();
     if ((await storageMode()) === 'idb') this.ui.toast('Songs folder unavailable (start the game with play.bat) — using browser storage', 'err');
     try {
       const moved = await migrateFromBrowser((song) => this.ui.toast(`Moving "${song.title}" from browser storage to the songs folder...`));

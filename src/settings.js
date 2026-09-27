@@ -42,6 +42,8 @@ export const DEFAULTS = {
   laneAssist: 'off',     // off | wide (3 wide lanes) | any (any button hits the next note)
   autoSustain: false,    // sustains hold themselves
   hudSize: 'normal',     // normal | large | huge (score, meters and judgements)
+  discordPresence: true, // Rich Presence: show the song you're playing in your Discord status
+  discordClientId: '',   // Discord application ID for Rich Presence + account linking ('' = STEMSTAGE_DISCORD_CLIENT_ID)
   lastInstrument: 'guitar',
   lastDifficulty: 'medium',
 };

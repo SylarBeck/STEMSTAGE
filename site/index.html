@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>STEMSTAGE — the rhythm game that plays any song</title>
+  <meta name="description" content="Drop in any song: AI splits it into stems and charts guitar, bass, drums, keys and vocals. Play with a controller, Rock Band gear, a DualSense — or your real guitar, bass and keyboard. Free for Windows and Linux." />
+  <meta property="og:title" content="STEMSTAGE — the rhythm game that plays any song" />
+  <meta property="og:description" content="Any song, any instrument, split by AI. Free for Windows and Linux." />
+  <meta property="og:image" content="https://sylarbeck.github.io/STEMSTAGE/img/hero.webp" />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#05030a" />
+  <link rel="icon" href="img/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <style>
+    :root {
+      --bg: #05030a; --bg-2: #0c0818; --panel: rgba(18, 12, 34, 0.72); --line: rgba(255, 255, 255, 0.09); --line-2: rgba(255, 255, 255, 0.18);
+      --ink: #f4f1fb; --dim: #a79fbe; --accent: #ff2d7a; --accent-2: #29e0ff; --gold: #ffcf3a; --good: #3dff8a;
+      --display: 'Orbitron', system-ui, sans-serif; --body: 'Rajdhani', system-ui, sans-serif;
+      --radius: 18px; --max: 1180px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 19px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent-2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { max-width: 100%; display: block; }
+    .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+    h1, h2, h3 { font-family: var(--display); letter-spacing: 0.04em; line-height: 1.15; margin: 0; }
+    h2 { font-size: clamp(26px, 4vw, 40px); text-transform: uppercase; }
+    h2 .hl { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .kicker { font-family: var(--display); font-size: 13px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+    .lead { color: var(--dim); font-size: 21px; max-width: 720px; }
+    section { padding: 96px 0; }
+    section + section { border-top: 1px solid var(--line); }
+
+    /* nav */
+    nav { position: fixed; inset: 0 0 auto; z-index: 20; backdrop-filter: blur(14px); background: rgba(5, 3, 10, 0.72); border-bottom: 1px solid var(--line); }
+    nav .wrap { display: flex; align-items: center; gap: 24px; height: 64px; }
+    nav .brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 900; letter-spacing: 0.18em; color: var(--ink); }
+    nav .brand img { width: 32px; height: 32px; border-radius: 8px; }
+    nav .links { display: flex; gap: 22px; margin-left: auto; font-weight: 600; }
+    nav .links a { color: var(--dim); }
+    nav .links a:hover { color: var(--ink); text-decoration: none; }
+    @media (max-width: 760px) { nav .links a:not(.gh) { display: none; } }
+
+    /* buttons */
+    .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 24px; border-radius: 999px; font-family: var(--display); font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid var(--line-2); color: var(--ink); background: rgba(255, 255, 255, 0.04); transition: transform 0.15s, box-shadow 0.15s, background 0.15s; }
+    .btn:hover { text-decoration: none; transform: translateY(-2px); background: rgba(255, 255, 255, 0.08); }
+    .btn.primary { border: 0; color: #120414; background: linear-gradient(90deg, var(--accent), #ff6fa6); box-shadow: 0 10px 40px rgba(255, 45, 122, 0.45); }
+    .btn.primary:hover { box-shadow: 0 14px 50px rgba(255, 45, 122, 0.6); }
+    .btn small { font-family: var(--body); font-weight: 600; letter-spacing: 0; text-transform: none; opacity: 0.75; font-size: 14px; }
+
+    /* hero */
+    .hero { position: relative; padding: 64px 0 72px; overflow: hidden; border-bottom: 1px solid var(--line); }
+    .hero-art { position: relative; }
+    .hero-art img { width: 100%; aspect-ratio: 1983 / 793; object-fit: cover; object-position: center top; max-height: 74vh; }
+    .hero-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, var(--bg) 99%); }
+    .hero .wrap { position: relative; z-index: 1; text-align: center; margin-top: clamp(-120px, -7vw, -24px); }
+    .hero h1 { font-size: clamp(24px, 3.6vw, 42px); text-transform: uppercase; }
+    .hero p { margin: 22px auto 34px; max-width: 700px; color: #d9d3ea; font-size: 21px; }
+    .hero .ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .hero .meta { margin-top: 18px; color: var(--dim); font-size: 15px; }
+    .hero .meta b { color: var(--ink); }
+
+    /* steps */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 48px; counter-reset: step; }
+    .step { position: relative; padding: 28px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); }
+    .step::before { counter-increment: step; content: '0' counter(step); position: absolute; top: 18px; right: 22px; font-family: var(--display); font-weight: 900; font-size: 40px; color: rgba(255, 255, 255, 0.06); }
+    .step i { font-size: 26px; color: var(--accent-2); }
+    .step h3 { font-size: 18px; margin: 16px 0 8px; }
+    .step p { margin: 0; color: var(--dim); }
+    @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+
+    /* features */
+    .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 48px; }
+    .feature { padding: 24px; border-radius: var(--radius); background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)); border: 1px solid var(--line); transition: border-color 0.2s, transform 0.2s; }
+    .feature:hover { border-color: rgba(41, 224, 255, 0.35); transform: translateY(-3px); }
+    .feature i { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; font-size: 20px; color: var(--c, var(--accent)); background: color-mix(in srgb, var(--c, var(--accent)) 14%, transparent); }
+    .feature h3 { font-size: 16px; margin: 16px 0 6px; }
+    .feature p { margin: 0; color: var(--dim); font-size: 17px; }
+    .feature .new { font-family: var(--display); font-size: 10px; letter-spacing: 0.14em; color: #120414; background: var(--gold); border-radius: 6px; padding: 2px 6px; margin-left: 6px; vertical-align: 2px; }
+
+    /* split showcase */
+    .split { display: grid; grid-template-columns: 1fr 1.25fr; gap: 48px; align-items: center; }
+    .split.flip { grid-template-columns: 1.25fr 1fr; }
+    .split.flip .text { order: 2; }
+    .split ul { padding: 0; margin: 22px 0 0; list-style: none; display: grid; gap: 10px; }
+    .split li { display: flex; gap: 12px; color: #d9d3ea; }
+    .split li i { color: var(--good); margin-top: 5px; }
+    .shot { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line-2); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 45, 122, 0.08); cursor: zoom-in; }
+    .shots2 { display: grid; gap: 14px; }
+    @media (max-width: 900px) { .split, .split.flip { grid-template-columns: 1fr; } .split.flip .text { order: 0; } }
+
+    /* gallery */
+    .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 40px; }
+    .gallery figure { margin: 0; }
+    .gallery figcaption { color: var(--dim); font-size: 15px; margin-top: 8px; }
+    @media (max-width: 860px) { .gallery { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 520px) { .gallery { grid-template-columns: 1fr; } }
+    .lightbox { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; padding: 24px; background: rgba(0, 0, 0, 0.88); cursor: zoom-out; }
+    .lightbox.open { display: grid; }
+    .lightbox img { max-height: 92vh; border-radius: 12px; }
+
+    /* download */
+    .downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top: 40px; }
+    .dl { display: flex; flex-direction: column; gap: 6px; padding: 24px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); color: var(--ink); }
+    .dl:hover { text-decoration: none; border-color: var(--accent); }
+    .dl.mine { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 16px 50px rgba(255, 45, 122, 0.22); }
+    .dl i { font-size: 30px; color: var(--accent-2); }
+    .dl b { font-family: var(--display); font-size: 16px; margin-top: 8px; }
+    .dl span { color: var(--dim); font-size: 16px; }
+    .dl em { font-style: normal; font-size: 14px; color: var(--dim); margin-top: auto; padding-top: 10px; word-break: break-all; }
+    .reqs { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 28px; }
+    .req { padding: 22px 24px; border-radius: var(--radius); border: 1px dashed var(--line-2); color: var(--dim); }
+    .req h3 { font-size: 14px; color: var(--ink); margin-bottom: 8px; letter-spacing: 0.1em; }
+    .req code { font-size: 15px; color: var(--gold); background: rgba(255, 255, 255, 0.05); padding: 1px 6px; border-radius: 6px; }
+
+    footer { padding: 48px 0 64px; border-top: 1px solid var(--line); color: var(--dim); font-size: 16px; }
+    footer .wrap { display: flex; gap: 24px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+    footer .links { display: flex; gap: 20px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="wrap">
+      <a class="brand" href="#top"><img src="img/icon.png" alt="" />STEMSTAGE</a>
+      <div class="links">
+        <a href="#features">Features</a>
+        <a href="#real">Real instruments</a>
+        <a href="#screens">Screenshots</a>
+        <a href="#download">Download</a>
+        <a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a>
+        <a class="gh" href="https://github.com/SylarBeck/STEMSTAGE" aria-label="GitHub"><i class="fa-brands fa-github"></i></a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero" id="top">
+    <div class="hero-art"><img src="img/hero.webp" alt="STEMSTAGE: any song, any instrument, split by AI" /></div>
+    <div class="wrap">
+      <h1>The rhythm game that plays any song</h1>
+      <p>Drop in a track and an AI splits it into stems. Every part becomes a playable chart: guitar, bass, drums, keys and vocals. Play with a controller, Rock Band gear, a DualSense, or your real guitar, bass and keyboard.</p>
+      <div class="ctas">
+        <a class="btn primary" id="cta-main" href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><i class="fa-solid fa-download"></i> Download <small id="cta-os">free</small></a>
+        <a class="btn" href="https://github.com/SylarBeck/STEMSTAGE"><i class="fa-brands fa-github"></i> Source</a>
+      </div>
+      <div class="meta" id="release-meta">Windows 10/11 · Linux (AppImage, .deb, .rpm) · MIT licensed</div>
+    </div>
+  </header>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="kicker">How it works</div>
+      <h2>Your music, <span class="hl">charted in minutes</span></h2>
+      <div class="steps">
+        <div class="step"><i class="fa-solid fa-compact-disc"></i><h3>Drop in any song</h3><p>An audio file, a folder, or a YouTube search or playlist. Title, artist and cover art are filled in automatically.</p></div>
+        <div class="step"><i class="fa-solid fa-wand-magic-sparkles"></i><h3>AI splits it into stems</h3><p>Demucs separates drums, bass, guitar, piano and vocals on your GPU. basic-pitch transcribes the notes and Whisper hears the lyrics.</p></div>
+        <div class="step"><i class="fa-solid fa-guitar"></i><h3>Play any part</h3><p>Four difficulties with overdrive phrases for every instrument. Solo, as a four-piece band, or online with friends.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="kicker">Features</div>
+      <h2>Everything a <span class="hl">rock star</span> needs</h2>
+      <div class="features">
+        <div class="feature" style="--c:#ff2d7a"><i class="fa-solid fa-layer-group"></i><h3>Any song, any part</h3><p>Demucs <code>htdemucs_6s</code> stems, neural note transcription, and an auto-charter that builds Easy to Expert.</p></div>
+        <div class="feature" style="--c:#3dff8a"><i class="fa-solid fa-guitar"></i><h3>Real instruments <span class="new">NEW</span></h3><p>Plug in a real guitar or bass and read a scrolling <b>tablature</b>, or play keys on a MIDI keyboard with notes falling onto a <b>piano</b>.</p></div>
+        <div class="feature" style="--c:#29e0ff"><i class="fa-solid fa-gamepad"></i><h3>DualSense, done properly</h3><p>Adaptive triggers that click like frets, haptics, lightbar and player LEDs over USB and Bluetooth, now with near-zero input lag.</p></div>
+        <div class="feature" style="--c:#ffcf3a"><i class="fa-solid fa-microphone-lines"></i><h3>Sing with checked lyrics <span class="new">NEW</span></h3><p>Karaoke pitch scoring with AI lyrics, cross-checked against the LRCLIB lyrics database so misheard words get fixed.</p></div>
+        <div class="feature" style="--c:#5865f2"><i class="fa-brands fa-discord"></i><h3>Discord <span class="new">NEW</span></h3><p>Link your Discord account to your profile, show your live status, and let friends see what you're playing.</p></div>
+        <div class="feature" style="--c:#ff8a1a"><i class="fa-solid fa-drum"></i><h3>Every controller</h3><p>Xbox, DualShock, Switch Pro, Joy-Con, Rock Band and Guitar Hero guitars and drums, MIDI kits, keyboard. Each gets its own profile.</p></div>
+        <div class="feature" style="--c:#b36bff"><i class="fa-solid fa-people-group"></i><h3>Band &amp; online</h3><p>Up to four local players, or online rooms with an invite code and no port forwarding. Songs are sent to your friends automatically.</p></div>
+        <div class="feature" style="--c:#ff5a5a"><i class="fa-solid fa-ticket"></i><h3>Tour &amp; career</h3><p>Seven venues from the garage to a festival main stage, daily challenges, XP, 34 achievements and leaderboards.</p></div>
+        <div class="feature" style="--c:#29e0ff"><i class="fa-solid fa-ghost"></i><h3>Ghosts &amp; replays</h3><p>Every run is recorded. Watch it back or race your best as a ghost.</p></div>
+        <div class="feature" style="--c:#3dff8a"><i class="fa-solid fa-pen-ruler"></i><h3>Chart editor</h3><p>Fix the AI's charts with a controller, keyboard or mouse, with live playback and undo.</p></div>
+        <div class="feature" style="--c:#ffcf3a"><i class="fa-brands fa-twitch"></i><h3>Stream mode</h3><p>Twitch chat votes for the next song and requests tracks, and an OBS overlay shows it all.</p></div>
+        <div class="feature" style="--c:#ff2d7a"><i class="fa-solid fa-universal-access"></i><h3>Accessible</h3><p>Colour-blind palettes, calm visuals, lane assist for one-handed play, auto sustain and a bigger HUD.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="real">
+    <div class="wrap split">
+      <div class="text">
+        <div class="kicker">Real instrument mode</div>
+        <h2>Learn the song on the <span class="hl">real thing</span></h2>
+        <p class="lead">Guitar, bass and keys can be played on the real instrument. STEMSTAGE listens to your audio interface or MIDI keyboard and scores every note you play.</p>
+        <ul>
+          <li><i class="fa-solid fa-check"></i><span><b>Tablature</b> for guitar and bass: string and fret for every note, fingered the way a player would, with chords, sustains and bar lines.</span></li>
+          <li><i class="fa-solid fa-check"></i><span><b>Keyboard</b> for keys, with notes falling onto the keys you need to press.</span></li>
+          <li><i class="fa-solid fa-check"></i><span>Shows what you're playing live: green when it's right, gold when it isn't.</span></li>
+          <li><i class="fa-solid fa-check"></i><span>Octave-free scoring, and input latency learned while you play.</span></li>
+        </ul>
+      </div>
+      <div class="shots2">
+        <img class="shot" src="img/real-guitar.webp" alt="Scrolling guitar tablature above the highway" loading="lazy" />
+        <img class="shot" src="img/real-keys.webp" alt="Piano keyboard with falling notes above the highway" loading="lazy" />
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap">
+      <div class="kicker">Screenshots</div>
+      <h2>See it <span class="hl">on stage</span></h2>
+      <div class="gallery">
+        <figure><img class="shot" src="img/gameplay.webp" alt="Guitar highway" loading="lazy" /><figcaption>Guitar highway with fret smashers and streak lights</figcaption></figure>
+        <figure><img class="shot" src="img/overdrive.webp" alt="Overdrive" loading="lazy" /><figcaption>Overdrive: double score and fire walls</figcaption></figure>
+        <figure><img class="shot" src="img/drums.webp" alt="Drums" loading="lazy" /><figcaption>Drums with cymbal gems</figcaption></figure>
+        <figure><img class="shot" src="img/setlist.webp" alt="Setlist" loading="lazy" /><figcaption>Your setlist, charted by AI</figcaption></figure>
+        <figure><img class="shot" src="img/band.webp" alt="Band lobby" loading="lazy" /><figcaption>Band lobby for up to four players</figcaption></figure>
+        <figure><img class="shot" src="img/controllers.webp" alt="Controllers" loading="lazy" /><figcaption>Controller hub with per-controller profiles</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="kicker">Download</div>
+      <h2>Free for <span class="hl">Windows &amp; Linux</span></h2>
+      <p class="lead" id="dl-lead">The latest release, straight from GitHub. The Windows app and the Linux AppImage update themselves.</p>
+      <div class="downloads" id="downloads">
+        <a class="dl" data-os="windows" data-match="setup\.exe$" href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><i class="fa-brands fa-windows"></i><b>Windows</b><span>Installer for Windows 10 and 11</span><em>.exe</em></a>
+        <a class="dl" data-os="linux" data-match="\.AppImage$" href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><i class="fa-brands fa-linux"></i><b>Linux · AppImage</b><span>Any distro: make it executable and run</span><em>.AppImage</em></a>
+        <a class="dl" data-os="debian" data-match="\.deb$" href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><i class="fa-brands fa-ubuntu"></i><b>Ubuntu / Debian</b><span>.deb package</span><em>.deb</em></a>
+        <a class="dl" data-os="fedora" data-match="\.rpm$" href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><i class="fa-brands fa-fedora"></i><b>Fedora / openSUSE</b><span>.rpm package</span><em>.rpm</em></a>
+      </div>
+      <div class="reqs">
+        <div class="req"><h3><i class="fa-brands fa-node-js"></i> Needed</h3>Node.js 20 or newer (<a href="https://nodejs.org">nodejs.org</a>), a GPU with WebGL2, and a controller, keyboard or instrument.</div>
+        <div class="req"><h3><i class="fa-solid fa-microchip"></i> For the AI splitter</h3>Python via the one-time setup: <code>server/setup-ai.ps1</code> on Windows, <code>server/setup-ai.sh</code> on Linux. An NVIDIA GPU makes it fast. Without it, a built-in DSP splitter is used.</div>
+        <div class="req"><h3><i class="fa-solid fa-book"></i> Help</h3>Installation, controllers, Discord and troubleshooting are in the <a href="https://github.com/SylarBeck/STEMSTAGE/wiki">wiki</a>.</div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div>STEMSTAGE · MIT licensed · Font Awesome icons (CC BY 4.0) · Orbitron &amp; Rajdhani (OFL)</div>
+      <div class="links">
+        <a href="https://github.com/SylarBeck/STEMSTAGE">GitHub</a>
+        <a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a>
+        <a href="https://github.com/SylarBeck/STEMSTAGE/releases">Releases</a>
+        <a href="https://github.com/SylarBeck/STEMSTAGE/issues">Report a bug</a>
+      </div>
+    </div>
+  </footer>
+
+  <div class="lightbox" id="lightbox"><img alt="" /></div>
+
+  <script>
+    // Latest release → direct download links, sizes and the right button for this visitor's OS
+    const ua = navigator.userAgent;
+    const os = /Windows/i.test(ua) ? 'windows' : /Ubuntu|Debian|Mint|Pop!_OS/i.test(ua) ? 'debian' : /Fedora|openSUSE|Red Hat/i.test(ua) ? 'fedora' : /Linux|X11/i.test(ua) && !/Android/i.test(ua) ? 'linux' : null;
+    const osName = { windows: 'for Windows', linux: 'for Linux', debian: 'for Ubuntu / Debian', fedora: 'for Fedora' };
+    if (os) {
+      document.getElementById('cta-os').textContent = osName[os];
+      document.querySelector(`.dl[data-os="${os}"]`)?.classList.add('mine');
+    }
+    const mb = (b) => `${(b / 1048576).toFixed(0)} MB`;
+    fetch('https://api.github.com/repos/SylarBeck/STEMSTAGE/releases/latest')
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((rel) => {
+        const assets = rel.assets || [];
+        document.getElementById('release-meta').innerHTML = `<b>${rel.name || rel.tag_name}</b> · ${new Date(rel.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} · Windows &amp; Linux · MIT licensed`;
+        document.getElementById('dl-lead').textContent = `${rel.name || rel.tag_name}, straight from GitHub. The Windows app and the Linux AppImage update themselves.`;
+        for (const el of document.querySelectorAll('.dl')) {
+          const a = assets.find((x) => new RegExp(el.dataset.match).test(x.name) && !/\.sig$/.test(x.name));
+          if (!a) continue;
+          el.href = a.browser_download_url;
+          el.querySelector('em').textContent = `${a.name} · ${mb(a.size)}`;
+          if (el.dataset.os === os) document.getElementById('cta-main').href = a.browser_download_url;
+        }
+      })
+      .catch(() => { /* keep the links to the releases page */ });
+
+    // screenshot lightbox
+    const lb = document.getElementById('lightbox');
+    document.querySelectorAll('img.shot').forEach((img) => img.addEventListener('click', () => { lb.querySelector('img').src = img.src; lb.querySelector('img').alt = img.alt; lb.classList.add('open'); }));
+    lb.addEventListener('click', () => lb.classList.remove('open'));
+    addEventListener('keydown', (e) => { if (e.key === 'Escape') lb.classList.remove('open'); });
+  </script>
+</body>
+</html>

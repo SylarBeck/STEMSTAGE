@@ -12,6 +12,7 @@ import { saveBest, getBest } from '../storage/library.js';
 import { STEM_FOR } from '../audio/engine.js';
 import { runJob } from '../audio/pipeline.js';
 import { Recorder, Replayer, buildReplay, ghostAt } from './replay.js';
+import { discord } from '../net/discord.js';
 
 const SHOTS = ['wide', 'left', 'player', 'right', 'low', 'drums', 'wide', 'player'];
 const stretchInWorker = (L, R, rate, onProgress) => runJob('stretch', { L: L.slice(), R: R.slice(), rate }, undefined, onProgress);
@@ -96,6 +97,7 @@ export class Session {
     this.running = true;
     this.paused = false;
     const rate = this.engine.rate || 1;
+    this._presence();
     let from = this.startTime - 3.2 * rate;
     if (this.online) from = -Math.max(0.5, (this.online.startAt - this.online.client.serverNow()) / 1000);
     this.engine.start(from);
@@ -167,6 +169,14 @@ export class Session {
     this.input.setMenu();
     this.ds.offAll();
     this.engine.setCrowd(0.15);
+    discord.menus();
+  }
+
+  /** Discord Rich Presence: what's being played right now. */
+  _presence(at = this.startTime) {
+    if (this.replay) discord.activity({ details: `Watching a replay: ${this.song.title}`, state: this.song.artist || 'Replay' });
+    else if (this.practice) discord.activity({ details: `Practicing ${this.song.title}`, state: `${this.cfgs[0].instrument} · ${Math.round(this.practice.speed * 100)}% speed` });
+    else discord.playing(this.song, this.cfgs, { resumeAt: at, rate: this.engine.rate || 1 });
   }
 
   async pause() {
@@ -175,6 +185,7 @@ export class Session {
     await this.engine.pause();
     this.input.setMenu();
     this.ds.offAll();
+    discord.paused(this.song);
     this.onPause?.();
   }
 
@@ -184,6 +195,7 @@ export class Session {
     for (const p of this.players) p._baseTriggers();
     this.paused = false;
     await this.engine.resume();
+    this._presence(this.engine.songTime);
   }
 
   async restart() {
@@ -390,6 +402,7 @@ export class Session {
       result.onlineWinnerId = all.length > 1 ? all.sort((a, b) => (b.score || 0) - (a.score || 0))[0]?.id || null : null;
       result.bandScore = all.reduce((s, r) => s + (r.score || 0), 0);
     }
+    if (!this.replay && !this.practice) discord.results(this.song, result);
     this.onEnd?.(result);
   }
 }

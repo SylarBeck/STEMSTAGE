@@ -40,12 +40,12 @@ export function buildVocalTrack(notes, chartPhrases = []) {
   return { segs, phrases };
 }
 
-/** Lyrics words → display lines. */
+/** Lyrics words → display lines (a checked word list marks the database's own line breaks with br). */
 export function lyricLines(words = []) {
   const lines = [];
   for (const w of words) {
     const cur = lines[lines.length - 1];
-    if (!cur || w.t - cur.end > 0.9 || cur.text.length > 38) lines.push({ start: w.t, end: w.e, words: [w], text: w.w });
+    if (!cur || w.br || w.t - cur.end > 0.9 || cur.text.length > 38) lines.push({ start: w.t, end: w.e, words: [w], text: w.w });
     else { cur.words.push(w); cur.end = w.e; cur.text += ` ${w.w}`; }
   }
   return lines;

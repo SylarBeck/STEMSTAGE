@@ -121,6 +121,16 @@ class Profiles {
     await saveProfiles(this.list);
   }
 
+  /** Link (data: { id, username, globalName, avatar }) or unlink (null) a Discord account. */
+  async setDiscord(id, data) {
+    const p = this.byId(id);
+    if (!p) return;
+    if (data) p.discord = { id: data.id, username: data.username || null, globalName: data.globalName || null, avatar: data.avatar || null, linkedAt: Date.now() };
+    else delete p.discord;
+    await saveProfiles(this.list);
+    this.emit();
+  }
+
   async setPin(id, oldPin, newPin) {
     const p = this.byId(id);
     if (p.pinHash && (await sha256(`${p.salt}:${oldPin || ''}`)) !== p.pinHash) throw new Error('Wrong PIN');

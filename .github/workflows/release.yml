@@ -1,9 +1,10 @@
-# Push a tag like v1.1.0 → builds the Windows installer, signs the update files and publishes a GitHub
-# Release with latest.json. Installed copies of STEMSTAGE find the new version there and update themselves.
+# Push a tag like v1.4.0 → builds the Windows installer and the Linux packages (AppImage, .deb, .rpm) and
+# publishes them in one GitHub Release, with latest.json for the in-app updater (Windows + AppImage).
 #
-# One-time setup: repository → Settings → Secrets and variables → Actions → New secret
+# One-time setup for signed updates: repository → Settings → Secrets and variables → Actions → New secret
 #   TAURI_SIGNING_PRIVATE_KEY = the contents of %USERPROFILE%\.tauri\stemstage.key
-# (the matching public key is already in src-tauri/tauri.conf.json → plugins.updater.pubkey)
+# (the matching public key is in src-tauri/tauri.conf.json → plugins.updater.pubkey). Without the secret the
+# release still builds; it just has no update files, so installed copies won't update themselves to it.
 name: Release
 
 on:
@@ -15,11 +16,30 @@ permissions:
   contents: write
 
 jobs:
-  windows:
-    runs-on: windows-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            bundles: nsis
+          - platform: ubuntu-22.04 # oldest supported glibc, so the AppImage runs on most distros
+            bundles: appimage,deb,rpm
+    runs-on: ${{ matrix.platform }}
+    env:
+      HAS_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils rpm \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -27,7 +47,14 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ matrix.platform }}
       - run: npm ci
+
+      - name: Skip update files (no signing key)
+        if: env.HAS_SIGNING_KEY != 'true'
+        shell: bash
+        run: echo 'TAURI_CONFIG={"bundle":{"createUpdaterArtifacts":false}}' >> "$GITHUB_ENV"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -37,7 +64,12 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: STEMSTAGE v__VERSION__
-          releaseBody: See the changes below. Installed copies update themselves (Settings → Updates).
+          releaseBody: |
+            **Windows:** download `STEMSTAGE_*_x64-setup.exe` and run it.
+            **Linux:** `STEMSTAGE_*_amd64.AppImage` (any distro: `chmod +x` and run), or the `.deb` (Ubuntu / Debian) / `.rpm` (Fedora / openSUSE) package.
+            STEMSTAGE needs Node.js 20+; the AI splitter and DualSense bridge need Python (see the wiki: Installation).
+            Installed copies update themselves (Settings → Updates).
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
+          args: --bundles ${{ matrix.bundles }}

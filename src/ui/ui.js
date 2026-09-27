@@ -3,7 +3,8 @@
 // every player drives their own slot with their own controller.
 import { settings } from '../settings.js';
 import { listSongs, getSong, getAudio, deleteSong, getBest, storageEstimate, openSongsFolder, songsFolder, coverUrl, previewUrl, saveSongJson, coverFromUrl } from '../storage/library.js';
-import { importFile, aiClient, importFromYouTube, ytSearch, ytStatus, rechartSong, ensurePreview, fetchLyrics } from '../audio/pipeline.js';
+import { importFile, aiClient, importFromYouTube, ytSearch, ytStatus, rechartSong, ensurePreview, fetchLyrics, checkLyrics } from '../audio/pipeline.js';
+import { discord } from '../net/discord.js';
 import { lookupOnline } from '../audio/metadata.js';
 import { profiles, levelInfo } from '../profile/profiles.js';
 import { installSocial, avatarHtml } from './social.js';
@@ -107,6 +108,10 @@ const SETTINGS_SCHEMA = [
   { key: 'lyrics', label: 'Lyrics', desc: 'Show lyrics under the vocal track (Song options → Get lyrics)', type: 'toggle' },
   { action: 'chooseMic', label: 'Microphone', desc: 'Pick the input you sing into' },
   { action: 'testMic', label: 'Test microphone', desc: 'Sing and see the note you hit' },
+  { group: 'Discord' },
+  { key: 'discordPresence', label: 'Show what I play on Discord', desc: 'Rich Presence: your Discord status shows the song, part and time left (needs the Discord app on this PC)', type: 'toggle' },
+  { key: 'discordClientId', label: 'Discord application ID', desc: 'From discord.com/developers → New Application "STEMSTAGE" → Application ID (see the wiki: Discord)', type: 'text' },
+  { action: 'testDiscord', label: 'Test Discord connection', desc: 'Check that the Discord app answers and who is signed in' },
   { group: 'Updates' },
   { key: 'autoUpdate', label: 'Check for updates at start-up', desc: 'Desktop app: offers new versions from GitHub Releases (signed)', type: 'toggle' },
   { key: 'updateFeed', label: 'Update source', desc: 'GitHub repository as owner/name — empty uses SylarBeck/STEMSTAGE', type: 'text' },
@@ -975,6 +980,7 @@ export class UI {
         { label: 'Add to setlist…', desc: 'Put it in a setlist for a marathon', run: () => this.setlists.addToSheet(s) },
         ...(band ? [] : [{ label: 'Edit chart', desc: `Fix the ${this.instrument} · ${this.difficulty} notes by hand`, disabled: !s.charts[this.instrument]?.available, run: () => this.editor.open(s.id, this.instrument, this.difficulty) }]),
         { label: s.lyrics?.words?.length ? 'Redo lyrics (AI)' : 'Get lyrics (AI)', desc: this.aiStatus?.lyrics ? `Whisper listens to the vocal stem${s.lyrics?.words?.length ? ` · ${s.lyrics.words.length} words now` : ''}` : 'Needs the AI splitter with Whisper (npm run ai:setup)', disabled: !this.aiStatus?.lyrics || !(s.stemNames || []).includes('vocals'), run: () => this.getLyrics(s) },
+        { label: 'Check lyrics online', desc: s.lyrics?.reference ? `Checked against ${s.lyrics.reference.source}${s.lyrics.corrected ? ` · ${s.lyrics.corrected} words fixed` : ''}` : s.lyrics?.words?.length ? 'Fix misheard words with a lyrics database (LRCLIB), keeping the AI timing' : 'Time-synced lyrics from LRCLIB (no AI needed)', disabled: !s.charts?.vocals?.available && !s.lyrics?.words?.length, run: () => this.checkSongLyrics(s) },
         { label: 'Re-chart with AI', desc: 'Run note transcription again for every part', run: () => this.rechart() },
         { label: 'Edit song info', desc: 'Title, artist, album, cover — or look it up online', run: () => this.openSongInfo() },
         { label: 'Export chart pack', desc: 'MIDI + song.ini + WAV stems (Clone Hero / YARG layout)', run: () => this.exportSong() },
@@ -1083,9 +1089,30 @@ export class UI {
       const song = await getSong(s.id);
       const out = await fetchLyrics(song);
       await this.reloadSongs();
-      this.toast(out.words.length ? `Lyrics ready for "${s.title}" · ${out.words.length} words (${out.language})` : `No sung words found in "${s.title}"`, out.words.length ? 'ok' : '');
+      const checked = out.reference ? ` · checked with ${out.reference.source}${out.corrected ? `, ${out.corrected} words fixed` : ''}` : '';
+      this.toast(out.words.length ? `Lyrics ready for "${s.title}" · ${out.words.length} words (${out.language})${checked}` : `No sung words found in "${s.title}"`, out.words.length ? 'ok' : '');
       if (this.screen === 'library' && this.selected?.id === s.id) this.renderDetail(this.songs.find((x) => x.id === s.id));
     } catch (e) { if (!quiet) this.toast(`Lyrics failed: ${e.message}`, 'err'); }
+    this._lyricsBusy.delete(s.id);
+  }
+
+  /** Song options → Check lyrics online: LRCLIB words on the AI's timing (or synced lines when there is no AI). */
+  async checkSongLyrics(s) {
+    if (this._lyricsBusy?.has(s.id)) return;
+    (this._lyricsBusy ||= new Set()).add(s.id);
+    this.toast(`Looking up lyrics for "${s.title}"…`);
+    try {
+      const song = await getSong(s.id);
+      const r = await checkLyrics(song);
+      if (r.changed) {
+        await this.reloadSongs();
+        const st = r.stats;
+        this.toast(st.ai ? `Lyrics checked · ${st.fixed} misheard words fixed, ${st.added} missing added, ${st.dropped} extra removed` : `Lyrics added from LRCLIB · ${song.lyrics.words.length} words`, 'ok');
+        if (this.screen === 'library' && this.selected?.id === s.id) this.renderDetail(this.songs.find((x) => x.id === s.id));
+      } else {
+        this.toast({ 'not found': `No lyrics found online for "${s.title}" — check the title and artist (Edit song info)`, instrumental: 'The lyrics database lists this song as instrumental', 'did not match the recording': 'The lyrics found online don’t match this recording — kept the AI lyrics', 'no timed lines': 'Only untimed lyrics online — get AI lyrics first, then check them' }[r.reason] || 'Lyrics unchanged', 'err');
+      }
+    } catch (e) { this.toast(`Lyrics check failed: ${e.message}`, 'err'); }
     this._lyricsBusy.delete(s.id);
   }
 
@@ -1669,6 +1696,12 @@ export class UI {
       });
     }
     if (a === 'testMic') this.testMic();
+    if (a === 'testDiscord') {
+      try {
+        const u = await discord.currentUser();
+        this.toast(`Discord connected · signed in as ${u.globalName || u.username}${settings.discordPresence ? ' · your status will show what you play' : ''}`, 'ok');
+      } catch (e) { this.toast(e.message, 'err'); }
+    }
     if (a === 'testInstrument') this.testMic({ instrument: true });
     if (a === 'chooseInstrumentInput') {
       try { await navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => s.getTracks().forEach((t) => t.stop())); } catch { /* labels stay hidden */ }

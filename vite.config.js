@@ -6,6 +6,7 @@ import { createLibrary } from './server/library.js';
 import { createYt, createMeta, createData } from './server/extras.js';
 import { createOnline } from './server/online.js';
 import { createStream } from './server/stream.js';
+import { createDiscord } from './server/discord.js';
 
 // On some Windows setups (e.g. virtualised AppData folders) the project's real path differs
 // from the path it was opened from; allow both so the module worker can be served in dev.
@@ -22,7 +23,7 @@ const dataDir = process.env.STEMSTAGE_DATA || path.join(root, 'data');
 function mount(server) {
   const services = globalThis.__stemstageServices ||= (() => {
     const library = createLibrary(songsDir);
-    return { library, yt: createYt(), meta: createMeta(), data: createData(dataDir), online: createOnline(library), stream: createStream() };
+    return { library, yt: createYt(), meta: createMeta(), data: createData(dataDir), online: createOnline(library), stream: createStream(), discord: createDiscord() };
   })();
   server.middlewares.use('/api/health', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
@@ -35,6 +36,7 @@ function mount(server) {
   server.middlewares.use('/api/data', services.data);
   server.middlewares.use('/api/online', services.online);
   server.middlewares.use('/api/stream', services.stream.handler);
+  server.middlewares.use('/api/discord', services.discord);
 }
 
 if (!globalThis.__stemstageGuard) {

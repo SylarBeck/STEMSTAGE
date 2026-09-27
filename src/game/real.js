@@ -5,9 +5,8 @@
 import { settings } from '../settings.js';
 import { Mic } from '../audio/pitch.js';
 import { Player, WINDOWS } from './player.js';
+import { TabView, KeysView, assignTab, TUNINGS } from './real-view.js';
 
-const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-export const noteName = (m) => (m ? `${NAMES[((Math.round(m) % 12) + 12) % 12]}${Math.floor(Math.round(m) / 12) - 1}` : '—');
 let sharedInput = null;
 
 export class RealPlayer extends Player {
@@ -23,10 +22,10 @@ export class RealPlayer extends Player {
 
   setup(song, startTime = 0) {
     super.setup(song, startTime);
-    this.strip = document.createElement('div');
-    this.strip.className = 'real-strip';
-    document.getElementById('hud').appendChild(this.strip);
-    this.stripKey = '';
+    // tablature (guitar / bass) or a keyboard (keys) above the highway, in this player's column in a band
+    const parent = this.hud.div || document.getElementById('hud');
+    if (this.inst === 'keys') this.view = new KeysView(parent, this.notes);
+    else { assignTab(this.notes, TUNINGS[this.inst] || TUNINGS.guitar); this.view = new TabView(parent, this.inst, song.beats || []); }
     if (this.replayer) return;
     if (this.real === 'midi') {
       this.offMidi = this.s.input.onMidiNote((ev) => {
@@ -46,8 +45,8 @@ export class RealPlayer extends Player {
 
   dispose() {
     this.offMidi?.();
-    this.strip?.remove();
-    this.strip = null;
+    this.view?.remove();
+    this.view = null;
     if (this.real === 'audio' && !this.replayer) { sharedInput?.stop(); settings.instrumentLatency = Math.round(this.lag * 1000) / 1000; }
   }
 
@@ -135,25 +134,7 @@ export class RealPlayer extends Player {
       this.pitch = keys.length ? Math.max(...keys) : 0;
     }
     super.update(t, dt, bl, frame);
-    this._strip(t);
-  }
-
-  /** "NEXT  E2  G2  A2 · YOU  A2" under the judgement text. */
-  _strip(t) {
-    if (!this.strip) return;
-    const next = [];
-    for (const n of this.notes) {
-      if (n.judged || n.t < t - 0.05) continue;
-      if (next.length && Math.abs(next[next.length - 1].t - n.t) < 1e-3) continue; // one name per chord
-      next.push(n);
-      if (next.length >= 4) break;
-    }
-    const key = next.map((n) => n.m).join(',') + '|' + (this.pitch ? Math.round(this.pitch) : 0);
-    if (key === this.stripKey) return;
-    this.stripKey = key;
-    const you = this.pitch ? noteName(this.pitch) : '—';
-    const ok = next[0] && this.pitch && this.matches(next[0].m, this.pitch);
-    this.strip.innerHTML = `<span class="rs-k">NEXT</span>${next.map((n, i) => `<b class="${i === 0 ? 'first' : ''}">${noteName(n.m)}</b>`).join('')}<span class="rs-k">YOU</span><b class="you ${ok ? 'ok' : ''}">${you}</b>`;
+    this.view?.draw(t, this);
   }
 
   result() { return { ...super.result(), real: this.real }; }

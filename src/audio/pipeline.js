@@ -5,6 +5,7 @@ import { STEM_RATE } from './engine.js';
 import { renderDemo } from './demo.js';
 import { saveSong, saveSongJson, saveSongFile, coverFromUrl, getAudio } from '../storage/library.js';
 import { gatherMetadata } from './metadata.js';
+import { crossref } from './lyrics-align.js';
 
 // ---------------------------------------------------------------- worker bridge
 let worker = null;
@@ -379,7 +380,35 @@ export async function fetchLyrics(song, onStatus = () => {}) {
   const r = await fetch(`${settings.aiServer.replace(/\/$/, '')}/lyrics`, { method: 'POST', body: mono.buffer });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `lyrics failed (${r.status})`);
-  song.lyrics = { language: j.language, words: j.words, source: 'whisper', date: Date.now() };
+  song.lyrics = { language: j.language, words: j.words, ai: j.words, source: 'whisper', date: Date.now() };
+  onStatus('Checking the words against a lyrics database…');
+  try { await checkLyrics(song, { save: false }); } catch (e) { console.warn('lyrics cross-check failed:', e); }
   await saveSongJson(song);
   return song.lyrics;
+}
+
+/**
+ * Cross-check the lyrics with LRCLIB: Whisper's timing, the database's words (see lyrics-align.js). Works
+ * without Whisper too when the database has time-synced lyrics — the lines are placed with the vocal chart.
+ * Returns { changed, stats, reason } and updates song.lyrics when the reference fits this recording.
+ */
+export async function checkLyrics(song, { save = true } = {}) {
+  const qs = new URLSearchParams({ title: song.title || '', artist: song.artist || '', album: song.album || '', duration: String(Math.round(song.duration || 0)) });
+  const r = await fetch(`/api/meta/lyrics?${qs}`, { signal: AbortSignal.timeout(30000) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `lyrics lookup failed (${r.status})`);
+  const ref = j.best;
+  if (!ref) return { changed: false, reason: 'not found' };
+  const ai = song.lyrics?.ai || (song.lyrics?.source === 'whisper' ? song.lyrics.words : []) || [];
+  if (ref.instrumental && !ai.length) return { changed: false, reason: 'instrumental' };
+  const onsets = (song.charts?.vocals?.notes?.expert || []).map((n) => n.t);
+  const out = crossref(ai, ref, { duration: song.duration, onsets });
+  if (!out.ok) return { changed: false, reason: ai.length ? 'did not match the recording' : 'no timed lines', stats: out.stats };
+  song.lyrics = {
+    language: song.lyrics?.language || null, words: out.words, ai: ai.length ? ai : undefined,
+    source: ai.length ? 'whisper+lrclib' : 'lrclib', reference: { source: ref.source, id: ref.id, synced: !!ref.synced },
+    corrected: out.stats.fixed, added: out.stats.added, dropped: out.stats.dropped, date: Date.now(),
+  };
+  if (save) await saveSongJson(song);
+  return { changed: true, stats: out.stats };
 }

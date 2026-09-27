@@ -6,6 +6,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const initials = (n) => String(n || '?').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 import { instIcon, fa, starsOnly, achIcon } from './icons.js';
+import { discord, discordAvatar, STATUS_LABEL } from '../net/discord.js';
 const ICON = { guitar: instIcon('guitar'), bass: instIcon('bass'), drums: instIcon('drums'), keys: instIcon('keys'), vocals: instIcon('vocals') };
 const DIFFS = ['easy', 'medium', 'hard', 'expert'];
 const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'];
@@ -18,7 +19,9 @@ const ago = (t) => {
   return new Date(t).toLocaleDateString();
 };
 
-export const avatarHtml = (p, size = 40) => `<span class="avatar" style="--pc:${p?.color || '#555'};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px">${esc(initials(p?.name || 'G'))}</span>`;
+// a linked Discord account shows its avatar (the initials stay underneath in case it can't load)
+export const avatarHtml = (p, size = 40) => `<span class="avatar" style="--pc:${p?.color || '#555'};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px">${esc(initials(p?.name || 'G'))}${p?.discord ? `<img src="${discordAvatar(p.discord, size > 64 ? 256 : 64)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</span>`;
+const dcIcon = '<i class="fa-brands fa-discord" aria-hidden="true"></i>';
 
 export function installSocial(ui) {
   const state = { formColor: PROFILE_COLORS[0], pinFor: null, lbTab: 'overall', lbSong: 0, lbInst: 'guitar', lbDiff: 'expert', careerId: null, afterSignIn: 'menu', careerTab: 'overview' };
@@ -32,7 +35,7 @@ export function installSocial(ui) {
     grid.hidden = false;
     grid.innerHTML = profiles.list.map((p) => {
       const lv = levelInfo(p.xp);
-      return `<div class="profile-card" data-nav data-profile="${p.id}" style="--pc:${p.color}">${avatarHtml(p, 84)}<b>${esc(p.name)}</b><span>Level ${lv.level} · ${esc(lv.rank)}${p.pinHash ? ` · ${fa('lock')}` : ''}</span></div>`;
+      return `<div class="profile-card" data-nav data-profile="${p.id}" style="--pc:${p.color}">${avatarHtml(p, 84)}<b>${esc(p.name)}</b><span>Level ${lv.level} · ${esc(lv.rank)}${p.pinHash ? ` · ${fa('lock')}` : ''}${p.discord ? ` · ${dcIcon}` : ''}</span></div>`;
     }).join('') + `<div class="profile-card add" data-nav data-action="pf-new">${'<span class="avatar" style="width:84px;height:84px;font-size:40px">+</span>'}<b>New profile</b><span>Name, colour, optional PIN</span></div>
       <div class="profile-card add" data-nav data-action="pf-guest"><span class="avatar" style="width:84px;height:84px;font-size:30px">?</span><b>Guest</b><span>Nothing is saved</span></div>`;
     $$('[data-profile]', grid).forEach((c) => c.addEventListener('click', () => pick(c.dataset.profile)));
@@ -125,10 +128,12 @@ export function installSocial(ui) {
         ${avatarHtml(p, 96)}
         <div><h2>${esc(p.name)}</h2><div class="rank">LEVEL ${lv.level} · ${esc(lv.rank.toUpperCase())}</div>
           <div class="xpbar"><div style="width:${Math.round(lv.progress * 100)}%"></div></div>
-          <small>${lv.into.toLocaleString()} / ${lv.span.toLocaleString()} XP to level ${lv.level + 1} · ${p.xp.toLocaleString()} XP total</small></div>
+          <small>${lv.into.toLocaleString()} / ${lv.span.toLocaleString()} XP to level ${lv.level + 1} · ${p.xp.toLocaleString()} XP total</small>
+          ${p.discord ? `<div class="dc-line">${dcIcon}<b>${esc(p.discord.globalName || p.discord.username || 'Discord')}</b>${p.discord.username ? `<small>@${esc(p.discord.username)}</small>` : ''}<span class="dc-status" data-s="unknown"><i></i><em>checking…</em></span><span class="dc-activity"></span></div>` : ''}</div>
         <div class="actions">
           <button class="nav-btn" data-nav data-action="profiles">Switch profile</button>
           ${mine ? '<button class="nav-btn" data-nav data-action="pf-signout">Sign out</button><button class="nav-btn" data-nav data-action="pf-pin">Set PIN</button>' : ''}
+          ${mine ? `<button class="nav-btn discord" data-nav data-action="pf-discord">${dcIcon} ${p.discord ? 'Unlink Discord' : 'Link Discord'}</button>` : ''}
           ${mine ? '<button class="nav-btn danger" data-nav data-action="pf-delete">Delete</button>' : ''}
         </div>
       </div>
@@ -162,6 +167,62 @@ export function installSocial(ui) {
     $$('[data-ct]', root).forEach((o) => o.addEventListener('click', () => { state.careerTab = o.dataset.ct; renderCareer(); }));
     ui.focus = 0;
     ui.applyFocus(false);
+    if (p.discord) showPresence(p);
+  }
+
+  /** Fill in the linked account's live Discord status (and keep it fresh while the career page is open). */
+  async function showPresence(p, fresh = false) {
+    clearTimeout(state.dcTimer);
+    const pr = await discord.presence(p.discord.id, { fresh });
+    const line = $('#career .dc-line');
+    if (!line || ui.screen !== 'career') return;
+    const st = line.querySelector('.dc-status'), act = line.querySelector('.dc-activity');
+    if (pr.ok) {
+      st.dataset.s = pr.status;
+      st.querySelector('em').textContent = STATUS_LABEL[pr.status] || pr.status;
+      const bits = [];
+      if (pr.custom?.text || pr.custom?.emoji) bits.push(esc(`${pr.custom.emoji || ''} ${pr.custom.text || ''}`.trim()));
+      if (pr.playing) bits.push(`Playing <b>${esc(pr.playing.name)}</b>${pr.playing.details ? ` · ${esc(pr.playing.details)}` : ''}`);
+      else if (pr.listening) bits.push(`Listening to <b>${esc(pr.listening.song)}</b> · ${esc(pr.listening.artist)}`);
+      act.innerHTML = bits.join(' · ');
+      // keep the stored name / avatar in step with Discord
+      const u = pr.user;
+      if (u && profiles.current?.id === p.id && (u.avatar !== p.discord.avatar || u.username !== p.discord.username || u.globalName !== p.discord.globalName)) profiles.setDiscord(p.id, u);
+    } else {
+      st.dataset.s = 'unknown';
+      st.querySelector('em').textContent = pr.error === 'not_monitored' ? 'status hidden' : 'status unavailable';
+      act.textContent = pr.error === 'not_monitored' ? 'Join the Lanyard Discord server (discord.gg/lanyard) to show your live status here' : '';
+    }
+    state.dcTimer = setTimeout(() => { if (ui.screen === 'career' && profiles.byId(p.id)?.discord) showPresence(profiles.byId(p.id), true); }, 30000);
+  }
+
+  /** Link Discord: the account signed in to the Discord app on this PC, or a user ID typed in. */
+  async function linkDiscord() {
+    const p = profiles.current;
+    if (!p) return;
+    if (p.discord) {
+      if (!(await ui.confirmDialog('Unlink Discord?', `${p.name} stops showing ${p.discord.globalName || p.discord.username || 'the Discord account'}.`, 'Unlink'))) return;
+      await profiles.setDiscord(p.id, null);
+      ui.toast('Discord unlinked');
+      renderCareer();
+      return;
+    }
+    let user = null;
+    try {
+      ui.toast('Asking the Discord app who is signed in…');
+      user = await discord.currentUser();
+      if (!(await ui.confirmDialog(`Link ${user.globalName || user.username}?`, `Discord account @${user.username}, signed in on this PC. Your profile shows its avatar and live status.`, 'Link'))) return;
+    } catch (e) {
+      // no Discord app / no application ID: a user ID works too
+      const id = await ui.osk.show({ title: 'Discord user ID', hint: `${e.message}. Or type your Discord user ID (Discord → Settings → Advanced → Developer Mode, then right-click your name → Copy User ID)`, type: 'number', max: 21 });
+      if (!id) return;
+      if (!/^\d{15,21}$/.test(id)) { ui.toast('That is not a Discord user ID (15-21 digits)', 'err'); return; }
+      const pr = await discord.presence(id, { fresh: true });
+      user = pr.ok ? pr.user : { id };
+    }
+    await profiles.setDiscord(p.id, user);
+    ui.toast(`Discord linked: ${user.globalName || user.username || user.id}`, 'ok');
+    renderCareer();
   }
 
   // ---------------------------------------------------------------- leaderboards
@@ -239,6 +300,7 @@ export function installSocial(ui) {
     'pf-guest': () => { profiles.signOut(); ui.refreshStatus(); ui.show(state.afterSignIn || 'menu'); ui.toast('Playing as guest'); },
     'pin-ok': submitPin,
     'pin-cancel': renderProfiles,
+    'pf-discord': linkDiscord,
     'pf-signout': () => { profiles.signOut(); ui.refreshStatus(); ui.show('profiles'); },
     'pf-pin': async () => {
       const p = profiles.current;

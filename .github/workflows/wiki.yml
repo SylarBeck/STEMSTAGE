@@ -1,0 +1,32 @@
+# wiki/*.md → the GitHub wiki (https://github.com/SylarBeck/STEMSTAGE/wiki). Edit the pages in wiki/, not on
+# github.com: this overwrites the wiki on every change. The wiki must exist first (Settings → Features → Wikis,
+# then create any first page once).
+name: Wiki
+
+on:
+  push:
+    branches: [main]
+    paths: ['wiki/**', '.github/workflows/wiki.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Is the wiki switched on?
+        id: wiki
+        run: |
+          if git ls-remote "https://github.com/${{ github.repository }}.wiki.git" >/dev/null 2>&1; then echo "ready=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::The GitHub wiki isn't set up yet: Settings → Features → Wikis, then create any first page once. Skipping."; fi
+      - if: steps.wiki.outputs.ready == 'true'
+        uses: Andrew-Chen-Wang/github-wiki-action@v5
+        with:
+          path: wiki/

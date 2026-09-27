@@ -9,6 +9,7 @@
 
 <p align="center">
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white" />
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-AppImage%20%7C%20deb%20%7C%20rpm-FCC624?logo=linux&logoColor=black" />
   <img alt="Tauri 2" src="https://img.shields.io/badge/desktop-Tauri%202-24C8DB?logo=tauri&logoColor=white" />
   <img alt="three.js" src="https://img.shields.io/badge/3D-three.js-000000?logo=threedotjs&logoColor=white" />
   <img alt="Demucs" src="https://img.shields.io/badge/AI-Demucs%20%2B%20basic--pitch-ff2d7a" />
@@ -17,7 +18,7 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-29e0ff" /></a>
 </p>
 
-<p align="center"><a href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><b>⬇ Download the Windows installer</b></a></p>
+<p align="center"><a href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><b>⬇ Download for Windows or Linux</b></a> · <a href="https://sylarbeck.github.io/STEMSTAGE/"><b>🌐 Website</b></a> · <a href="https://github.com/SylarBeck/STEMSTAGE/wiki"><b>📖 Wiki</b></a></p>
 
 ---
 
@@ -32,23 +33,29 @@
 
 - **Any song, any part** — [Demucs](https://github.com/facebookresearch/demucs) `htdemucs_6s` separates drums, bass, guitar, piano, vocals and other on your GPU; [basic-pitch](https://github.com/spotify/basic-pitch) transcribes the notes; an auto-charter builds four difficulties with overdrive phrases.
 - **Rock Band-style highway** — chrome rails that react to your state, fret smashers, glowing gems, cymbal gems on drums, a streak meter in the board, overdrive fire walls.
-- **DualSense done properly** — adaptive triggers that click like frets and buzz on sustains, haptics, lightbar and player LEDs through a native [pydualsense](https://github.com/flok/pydualsense) bridge. Works over USB and Bluetooth, several controllers at once.
+- **DualSense done properly** — adaptive triggers that click like frets and buzz on sustains, haptics, lightbar and player LEDs through a native [pydualsense](https://github.com/flok/pydualsense) bridge. Works over USB and Bluetooth, several controllers at once, with sub-millisecond median input lag (the bridge reads and writes on separate threads and time-stamps every press).
 - **Every controller** — Xbox, DualShock 4, Switch Pro, Joy-Con, Rock Band / Guitar Hero guitars and drums, MIDI e-kits and keyboards, and two keyboard layouts. Each controller gets its own **config profile**.
 - **Controller-first menus** — D-pad navigation everywhere, button prompts that match your controller (✕◯△▢ / ABXY / Nintendo / keys), an on-screen keyboard, fullscreen UI that scales to any window.
 - **Band & online** — up to 4 local players each with their own highway, plus online rooms with live scoreboards; overdrive revives failed bandmates.
 - **Online without port forwarding** — press *Host online*, share the invite code, friends type it in *Join*. Songs are sent to friends automatically (compressed to ~10% of the size).
 - **Tour & career** — seven venues from the Garage to a festival main stage, unlocked by stars; a daily challenge with a day streak; profiles with PINs, XP, levels, 34 achievements and leaderboards.
-- **Sing** — pick *🎤 Sing* on the vocals part and sing into a microphone: a karaoke pitch track with AI lyrics (Whisper), octave-free scoring, and the original singer muted.
+- **Sing** — pick *🎤 Sing* on the vocals part and sing into a microphone: a karaoke pitch track with AI lyrics (Whisper), octave-free scoring, and the original singer muted. The AI lyrics are **cross-checked against the [LRCLIB](https://lrclib.net) lyrics database**: misheard words are replaced, missing ones added, all on Whisper's timing.
 - **Ghosts & replays** — every run is recorded; watch it back exactly, or race your best (or the top run on this PC) as a ghost.
 - **Setlists & marathons** — build setlists and play them back to back for one combined score; drop a folder of songs or paste a YouTube playlist to import them all at once.
 - **Chart editor** — fix the AI's charts by hand with a controller, keyboard or mouse: live playback, note placement while it plays, sustains, overdrive phrases, undo, and one-press rebuilding of the easier difficulties.
 - **Stream mode** — Twitch chat votes for the next song (`!vote`), requests songs (`!sr`) and hypes the crowd (`!hype`); an OBS overlay shows the song, score, vote and requests.
-- **Real instrument mode** — play the guitar, bass or keys part on a real instrument: plug a guitar/bass into your audio interface (pitch tracking, octave-free, latency learned as you play) or use a MIDI keyboard; the HUD shows the next notes by name and the note you play.
+- **Real instrument mode** — play the guitar, bass or keys part on a real instrument: plug a guitar/bass into your audio interface (pitch tracking, octave-free, latency learned as you play) or use a MIDI keyboard. Guitar and bass read a scrolling **tablature** (string + fret, fingered like a player would), keys a **piano keyboard** with falling notes; both show what you're playing live.
+- **Discord** — link your profile to your Discord account (avatar, name, live status via Lanyard) and show what you're playing in your Discord status (Rich Presence).
 - **Accessibility** — colour-blind lane palettes (red-green, blue-yellow, high contrast), calm visuals (no strobes, shockwaves or camera cuts), lane assist (3 wide lanes, or any button — playable one-handed), auto sustain and a bigger HUD. Assisted runs earn XP but stay off leaderboards.
 - **Auto-updates** — the desktop app updates itself from signed GitHub Releases.
 - **Import from anywhere** — audio files or YouTube search (yt-dlp), with automatic metadata and cover art (MusicBrainz, iTunes).
 - **Practice mode** — slow songs down with pitch-preserving time-stretch and start at any bar.
 - **Export** — Clone Hero / YARG chart packs (MIDI + song.ini + stems).
+
+<p align="center">
+  <img src="docs/screenshots/real-guitar.png" width="49%" alt="Real guitar mode: scrolling tablature" />
+  <img src="docs/screenshots/real-keys.png" width="49%" alt="Real keys mode: keyboard with falling notes" />
+</p>
 
 <p align="center">
   <img src="docs/screenshots/setlist.png" width="32%" alt="Setlist" />
@@ -62,14 +69,14 @@
 
 | | |
 |---|---|
-| OS | Windows 10 / 11 |
+| OS | Windows 10 / 11, or Linux x86-64 (AppImage / .deb / .rpm) |
 | Node.js | 20 or newer — runs the game server |
 | GPU | Any WebGL 2 GPU. An NVIDIA GPU makes AI splitting ~10× faster (CPU works too) |
-| For building the app | [Rust](https://rustup.rs) + Visual Studio Build Tools (C++), WebView2 (preinstalled on Windows 11) |
+| For building the app | [Rust](https://rustup.rs) + Visual Studio Build Tools (C++), WebView2 (preinstalled on Windows 11). Linux: WebKitGTK 4.1 dev packages (see the [wiki](https://github.com/SylarBeck/STEMSTAGE/wiki/Development-Setup)) |
 
 ### Install
 
-**Players:** download `STEMSTAGE_x.y.z_x64-setup.exe` from [Releases](https://github.com/SylarBeck/STEMSTAGE/releases/latest) and run it (installs for your user, no admin needed). Install [Node.js](https://nodejs.org) 20+ if you don't have it, and run `npm run ai:setup` from a source checkout once if you want the AI splitter (see below). The app updates itself when a new release is published.
+**Players:** download `STEMSTAGE_x.y.z_x64-setup.exe` (Windows) or the `.AppImage` / `.deb` / `.rpm` (Linux) from [Releases](https://github.com/SylarBeck/STEMSTAGE/releases/latest) and run it (the Windows installer installs for your user, no admin needed). On Linux, run `bash server/setup-ai.sh` from a source checkout for the AI splitter and DualSense bridge; see the [wiki](https://github.com/SylarBeck/STEMSTAGE/wiki/Installation). Install [Node.js](https://nodejs.org) 20+ if you don't have it, and run `npm run ai:setup` from a source checkout once if you want the AI splitter (see below). The app updates itself when a new release is published.
 
 **From source:**
 
@@ -164,8 +171,8 @@ Songs live in `Documents\STEMSTAGE\songs` (one folder of WAV stems + `song.json`
 The desktop app checks GitHub Releases for a newer version at start-up (Settings → Updates) and installs it after asking. Updates are signed; the app refuses files that don't match the public key in `src-tauri/tauri.conf.json`.
 
 1. Once: put the repository on GitHub and add a secret **TAURI_SIGNING_PRIVATE_KEY** with the contents of `%USERPROFILE%\.tauri\stemstage.key` (keep this file private and backed up — without it you can't publish updates for installed copies).
-2. For each release: bump the version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, commit, then tag and push: `git tag v1.2.0 && git push --tags`.
-3. The **Release** workflow (`.github/workflows/release.yml`) builds the installer, signs it and publishes the release with `latest.json`. Builds made there know their repository, so installed copies find updates by themselves; copies built on your PC use the repository set in Settings → Updates.
+2. For each release: bump the version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, commit, then tag and push: `git tag v1.4.0 && git push origin v1.4.0`.
+3. The **Release** workflow (`.github/workflows/release.yml`) builds the Windows installer and the Linux AppImage, .deb and .rpm, signs the update files and publishes them in one release with `latest.json` (details: [Release Process](https://github.com/SylarBeck/STEMSTAGE/wiki/Release-Process)). Builds made there know their repository, so installed copies find updates by themselves; copies built on your PC use the repository set in Settings → Updates.
 
 ## Singing and lyrics
 
@@ -190,13 +197,14 @@ brand/           logo, icon, wordmark, banner · tools/  art, brand and screensh
 - **The desktop app shows an error on start** — it needs Node.js on your PATH. Logs are in `%LOCALAPPDATA%\stemstage\logs`.
 - **Online: "No room found"** — check the code with the host; a room only exists while the host is on the Online screen or in the match. A brand-new room can take a few seconds to become reachable.
 - **Online: the invite code never appears** — the tunnel needs internet access to github.com (first time only) and to Cloudflare. If a VPN or firewall blocks it, use *Local network* or put `cloudflared.exe` in `%LOCALAPPDATA%\stemstage\bin` yourself.
-- **Singing: no pitch arrow** — Settings → Singing → *Microphone* and *Test microphone*; Windows may need microphone access for desktop apps (Settings → Privacy → Microphone).
+- **Singing / real instruments: no microphone** — the desktop app grants the game microphone access itself; if Windows still blocks it, turn on Settings → Privacy & security → Microphone → *Let desktop apps access your microphone*. Then Settings → Singing → *Microphone* and *Test microphone*.
+- **More help** — the [wiki](https://github.com/SylarBeck/STEMSTAGE/wiki/Troubleshooting) covers Linux, Discord, lyrics and more.
 - **Stream: chat commands do nothing** — Stream screen → connect to your channel name (no login needed); it shows "Reading chat" when connected.
 - **Local network: friends can't join** — allow Node.js through Windows Firewall on private networks and share the address shown on the Online screen (port 5180).
 
 ## Credits
 
-three.js · Tauri · Demucs (Meta) · basic-pitch (Spotify) · faster-whisper / Whisper (OpenAI) · pydualsense · hidapi · yt-dlp · music-metadata · Cloudflare Tunnel · Orbitron and Rajdhani fonts (SIL Open Font License). Controller pictures for gamepads come from the [Gamepad Asset Pack](https://github.com/AL2009man/Gamepad-Asset-Pack) by AL2009man (MIT, see `public/controllers/pack/LICENSE.txt`); guitar, drum, MIDI and keyboard pictures are original artwork. Icons are [Font Awesome Free](https://fontawesome.com) (icons CC BY 4.0, fonts SIL OFL 1.1, bundled in `public/vendor/fontawesome`). Product names and trademarks belong to their owners. Only import music you have the rights to use.
+three.js · Tauri · Demucs (Meta) · basic-pitch (Spotify) · faster-whisper / Whisper (OpenAI) · [LRCLIB](https://lrclib.net) (lyrics) · [Lanyard](https://github.com/Phineas/lanyard) (Discord status) · pydualsense · hidapi · yt-dlp · music-metadata · Cloudflare Tunnel · Orbitron and Rajdhani fonts (SIL Open Font License). Controller pictures for gamepads come from the [Gamepad Asset Pack](https://github.com/AL2009man/Gamepad-Asset-Pack) by AL2009man (MIT, see `public/controllers/pack/LICENSE.txt`); guitar, drum, MIDI and keyboard pictures are original artwork. Icons are [Font Awesome Free](https://fontawesome.com) (icons CC BY 4.0, fonts SIL OFL 1.1, bundled in `public/vendor/fontawesome`). Product names and trademarks belong to their owners. Only import music you have the rights to use.
 
 ## License
 

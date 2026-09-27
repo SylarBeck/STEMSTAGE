@@ -811,12 +811,15 @@ html[data-hud="large"] #hud .hud-left, html[data-hud="large"] #hud .hud-right, h
 html[data-hud="huge"] #hud .hud-left, html[data-hud="huge"] #hud .hud-right, html[data-hud="huge"] #hud .judge, html[data-hud="huge"] #hud .callout { zoom: 1.5; }
 
 /* ---------- real instruments: next notes + what you play ---------- */
-.real-strip { position: absolute; left: 50%; transform: translateX(-50%); top: 118px; display: flex; gap: 10px; align-items: baseline; padding: 8px 16px; border-radius: 12px; background: rgba(8,6,20,0.78); border: 1px solid var(--line); font-family: var(--display); }
-.real-strip:empty { display: none; }
-.real-strip .rs-k { font-size: 10px; letter-spacing: 0.22em; color: var(--dim); margin-left: 6px; }
-.real-strip b { font-size: 18px; color: rgba(255,255,255,0.6); min-width: 34px; text-align: center; }
-.real-strip b.first { color: #fff; font-size: 24px; }
-.real-strip b.you { color: var(--gold); } .real-strip b.you.ok { color: var(--good); text-shadow: 0 0 12px rgba(61,255,138,0.6); }
+/* real instruments: tablature (guitar / bass) or keyboard (keys) over the far end of the highway */
+.real-view { position: absolute; left: 50%; transform: translateX(-50%); top: 104px; width: min(660px, 92%); border-radius: 14px; overflow: hidden;
+  background: linear-gradient(180deg, rgba(8,6,20,0.86), rgba(8,6,20,0.7)); border: 1px solid var(--line); box-shadow: 0 14px 40px rgba(0,0,0,0.45); pointer-events: none; }
+.real-view canvas { display: block; width: 100%; height: 100%; }
+.real-tab { height: 158px; }
+.real-tab.bass { height: 124px; }
+.real-keys { height: 170px; }
+.phud .real-view { top: 96px; width: 94%; }
+.phud .real-tab { height: 124px; } .phud .real-keys { height: 140px; }
 
 /* ---------- singing (karaoke track on the HUD) ---------- */
 .vox { position: absolute; left: 7%; right: 7%; top: 70px; height: 34%; display: flex; flex-direction: column; border-radius: 16px; overflow: hidden;
@@ -856,3 +859,17 @@ html[data-hud="huge"] #hud .hud-left, html[data-hud="huge"] #hud .hud-right, htm
 .ach:not(.on) .i .fa-solid { color: var(--dim); }
 .drop-icon .fa-solid { font-size: 0.8em; }
 .detail-meta .badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Discord (linked profiles) ---------- */
+.avatar { position: relative; overflow: hidden; }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.dc-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; font-size: 14px; }
+.dc-line .fa-discord { color: #5865f2; font-size: 16px; }
+.dc-line small { color: var(--dim); }
+.dc-status { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); }
+.dc-status i { width: 9px; height: 9px; border-radius: 50%; background: #747f8d; }
+.dc-status[data-s="online"] i { background: #23a55a; } .dc-status[data-s="idle"] i { background: #f0b232; } .dc-status[data-s="dnd"] i { background: #f23f43; }
+.dc-status em { font-style: normal; }
+.dc-activity { flex-basis: 100%; color: var(--dim); font-size: 13px; }
+.dc-activity:empty { display: none; }
+.nav-btn.discord .fa-discord { color: #5865f2; }

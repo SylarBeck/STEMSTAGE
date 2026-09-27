@@ -1,5 +1,5 @@
 // STEMSTAGE production server: serves the built game (dist/) plus the local services — song library,
-// yt-dlp, metadata lookups, profiles/scores and the LAN room server — without Vite.
+// yt-dlp, metadata + lyrics lookups, profiles/scores, Discord and the LAN room server — without Vite.
 // Used by the desktop app (src-tauri) and `npm start`.
 //
 //   PORT / HOST            where to listen (127.0.0.1:5173)
@@ -14,6 +14,7 @@ import { createLibrary } from './library.js';
 import { createYt, createMeta, createData } from './extras.js';
 import { createOnline } from './online.js';
 import { createStream } from './stream.js';
+import { createDiscord } from './discord.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
@@ -45,6 +46,7 @@ const services = [
   ['/api/data', createData(DATA)],
   ['/api/online', createOnline(library)],
   ['/api/stream', createStream().handler],
+  ['/api/discord', createDiscord()],
 ];
 
 function serveStatic(req, res) {
