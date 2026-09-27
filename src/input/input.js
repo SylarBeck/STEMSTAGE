@@ -492,11 +492,18 @@ export class Input {
     return this.midiInputs.size;
   }
 
+  /** Raw MIDI notes: fn({ note, on, velocity, t, deviceId }). Returns an unsubscribe function. */
+  onMidiNote(fn) { (this.midiNoteListeners ||= new Set()).add(fn); return () => this.midiNoteListeners.delete(fn); }
+
   _midiMessage(inp, e) {
     const [st, d1, d2 = 0] = e.data;
     const cmd = st & 0xf0;
     const deviceId = `midi:${inp.id}`;
     const t = e.timeStamp || performance.now();
+    if (this.midiNoteListeners?.size && (cmd === 0x90 || cmd === 0x80)) {
+      const ev = { note: d1, on: cmd === 0x90 && d2 > 0, velocity: d2, t, deviceId };
+      this.midiNoteListeners.forEach((fn) => fn(ev));
+    }
     let counts = this.midiActive.get(deviceId);
     if (!counts) { counts = new Map(); this.midiActive.set(deviceId, counts); }
     const edge = (key, on) => {

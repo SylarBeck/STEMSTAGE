@@ -51,7 +51,8 @@ export class Replayer {
     while (this.ptr < this.events.length && this.events[this.ptr][0] <= t) {
       const [at, c, v] = this.events[this.ptr++];
       if (c === 'w') { this.whammy = v; continue; }
-      if (c === 'v') { this.pitch = v; continue; } // singing: the recorded pitch
+      if (c === 'v') { this.pitch = v; continue; } // singing / real instruments: the recorded pitch
+      if (c === 'n') { player.handle({ type: 'realnote', note: v }, at); continue; } // a note played on a real instrument
       if (c === 'p') this.held[v] = true;
       if (c === 'r') this.held[v] = false;
       player.handle({ type: TYPE[c], lane: v }, at);
@@ -68,7 +69,10 @@ export function ghostAt(timeline, t) {
 }
 
 /** The rules that change judgement; a replay is played back under the rules it was recorded with. */
-export const currentRules = () => ({ ghostPenalty: !!settings.ghostPenalty, noFail: !!settings.noFail });
+export const currentRules = () => ({
+  ghostPenalty: !!settings.ghostPenalty, noFail: !!settings.noFail,
+  laneAssist: settings.laneAssist || 'off', autoSustain: !!settings.autoSustain, // accessibility assists
+});
 
 export function buildReplay(song, player, recorder, result) {
   return {

@@ -1,6 +1,7 @@
 // The venue: LED wall, truss + moving-head beams, band, crowd, pyro, confetti and a camera director.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { settings } from '../settings.js';
 
 const PALETTES = [
   [0xff2d7a, 0x29e0ff],
@@ -542,7 +543,7 @@ export class Stage {
       if (od) { pan = Math.sin(t * 3 + i) * 0.8; tilt = 0.3 + Math.sin(t * 5 + i) * 0.3; }
       h.pivot.rotation.set(h.front ? tilt : -tilt * 0.8, 0, pan);
       const col = od ? (i % 2 ? GOLD : WHITE) : i % 2 ? this.colA : this.colB;
-      const strobe = od && Math.sin(t * 40 + i) > 0.8 ? 1.25 : 1;
+      const strobe = od && !settings.calmVisuals && Math.sin(t * 40 + i) > 0.8 ? 1.25 : 1; // no strobing in calm visuals
       h.beam.material.uniforms.uColor.value.copy(col);
       h.beam.material.uniforms.uIntensity.value = beamI * strobe * (0.7 + 0.3 * Math.sin(beat * Math.PI + i));
       h.lensMat.color.copy(col).multiplyScalar((2 + pulse * 2.5) * dim);

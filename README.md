@@ -43,6 +43,8 @@
 - **Setlists & marathons** — build setlists and play them back to back for one combined score; drop a folder of songs or paste a YouTube playlist to import them all at once.
 - **Chart editor** — fix the AI's charts by hand with a controller, keyboard or mouse: live playback, note placement while it plays, sustains, overdrive phrases, undo, and one-press rebuilding of the easier difficulties.
 - **Stream mode** — Twitch chat votes for the next song (`!vote`), requests songs (`!sr`) and hypes the crowd (`!hype`); an OBS overlay shows the song, score, vote and requests.
+- **Real instrument mode** — play the guitar, bass or keys part on a real instrument: plug a guitar/bass into your audio interface (pitch tracking, octave-free, latency learned as you play) or use a MIDI keyboard; the HUD shows the next notes by name and the note you play.
+- **Accessibility** — colour-blind lane palettes (red-green, blue-yellow, high contrast), calm visuals (no strobes, shockwaves or camera cuts), lane assist (3 wide lanes, or any button — playable one-handed), auto sustain and a bigger HUD. Assisted runs earn XP but stay off leaderboards.
 - **Auto-updates** — the desktop app updates itself from signed GitHub Releases.
 - **Import from anywhere** — audio files or YouTube search (yt-dlp), with automatic metadata and cover art (MusicBrainz, iTunes).
 - **Practice mode** — slow songs down with pitch-preserving time-stretch and start at any bar.

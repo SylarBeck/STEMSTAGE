@@ -12,6 +12,7 @@ const JUDGE_COLOR = { perfect: '#7fffd4', great: '#29e0ff', good: '#ffe14d', mis
 const MISS_PENALTY = { easy: 0.02, medium: 0.025, hard: 0.03, expert: 0.035 };
 const STREAK_CALLOUTS = new Set([50, 100, 200, 300, 400, 500, 750, 1000, 1500, 2000]);
 const hexRgb = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+const WIDE = [0, 0, 2, 4, 4]; // lane assist "wide": 5 lanes → 3 wide lanes (outer pairs merged)
 
 export class Player {
   /**
@@ -40,6 +41,17 @@ export class Player {
     this.notes = chart.notes[this.diff]
       .filter((n) => n.t >= startTime - 0.05)
       .map((n, i) => ({ ...n, i, hit: false, missed: false, judged: false, sus: n.len > 0 ? { held: false, dead: false, done: false } : null }));
+    if (this.rules.laneAssist === 'wide' && !this.drums) {
+      const seen = new Set();
+      this.notes = this.notes.filter((n) => {
+        n.lane = WIDE[n.lane];
+        const k = `${n.t.toFixed(4)}:${n.lane}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      this.notes.forEach((n, i) => { n.i = i; });
+    }
     // chord groups + hammer-on/pull-off flags for strum mode
     this.groups = [];
     for (const n of this.notes) {
@@ -89,7 +101,15 @@ export class Player {
   get ds() { return this._ds || this.s.ds; }
   get engine() { return this.s.engine; }
   rumble(strong, weak, ms) { if (this.dsOwner && this.cfg.rumble !== false) this.ds.rumble(strong, weak, ms); }
-  isHeld(lane) { return this.replayer ? this.replayer.held[lane] : this.s.input.isHeld(this.index, lane); }
+  rawHeld(lane) { return this.replayer ? this.replayer.held[lane] : this.s.input.isHeld(this.index, lane); }
+  /** Lane held — through the lane assist (wide: either button of a merged pair; any: any button). */
+  isHeld(lane) {
+    const a = this.rules.laneAssist;
+    if (!a || a === 'off' || (a === 'wide' && this.drums)) return this.rawHeld(lane);
+    if (a === 'any') return [0, 1, 2, 3, 4].some((l) => this.rawHeld(l));
+    return [0, 1, 2, 3, 4].some((l) => WIDE[l] === lane && this.rawHeld(l));
+  }
+  get assisted() { return (this.rules.laneAssist && this.rules.laneAssist !== 'off') || !!this.rules.autoSustain; }
   whammy() { return this.replayer ? this.replayer.whammy : this.s.input.whammy(this.index); }
 
   // ---------------------------------------------------------------- input
@@ -103,6 +123,13 @@ export class Player {
 
   press(lane, t) {
     if (this.strum) { this._tryHopo(t); return; }
+    if (this.rules.laneAssist === 'any') { // any button hits the next note (and its whole chord)
+      const g = this._nextGroup(t);
+      if (g) { this._hitGroup(g, t); return; }
+      this.ghost(lane, t);
+      return;
+    }
+    if (this.rules.laneAssist === 'wide' && !this.drums) lane = WIDE[lane];
     const list = this.laneNotes[lane];
     let p = this.ptr[lane];
     while (p < list.length && list[p].judged) p++;
@@ -133,6 +160,7 @@ export class Player {
   }
 
   _fretsMatch(g) {
+    if (this.rules.laneAssist === 'any') return true;
     const held = [0, 1, 2, 3, 4].filter((l) => this.isHeld(l));
     const req = g.notes.map((n) => n.lane).sort();
     if (req.length === 1) return held.includes(req[0]) && !held.some((l) => l > req[0]); // anchoring: lower frets allowed
@@ -362,7 +390,7 @@ export class Player {
       }
       const whammy = this.whammy();
       for (const n of [...this.activeSus]) {
-        if (!this.isHeld(n.lane)) { this._endSustain(n, false); continue; }
+        if (!this.rules.autoSustain && !this.isHeld(n.lane)) { this._endSustain(n, false); continue; }
         this._susScore(n, Math.min(t, n.t + n.len));
         if (t >= n.t + n.len) { this._endSustain(n, true); continue; }
         this.highway.sustainSparks(n.lane);
@@ -383,7 +411,7 @@ export class Player {
       odReady: !this.odActive && this.od >= 0.5, onFire: this.onFire, failed: this.failed,
       danger: this.rock < 0.25 ? 1 : 0, whammy: this.whammy(), beatHit: frame.beatHit,
       mult: this.mult, maxMult: this.maxMult, streak: this.streak,
-      odPhraseAlive: (p) => !this.phraseFailed.has(p), cameraShake: settings.cameraShake,
+      odPhraseAlive: (p) => !this.phraseFailed.has(p), cameraShake: settings.cameraShake && !settings.calmVisuals,
     });
     this.hud.frame(dt, {
       score: Math.floor(this.score), mult: this.mult * (this.odActive ? 2 : 1), maxMult: this.maxMult,
@@ -410,7 +438,7 @@ export class Player {
     return {
       index: this.index, name: this.cfg.name, color: this.cfg.color || PLAYER_COLORS[this.index], device: this.cfg.device, profileId: this.cfg.profileId || null,
       instrument: this.inst, difficulty: this.diff, score: Math.floor(this.score), stars, gold, accuracy, hits, total,
-      maxStreak: this.maxStreak, ...this.stats, odActivations: this.odActivations, failed: this.failed, strum: this.strum,
+      maxStreak: this.maxStreak, ...this.stats, odActivations: this.odActivations, failed: this.failed, strum: this.strum, assist: this.assisted,
     };
   }
 }

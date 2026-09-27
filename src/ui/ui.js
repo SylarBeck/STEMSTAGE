@@ -89,6 +89,17 @@ const SETTINGS_SCHEMA = [
   { action: 'openControllers', label: 'Controller profiles & bindings', desc: 'Per-controller config profiles, rebinding and tests' },
   { key: 'bridgeUrl', label: 'Controller bridge URL', desc: 'The pydualsense bridge that drives DualSense triggers, haptics and lights (npm run bridge)', type: 'text' },
   { action: 'testBridge', label: 'Test controller bridge', desc: 'Show which DualSense controllers the bridge sees' },
+  { group: 'Accessibility' },
+  { key: 'palette', label: 'Lane colours', desc: 'Colour-blind friendly note colours (applies from the next song)', type: 'choice', options: ['default', 'redgreen', 'tritan', 'contrast'], labels: { default: 'Classic', redgreen: 'Red-green safe', tritan: 'Blue-yellow safe', contrast: 'High contrast' } },
+  { key: 'calmVisuals', label: 'Calm visuals', desc: 'No strobes, shockwaves, colour fringing, camera shake or camera cuts; smaller pyro', type: 'toggle' },
+  { key: 'laneAssist', label: 'Lane assist', desc: 'Wide: 3 wide lanes (outer buttons merged). Any: any button hits the next note — playable with one hand. Assisted runs earn XP but stay off leaderboards', type: 'choice', options: ['off', 'wide', 'any'], labels: { off: 'Off', wide: '3 wide lanes', any: 'Any button' } },
+  { key: 'autoSustain', label: 'Auto sustain', desc: 'Long notes hold themselves after you hit them', type: 'toggle' },
+  { key: 'hudSize', label: 'HUD size', desc: 'Bigger score, meters and judgements', type: 'choice', options: ['normal', 'large', 'huge'], labels: { normal: 'Normal', large: 'Large', huge: 'Huge' } },
+  { group: 'Real instruments' },
+  { key: 'realInstrument', label: 'Play real instruments', desc: 'Guitar, bass and keys: play the real instrument (audio input or MIDI keyboard) instead of a controller', type: 'toggle' },
+  { action: 'chooseInstrumentInput', label: 'Instrument input', desc: 'The audio input your guitar or bass is plugged into (an audio interface works best)' },
+  { key: 'realStrict', label: 'Exact octave', desc: 'Off: any octave counts (recommended — the AI charts can be an octave off)', type: 'toggle' },
+  { action: 'testInstrument', label: 'Test instrument', desc: 'Play and see which note the game hears' },
   { group: 'Singing' },
   { key: 'vocalMode', label: 'Vocals', desc: 'Sing into a microphone, or play the vocal part with buttons', type: 'choice', options: ['mic', 'buttons'] },
   { key: 'guideVocals', label: 'Guide vocals', desc: 'Keep the original singer in the mix while you sing (off = karaoke)', type: 'toggle' },
@@ -927,6 +938,10 @@ export class UI {
         return `<div class="opt ${df === this.difficulty ? 'sel' : ''}" data-val="${df}">${df}<small>${n}</small></div>`;
       }).join('');
       $$('#pick-instrument .opt').forEach((o) => o.addEventListener('click', () => { this.instrument = o.dataset.val; settings.lastInstrument = this.instrument; this.renderDetail(s); }));
+      const rw = $('#pick-real-wrap');
+      rw.hidden = !['guitar', 'bass', 'keys'].includes(this.instrument);
+      $('#pick-real').innerHTML = [[false, '🎮 Controller'], [true, this.instrument === 'keys' ? '🎹 Real keyboard' : `🎸 Real ${this.instrument}`]].map(([v, l]) => `<div class="opt ${!!settings.realInstrument === v ? 'sel' : ''}" data-val="${v}">${l}</div>`).join('');
+      $$('#pick-real .opt').forEach((o) => o.addEventListener('click', () => { settings.realInstrument = o.dataset.val === 'true'; this.renderDetail(s); }));
       const vw = $('#pick-vocal-wrap');
       vw.hidden = this.instrument !== 'vocals';
       $('#pick-vocal').innerHTML = [['mic', '🎤 Sing'], ['buttons', '🎮 Buttons']].map(([v, l]) => `<div class="opt ${settings.vocalMode === v ? 'sel' : ''}" data-val="${v}">${l}${v === 'mic' && !s.lyrics?.words?.length ? '<small>no lyrics yet</small>' : ''}</div>`).join('');
@@ -969,6 +984,7 @@ export class UI {
   cyclePicker(which, d) {
     let m;
     if (this.pickerHooks.some((h) => h(which, d))) return;
+    if (which === 'real-mode' && this.selected) { settings.realInstrument = !settings.realInstrument; this.renderDetail(this.selected); return; }
     if (which === 'vocal-mode' && this.selected) { settings.vocalMode = settings.vocalMode === 'mic' ? 'buttons' : 'mic'; this.renderDetail(this.selected); return; }
     if (which === 'lib-sort') {
       const i = SORTS.findIndex(([v]) => v === this.sort);
@@ -1011,6 +1027,12 @@ export class UI {
     return keys.some((k) => k && (bindings.baseOf(k) === 'guitar' || bindings.profile(k)?.five?.strum?.length));
   }
 
+  /** Real instrument mode for a part: 'midi' (keys with a MIDI keyboard), 'audio' (guitar / bass / keys by ear) or null. */
+  realMode(inst) {
+    if (!settings.realInstrument || !['guitar', 'bass', 'keys'].includes(inst)) return null;
+    return inst === 'keys' && this.app.input.midiInputs?.size ? 'midi' : 'audio';
+  }
+
   /** Per-player options from the controller's config profile. */
   deviceCfg(deviceId) {
     const o = this.app.input.optionsFor(deviceId);
@@ -1035,7 +1057,7 @@ export class UI {
     } else {
       if (!s.charts[this.instrument]?.available) { this.toast('That instrument has no chart for this song', 'err'); return; }
       const p = profiles.current;
-      cfgs = [{ name: p?.name || 'P1', color: p?.color, profileId: p?.id || null, device: 'any', instrument: this.instrument, difficulty: this.difficulty, strum: this.instrument !== 'drums' && this.strumFor('any'), ...this.deviceCfg('any'), mic: this.instrument === 'vocals' && settings.vocalMode === 'mic' }];
+      cfgs = [{ name: p?.name || 'P1', color: p?.color, profileId: p?.id || null, device: 'any', instrument: this.instrument, difficulty: this.difficulty, strum: this.instrument !== 'drums' && this.strumFor('any'), ...this.deviceCfg('any'), mic: this.instrument === 'vocals' && settings.vocalMode === 'mic', real: this.realMode(this.instrument) }];
     }
     this.app.engine.unlock();
     this.toast(`Loading ${s.title}...`);
@@ -1558,7 +1580,7 @@ export class UI {
       let ctl = '';
       if (it.type === 'range') ctl = `<input type="range" min="${it.min}" max="${it.max}" step="${it.step}" tabindex="-1"/><span class="val"></span>`;
       if (it.type === 'toggle') ctl = '<div class="opt" data-t="off">Off</div><div class="opt" data-t="on">On</div>';
-      if (it.type === 'choice') ctl = it.options.map((o) => `<div class="opt" data-c="${o}">${o}</div>`).join('');
+      if (it.type === 'choice') ctl = it.options.map((o) => `<div class="opt" data-c="${o}">${it.labels?.[o] || o}</div>`).join('');
       if (it.type === 'text') ctl = `<input type="text" spellcheck="false" data-osk="${it.label}" data-osk-type="address"/>`;
       return `<div class="set-row" data-nav data-group="${group}" data-setting="${it.key}">${lbl}<div class="set-ctl">${ctl}</div></div>`;
     }).join('');
@@ -1616,11 +1638,11 @@ export class UI {
   }
 
   /** Settings → Test microphone: a sheet that shows the note you sing, live. */
-  async testMic() {
+  async testMic({ instrument = false } = {}) {
     const mic = new Mic(this.app.engine.ctx);
-    try { this.app.engine.unlock(); await mic.start(settings.micDevice || ''); } catch (e) { this.toast(`Microphone unavailable: ${e.message}`, 'err'); return; }
+    try { this.app.engine.unlock(); await mic.start(instrument ? settings.instrumentInput || '' : settings.micDevice || '', { raw: instrument, lowHz: instrument ? 38 : 70 }); } catch (e) { this.toast(`Input unavailable: ${e.message}`, 'err'); return; }
     const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const done = this.openSheet({ title: 'Test microphone', sub: 'Sing a note…', items: [{ label: 'Done' }] });
+    const done = this.openSheet({ title: instrument ? 'Test instrument' : 'Test microphone', sub: instrument ? 'Play a note…' : 'Sing a note…', items: [{ label: 'Done' }] });
     const timer = setInterval(() => {
       const { midi, level } = mic.read();
       const sub = $('#sheet .sheet-sub');
@@ -1645,6 +1667,16 @@ export class UI {
       });
     }
     if (a === 'testMic') this.testMic();
+    if (a === 'testInstrument') this.testMic({ instrument: true });
+    if (a === 'chooseInstrumentInput') {
+      try { await navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => s.getTracks().forEach((t) => t.stop())); } catch { /* labels stay hidden */ }
+      const devs = await Mic.devices();
+      this.openSheet({
+        title: 'Instrument input', sub: 'Where your guitar or bass comes in',
+        items: [{ label: `System default${!settings.instrumentInput ? ' ✓' : ''}`, run: () => { settings.instrumentInput = ''; } },
+          ...devs.filter((d) => d.deviceId && d.deviceId !== 'default').map((d) => ({ label: `${d.label || 'Audio input'}${settings.instrumentInput === d.deviceId ? ' ✓' : ''}`, run: () => { settings.instrumentInput = d.deviceId; this.toast(`Instrument input: ${d.label || 'that input'}`, 'ok'); } }))],
+      });
+    }
     if (a === 'checkUpdate') checkForUpdates(this);
     if (a === 'openControllers') this.show('controller');
     if (a === 'testBridge') {
@@ -1736,7 +1768,7 @@ export class UI {
       ? `PRACTICE · ${Math.round(r.practice.speed * 100)}% speed · ${solo.instrument} · ${solo.difficulty}`
       : r.mode === 'online' ? `${r.song.artist} · online match · ${everyone.length} players`
         : band ? `${r.song.artist} · ${r.players.length}-player band${r.failed ? ' · FAILED' : ''}`
-          : `${r.song.artist} · ${solo.instrument} · ${solo.difficulty}${solo.strum ? ' · strum' : ''}${r.failed ? ' · FAILED' : ''}`;
+          : `${r.song.artist} · ${solo.instrument} · ${solo.difficulty}${solo.strum ? ' · strum' : ''}${solo.real ? ` · real ${solo.instrument}` : ''}${solo.assist ? ' · assists on (not on leaderboards)' : ''}${r.failed ? ' · FAILED' : ''}`;
     const cv = coverUrl(r.song);
     $('#res-cover').style.background = cv ? `url('${cv}') center/cover` : this.art(r.song);
     $('[data-action="retry"]').textContent = r.mode === 'online' ? 'Back to lobby' : r.mode === 'replay' ? 'Watch again' : r.practice ? 'Practice again' : 'Play again';

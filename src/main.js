@@ -162,6 +162,14 @@ class App {
 }
 
 // Scale the UI (designed at 1600x900) to the window so everything fits with no scrollbars.
+import { applyPalette } from './game/palettes.js';
+function applyAccessibility() {
+  applyPalette(settings.palette);
+  document.documentElement.dataset.hud = settings.hudSize || 'normal';
+}
+applyAccessibility();
+onSettingsChange((key) => { if (key === 'palette' || key === 'hudSize') applyAccessibility(); });
+
 function fitUi() {
   const s = Math.max(0.5, Math.min(2.4, Math.min(window.innerWidth / 1600, window.innerHeight / 900)));
   document.documentElement.style.zoom = String(s);

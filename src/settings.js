@@ -33,6 +33,15 @@ export const DEFAULTS = {
   streamAutoPlay: true,  // start the song chat voted for
   autoUpdate: true,      // desktop app: look for a new version at start-up
   updateFeed: '',        // GitHub "owner/repo" (or a latest.json URL); release builds know theirs
+  realInstrument: false, // guitar / bass / keys: play a real instrument (audio input or MIDI) instead of a controller
+  instrumentInput: '',   // audio input for a real guitar / bass ('' = system default)
+  realStrict: false,     // real instruments: the octave has to match too
+  instrumentLatency: 0.07, // seconds; learned while you play a real instrument
+  palette: 'default',    // lane colours: default | redgreen | tritan | contrast
+  calmVisuals: false,    // no strobes, shockwaves, colour fringing or camera cuts
+  laneAssist: 'off',     // off | wide (3 wide lanes) | any (any button hits the next note)
+  autoSustain: false,    // sustains hold themselves
+  hudSize: 'normal',     // normal | large | huge (score, meters and judgements)
   lastInstrument: 'guitar',
   lastDifficulty: 'medium',
 };

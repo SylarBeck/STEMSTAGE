@@ -7,6 +7,7 @@ import { isDualSensePad } from '../input/input.js';
 import { Highway } from './highway.js';
 import { Player } from './player.js';
 import { VocalPlayer } from './vocals.js';
+import { RealPlayer } from './real.js';
 import { saveBest, getBest } from '../storage/library.js';
 import { STEM_FOR } from '../audio/engine.js';
 import { runJob } from '../audio/pipeline.js';
@@ -52,7 +53,9 @@ export class Session {
     this.players = cfgs.map((cfg, i) => {
       const hud = this.solo ? this.hud : this.hud.addPlayer(i, cfgs.length, cfg);
       const pcfg = this.replay ? { ...cfg, replayer: new Replayer(this.replay), rules: this.replay.rules } : cfg;
-      const p = cfg.mic && cfg.instrument === 'vocals' ? new VocalPlayer(this, i, pcfg, null, hud) : new Player(this, i, pcfg, this._highway(i), hud);
+      const p = cfg.mic && cfg.instrument === 'vocals' ? new VocalPlayer(this, i, pcfg, null, hud)
+        : cfg.real && ['guitar', 'bass', 'keys'].includes(cfg.instrument) ? new RealPlayer(this, i, pcfg, this._highway(i), hud)
+          : new Player(this, i, pcfg, this._highway(i), hud);
       p.setup(song, this.startTime);
       p.recorder = this.practice || this.replay ? null : new Recorder();
       return p;
@@ -202,10 +205,13 @@ export class Session {
   }
 
   onOverdrive(player) {
-    this.stage.pyro(1);
-    this.stage.setShot('player');
-    this.fx.shock = 0;
-    this.fx.aberration = Math.max(this.fx.aberration, 0.012);
+    const calm = settings.calmVisuals;
+    this.stage.pyro(calm ? 0.35 : 1);
+    if (!calm) {
+      this.stage.setShot('player');
+      this.fx.shock = 0;
+      this.fx.aberration = Math.max(this.fx.aberration, 0.012);
+    }
     for (const p of this.players) if (p !== player && p.failed) p.revive();
     this.online?.client.event('od');
   }
@@ -213,10 +219,9 @@ export class Session {
   /** Stream mode: a viewer typed !hype. */
   hype(name) {
     if (!this.running || this.finished) return;
-    this.stage.pyro(1.2);
-    this.stage.sparks();
+    this.stage.pyro(settings.calmVisuals ? 0.35 : 1.2);
+    if (!settings.calmVisuals) { this.stage.sparks(); this.fx.shock = 0; }
     this.engine.cheer(1);
-    this.fx.shock = 0;
     this.hud.callout(`🔥 ${name} hyped the crowd!`, '#ff8a1a');
   }
 
@@ -254,7 +259,7 @@ export class Session {
         const measure = Math.round(this.beatPtr - this.song.downbeat);
         if (beatHit && measure % 32 === 0 && measure > 0) {
           this.stage.nextPalette();
-          if (!this.players.some((p) => p.odActive)) this.stage.setShot(SHOTS[(measure / 32) % SHOTS.length]);
+          if (!this.players.some((p) => p.odActive) && !settings.calmVisuals) this.stage.setShot(SHOTS[(measure / 32) % SHOTS.length]);
         }
       }
       if (t > this.endTime) this._finish();
@@ -310,6 +315,7 @@ export class Session {
     this.fx.aberration = Math.max(0, this.fx.aberration - dt * 0.02);
     if (this.fx.shock >= 0) { this.fx.shock += dt * 1.4; if (this.fx.shock > 1) this.fx.shock = -1; }
     this.fx.od += ((anyOD ? 1 : 0) - this.fx.od) * Math.min(1, dt * 3);
+    if (settings.calmVisuals) { this.fx.shock = -1; this.fx.aberration = 0; } // calm visuals: no shockwaves / colour fringing
     this.renderer.setFx(this.fx);
 
     const lv = this.engine.levels();
@@ -331,7 +337,7 @@ export class Session {
     if (!this.practice && !this.replay) {
       for (const r of players) {
         r.prevBest = getBest(this.song.id, r.instrument, r.difficulty);
-        r.newBest = !r.failed && saveBest(this.song.id, r.instrument, r.difficulty, { score: r.score, stars: r.stars, gold: r.gold, accuracy: r.accuracy });
+        r.newBest = !r.failed && !r.assist && saveBest(this.song.id, r.instrument, r.difficulty, { score: r.score, stars: r.stars, gold: r.gold, accuracy: r.accuracy });
       }
     }
     const failed = this.failedAll;

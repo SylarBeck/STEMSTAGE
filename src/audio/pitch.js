@@ -49,14 +49,17 @@ export class Mic {
 
   get active() { return !!this.stream; }
 
-  async start(deviceId = '') {
+  /** raw: an instrument (no echo cancellation), lowHz: lowest note to track (bass goes down to ~40 Hz) */
+  async start(deviceId = '', { raw = false, lowHz = 70 } = {}) {
     if (this.stream) return;
+    this.lowHz = lowHz;
     this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: true, noiseSuppression: false, autoGainControl: false },
+      audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: !raw, noiseSuppression: false, autoGainControl: false },
     });
     this.source = this.ctx.createMediaStreamSource(this.stream);
     this.analyser = this.ctx.createAnalyser();
-    this.analyser.fftSize = 2048;
+    this.analyser.fftSize = lowHz < 60 ? 4096 : 2048; // YIN needs two periods: 4096 reaches a bass's low E (41 Hz)
+    this.buf = new Float32Array(this.analyser.fftSize);
     this.source.connect(this.analyser); // analysis only — the mic is never sent to the speakers
   }
 
@@ -69,7 +72,7 @@ export class Mic {
 
   /** Read the current pitch. Call once per frame. */
   read() {
-    if (!this.analyser) return { midi: 0, level: 0 };
+    if (!this.analyser) return { midi: 0, level: 0, rms: 0 };
     this.analyser.getFloatTimeDomainData(this.buf);
     let s = 0;
     for (let i = 0; i < this.buf.length; i++) s += this.buf[i] * this.buf[i];
@@ -77,14 +80,14 @@ export class Mic {
     this.level = Math.min(1, rms * 8);
     let midi = 0;
     if (rms > 0.012) {
-      const { hz, conf } = yin(this.buf, this.ctx.sampleRate);
+      const { hz, conf } = yin(this.buf, this.ctx.sampleRate, this.lowHz || 70);
       if (hz && conf > 0.55) midi = hzToMidi(hz);
     }
     // light smoothing that still follows jumps between notes
     if (midi && this.smooth && Math.abs(midi - this.smooth) < 1.2) this.smooth = this.smooth * 0.55 + midi * 0.45;
     else this.smooth = midi;
     this.midi = this.smooth;
-    return { midi: this.midi, level: this.level };
+    return { midi: this.midi, level: this.level, rms };
   }
 
   static async devices() {

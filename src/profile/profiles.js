@@ -184,7 +184,7 @@ class Profiles {
         id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, profileId: p.id, profileName: p.name,
         songId: song.id, songTitle: song.title, songArtist: song.artist, instrument: r.instrument, difficulty: r.difficulty,
         score: r.score, stars: r.stars, gold: !!r.gold, accuracy: +r.accuracy.toFixed(4), maxStreak: r.maxStreak,
-        hits: r.hits, total: r.total, miss: r.miss, fc, failed: !!r.failed, od: r.odActivations || 0, mode,
+        hits: r.hits, total: r.total, miss: r.miss, fc, failed: !!r.failed, od: r.odActivations || 0, mode, assist: !!r.assist, real: r.real || null,
         seconds: Math.round(song.duration || 0), date: Date.now(),
       };
       entries.push(entry);
@@ -251,7 +251,7 @@ class Profiles {
   leaderboard(songId, instrument, difficulty, limit = 10) {
     const best = new Map();
     for (const x of this.plays) {
-      if (x.songId !== songId || x.instrument !== instrument || x.difficulty !== difficulty || x.failed) continue;
+      if (x.songId !== songId || x.instrument !== instrument || x.difficulty !== difficulty || x.failed || x.assist) continue; // assisted runs stay off the boards
       const cur = best.get(x.profileId);
       if (!cur || x.score > cur.score) best.set(x.profileId, x);
     }
@@ -265,7 +265,7 @@ class Profiles {
       const mine = this.plays.filter((x) => x.profileId === p.id);
       const bestPerChart = new Map();
       for (const x of mine) {
-        if (x.failed) continue;
+        if (x.failed || x.assist) continue;
         const k = `${x.songId}|${x.instrument}|${x.difficulty}`;
         const cur = bestPerChart.get(k);
         if (!cur || x.score > cur.score) bestPerChart.set(k, x);

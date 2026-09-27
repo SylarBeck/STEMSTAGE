@@ -1,6 +1,6 @@
 [package]
 name = "stemstage"
-version = "1.1.0"
+version = "1.2.0"
 description = "STEMSTAGE desktop app: the AI rhythm game that plays any song"
 edition = "2021"
 publish = false
