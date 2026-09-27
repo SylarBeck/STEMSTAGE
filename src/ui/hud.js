@@ -2,7 +2,8 @@
 // panel; `PlayerHud` is the compact per-player panel used in band mode. Writes only on change.
 const $ = (id) => document.getElementById(id);
 const PLAYER_COLORS = ['#ff2d7a', '#29e0ff', '#ffcf3a', '#3dff8a'];
-const ICON = { guitar: '🎸', bass: '🎸', drums: '🥁', keys: '🎹', vocals: '🎤' };
+import { instIcon, fa } from './icons.js';
+const ICON = { guitar: instIcon('guitar'), bass: instIcon('bass'), drums: instIcon('drums'), keys: instIcon('keys'), vocals: instIcon('vocals') };
 
 function popClass(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
 
@@ -118,10 +119,10 @@ export class Hud extends HudBase {
     const key = `${g.name}|${g.score}|${Math.round(g.delta / 10)}`;
     if (this.cache.ghost === key) return;
     this.cache.ghost = key;
-    el.querySelector('.hg-name').textContent = `👻 ${g.name}`;
+    el.querySelector('.hg-name').innerHTML = `${fa('ghost')} ${escapeHtml(g.name)}`;
     el.querySelector('.hg-score').textContent = g.score.toLocaleString();
     const d = el.querySelector('.hg-delta');
-    d.textContent = `${g.delta >= 0 ? '▲' : '▼'} ${Math.abs(g.delta).toLocaleString()}`;
+    d.innerHTML = `${fa(g.delta >= 0 ? 'caret-up' : 'caret-down')} ${Math.abs(g.delta).toLocaleString()}`;
     d.className = `hg-delta ${g.delta >= 0 ? 'ahead' : 'behind'}`;
   }
 
@@ -131,7 +132,7 @@ export class Hud extends HudBase {
       el = document.createElement('div');
       el.id = 'hud-replay';
       el.className = 'hud-replay';
-      el.textContent = '● REPLAY';
+      el.innerHTML = `${fa('circle', 'rec')} REPLAY`;
       this.root.appendChild(el);
     }
     if (el) el.hidden = !on;

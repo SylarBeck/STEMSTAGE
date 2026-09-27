@@ -222,7 +222,7 @@ export class Session {
     this.stage.pyro(settings.calmVisuals ? 0.35 : 1.2);
     if (!settings.calmVisuals) { this.stage.sparks(); this.fx.shock = 0; }
     this.engine.cheer(1);
-    this.hud.callout(`🔥 ${name} hyped the crowd!`, '#ff8a1a');
+    this.hud.callout(`${name} hyped the crowd!`, '#ff8a1a');
   }
 
   onPlayerFailed(player) {

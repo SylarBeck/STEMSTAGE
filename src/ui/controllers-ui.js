@@ -31,7 +31,7 @@ export function installControllers(ui) {
     const dev = dsDeviceFor(d);
     if (dev) {
       const b = d.pad.battery;
-      return `Controller bridge (pydualsense) · ${dev.bt ? 'Bluetooth' : 'USB'}${b ? ` · battery ${b.level}%${b.charging ? ' ⚡' : ''}` : ''}`;
+      return `Controller bridge (pydualsense) · ${dev.bt ? 'Bluetooth' : 'USB'}${b ? ` · battery ${b.level}%${b.charging ? ' (charging)' : ''}` : ''}`;
     }
     if (isDualSensePad(d.pad)) return ds.online ? 'Gamepad API · press Find DualSense to hand it to the controller bridge' : 'Gamepad API · start the controller bridge for adaptive triggers, haptics and lightbar';
     return `${d.pad.mapping === 'standard' ? 'Standard layout' : 'Non-standard layout'} · Gamepad API`;
@@ -81,7 +81,7 @@ export function installControllers(ui) {
     const warn = $('#browser-warn-2');
     if (warn) warn.hidden = 'requestMIDIAccess' in navigator;
     const find = $('[data-action="ds-connect"]', $('#screen-controller'));
-    find.textContent = ds.online ? (ds.connected ? `DualSense ✓ (${ds.devices.length})` : 'Find DualSense') : 'Bridge offline';
+    find.textContent = ds.online ? (ds.connected ? `DualSense connected (${ds.devices.length})` : 'Find DualSense') : 'Bridge offline';
     find.classList.toggle('primary', ds.online && !ds.connected);
     $('[data-action="midi-enable"]', $('#screen-controller')).textContent = input.midiEnabled ? `MIDI on · ${input.midiInputs.size} device${input.midiInputs.size === 1 ? '' : 's'}` : 'Enable MIDI devices';
     if (!keepFocus) {
@@ -163,7 +163,7 @@ export function installControllers(ui) {
       ${tools.length || diag.length ? `<div class="hub-section"><div class="btn-row tight">${tools.join('')}</div>${diag.length ? `<div class="hub-diag">${diag.join('<br/>')}</div>` : ''}</div>` : ''}
       ${key ? `<div class="hub-section binds">
         <div class="picker" data-nav data-picker="hub-mode"><label>Bindings for</label><div class="picker-options">
-          <div class="opt ${st.mode === 'five' ? 'sel' : ''}" data-mode="five">🎸 Guitar · Bass · Keys</div><div class="opt ${st.mode === 'drums' ? 'sel' : ''}" data-mode="drums">🥁 Drums</div></div></div>
+          <div class="opt ${st.mode === 'five' ? 'sel' : ''}" data-mode="five"><i class="fa-solid fa-guitar"></i> Guitar · Bass · Keys</div><div class="opt ${st.mode === 'drums' ? 'sel' : ''}" data-mode="drums"><i class="fa-solid fa-drum"></i> Drums</div></div></div>
         <div class="bind-table">${ACTIONS[st.mode].map((action) => {
           const list = bindings.profile(key)?.[st.mode]?.[action] || [];
           const chips = list.length ? list.map((src, i) => `<span class="chip">${esc(srcLabel(src, key, det.family))}<i data-del="${st.mode}|${action}|${i}" title="Remove">✕</i></span>`).join('') : '<span class="chip none">unbound</span>';

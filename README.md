@@ -196,7 +196,7 @@ brand/           logo, icon, wordmark, banner · tools/  art, brand and screensh
 
 ## Credits
 
-three.js · Tauri · Demucs (Meta) · basic-pitch (Spotify) · faster-whisper / Whisper (OpenAI) · pydualsense · hidapi · yt-dlp · music-metadata · Cloudflare Tunnel · Orbitron and Rajdhani fonts (SIL Open Font License). Controller pictures for gamepads come from the [Gamepad Asset Pack](https://github.com/AL2009man/Gamepad-Asset-Pack) by AL2009man (MIT, see `public/controllers/pack/LICENSE.txt`); guitar, drum, MIDI and keyboard pictures are original artwork. Product names and trademarks belong to their owners. Only import music you have the rights to use.
+three.js · Tauri · Demucs (Meta) · basic-pitch (Spotify) · faster-whisper / Whisper (OpenAI) · pydualsense · hidapi · yt-dlp · music-metadata · Cloudflare Tunnel · Orbitron and Rajdhani fonts (SIL Open Font License). Controller pictures for gamepads come from the [Gamepad Asset Pack](https://github.com/AL2009man/Gamepad-Asset-Pack) by AL2009man (MIT, see `public/controllers/pack/LICENSE.txt`); guitar, drum, MIDI and keyboard pictures are original artwork. Icons are [Font Awesome Free](https://fontawesome.com) (icons CC BY 4.0, fonts SIL OFL 1.1, bundled in `public/vendor/fontawesome`). Product names and trademarks belong to their owners. Only import music you have the rights to use.
 
 ## License
 

@@ -16,9 +16,12 @@
     "start": "node server/app.js",
     "desktop:dev": "tauri dev",
     "desktop:build": "node tools/desktop-build.mjs",
-    "screenshots": "node tools/screenshots.mjs"
+    "screenshots": "node tools/screenshots.mjs",
+    "predev": "node tools/copy-fa.mjs",
+    "prebuild": "node tools/copy-fa.mjs"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^6.7.2",
     "music-metadata": "^11.16.1",
     "three": "^0.186.1",
     "ws": "^8.22.0"

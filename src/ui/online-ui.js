@@ -7,7 +7,8 @@ import { getSong, getAudio, coverUrl } from '../storage/library.js';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const ICON = { guitar: '🎸', bass: '🎸', drums: '🥁', keys: '🎹', vocals: '🎤' };
+import { instIcon, fa } from './icons.js';
+const ICON = { guitar: instIcon('guitar'), bass: instIcon('bass'), drums: instIcon('drums'), keys: instIcon('keys'), vocals: instIcon('vocals') };
 const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'];
 const DIFFS = ['easy', 'medium', 'hard', 'expert'];
 
@@ -94,7 +95,7 @@ export function installOnline(ui) {
       : `<div class="small-note">${online.host ? 'Choose a song for the match.' : 'Waiting for the host to choose a song...'}</div>`;
     $('#ol-players').innerHTML = room.players.map((p) => {
       const status = !song ? '' : p.hasSong ? (p.ready || p.host ? '<span class="rd ok">READY</span>' : '<span class="rd">NOT READY</span>') : `<span class="rd">DOWNLOADING ${Math.round((p.loading || 0) * 100)}%</span>`;
-      return `<div class="ol-player" style="--pc:${p.color}"><i></i><span>${esc(p.name)}${p.host ? ' 👑' : ''}${p.id === online.id ? ' (you)' : ''}</span><span>${ICON[p.instrument] || ''} ${p.instrument}</span><span>${p.difficulty}</span>${status || '<span></span>'}</div>`;
+      return `<div class="ol-player" style="--pc:${p.color}"><i></i><span>${esc(p.name)}${p.host ? ` ${fa('crown', 'host')}` : ''}${p.id === online.id ? ' (you)' : ''}</span><span>${ICON[p.instrument] || ''} ${p.instrument}</span><span>${p.difficulty}</span>${status || '<span></span>'}</div>`;
     }).join('');
     const avail = song?.instruments?.length ? song.instruments : INSTS;
     if (!avail.includes(st.inst)) st.inst = avail[0];

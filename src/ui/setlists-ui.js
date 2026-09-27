@@ -8,7 +8,8 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-const INSTS = [['guitar', '🎸'], ['bass', '🎸'], ['drums', '🥁'], ['keys', '🎹'], ['vocals', '🎤']];
+import { instIcon, fa, stars as starsHtml } from './icons.js';
+const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'].map((i) => [i, instIcon(i)]);
 const DIFFS = ['easy', 'medium', 'hard', 'expert'];
 const BREAK_SECONDS = 10;
 
@@ -70,7 +71,7 @@ export function installSetlists(ui) {
       ${band ? '' : `<div class="picker" data-nav data-picker="sl-inst"><label>Instrument</label><div class="picker-options">${INSTS.map(([v, ico]) => `<div class="opt ${ui.instrument === v ? 'sel' : ''}">${ico} ${v}</div>`).join('')}</div></div>
       <div class="picker" data-nav data-picker="sl-diff"><label>Difficulty</label><div class="picker-options">${DIFFS.map((v) => `<div class="opt ${ui.difficulty === v ? 'sel' : ''}">${v}</div>`).join('')}</div></div>`}
       <div class="sl-songs">${rows || '<div class="small-note">Empty — add songs from the setlist.</div>'}</div>
-      <div class="btn-row"><button class="nav-btn primary" data-nav data-action="sl-play" ${l.songs.length ? '' : 'disabled'}>▶ Play marathon</button><button class="nav-btn" data-nav data-action="sl-add">+ Add songs</button></div>`;
+      <div class="btn-row"><button class="nav-btn primary" data-nav data-action="sl-play" ${l.songs.length ? '' : 'disabled'}>${fa('play')} Play marathon</button><button class="nav-btn" data-nav data-action="sl-add">${fa('plus')} Add songs</button></div>`;
     $$('[data-action]', d).forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); ui.action(b.dataset.action, b); }));
     $$('[data-sl-song]', d).forEach((r) => r.addEventListener('click', () => songMenu(+r.dataset.slSong)));
   }
@@ -158,7 +159,7 @@ export function installSetlists(ui) {
       const score = x.players.reduce((a, p) => a + p.score, 0);
       const stars = Math.round(x.players.reduce((a, p) => a + p.stars, 0) / x.players.length);
       return `<div class="mr-row ${x.failed ? 'failed' : ''}"><span class="n">${i + 1}</span><div><b>${esc(x.song.title)}</b><small>${esc(x.song.artist)}</small></div>
-        <span class="st">${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}</span><b class="sc">${score.toLocaleString()}</b></div>`;
+        <span class="st">${starsHtml(stars)}</span><b class="sc">${score.toLocaleString()}</b></div>`;
     }).join('');
   }
 
@@ -215,7 +216,7 @@ export function installSetlists(ui) {
     // a finished marathon of 3+ songs counts for the Marathon Man badge
     if (!early && played >= 3) {
       const ids = new Set(m.results.flatMap((x) => x.players.map((p) => p.profileId)).filter(Boolean));
-      for (const id of ids) for (const a of await profiles.award(id, 'setlist_marathon')) ui.toast(`🏆 ${a.name} — ${a.desc}`, 'ok');
+      for (const id of ids) for (const a of await profiles.award(id, 'setlist_marathon')) ui.toast(`${a.name} — ${a.desc}`, 'ok', 'trophy');
     }
     ui.marathonDone = m;
   }
