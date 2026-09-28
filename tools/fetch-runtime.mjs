@@ -3,6 +3,7 @@
 //   uv(.exe)    Astral's uv — installs Python and the game's Python packages (controller bridge, AI splitter)
 // Runs before every desktop build (tauri.conf.json → beforeBuildCommand). Downloads only what's missing or
 // outdated; set STEMSTAGE_NODE_MAJOR to change the Node.js line (default 22).
+// uv is pinned so builds do not depend on GitHub's anonymous API rate limit.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,6 +15,8 @@ const bin = path.join(root, 'src-tauri', 'bin');
 const win = process.platform === 'win32';
 const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
 const NODE_MAJOR = process.env.STEMSTAGE_NODE_MAJOR || '22';
+const UV_VERSION = process.env.STEMSTAGE_UV_VERSION || '0.12.19';
+if (!/^\d+\.\d+\.\d+$/.test(UV_VERSION)) throw new Error('STEMSTAGE_UV_VERSION must be a version like 0.12.19');
 fs.mkdirSync(bin, { recursive: true });
 const stampFile = path.join(bin, 'versions.json');
 const stamps = (() => { try { return JSON.parse(fs.readFileSync(stampFile, 'utf8')); } catch { return {}; } })();
@@ -49,10 +52,8 @@ if (stamps.node !== node.version || !fs.existsSync(nodeExe)) {
 } else console.log(`Node.js ${node.version} already in src-tauri/bin`);
 
 // ---------------------------------------------------------------- uv
-const uvRel = await (await fetch('https://api.github.com/repos/astral-sh/uv/releases/latest', { headers: { 'User-Agent': 'STEMSTAGE build', Accept: 'application/vnd.github+json' } })).json();
-const uvVersion = uvRel.tag_name;
+const uvVersion = UV_VERSION;
 const uvExe = path.join(bin, win ? 'uv.exe' : 'uv');
-if (!uvVersion) throw new Error(`could not look up the latest uv release: ${JSON.stringify(uvRel).slice(0, 200)}`);
 if (stamps.uv !== uvVersion || !fs.existsSync(uvExe)) {
   console.log(`uv ${uvVersion} → src-tauri/bin`);
   const target = `${arch === 'arm64' ? 'aarch64' : 'x86_64'}-${win ? 'pc-windows-msvc' : 'unknown-linux-gnu'}`;
