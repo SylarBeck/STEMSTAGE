@@ -45,6 +45,7 @@ export async function shareProfile(profileId) {
     profile: {
       color: p.color, level: c.level.level, rank: c.level.rank, xp: p.xp, progress: c.level.progress, favorite: c.favorite,
       stats: { plays: t.plays, songs: t.songs, seconds: Math.round(t.seconds), stars: t.stars, fcs: t.fcs, bestStreak: t.bestStreak, accuracy: t.accuracy, notes: t.notes },
+      ...(c.versus ? { versus: { wins: c.versus.wins, losses: c.versus.losses, draws: c.versus.draws, best: c.versus.best } } : {}),
       instruments: Object.fromEntries(Object.entries(c.byInst).map(([i, x]) => [i, { plays: x.plays, best: x.best, accuracy: x.acc, fcs: x.fcs }])),
       achievements: ACHIEVEMENTS.map((a) => ({ id: a.id, name: a.name, desc: a.desc, icon: ACH_ICON[a.id] || 'award', at: p.achievements?.[a.id] || null })),
     },

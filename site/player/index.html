@@ -139,6 +139,7 @@
           <div><b>${n(st.bestStreak)}</b><span>Best streak</span></div>
           <div><b>${Math.round((st.accuracy || 0) * 100)}%</b><span>Avg accuracy</span></div>
           <div><b>${hours(st.seconds || 0)}</b><span>Time played</span></div>
+          ${pr.versus ? `<div><b>${n(pr.versus.wins)}–${n(pr.versus.losses)}${pr.versus.draws ? `–${n(pr.versus.draws)}` : ''}</b><span>Versus W–L</span></div>` : ''}
         </section>
         <div class="grid2">
           <section class="panel"><h2><i class="fa-solid fa-trophy"></i> Best world runs</h2><table class="table">

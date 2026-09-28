@@ -1965,7 +1965,7 @@ export class UI {
     $('#res-title').textContent = r.song.title;
     $('#res-sub').textContent = r.practice
       ? `PRACTICE · ${Math.round(r.practice.speed * 100)}% speed · ${solo.instrument} · ${solo.difficulty}`
-      : r.mode === 'online' ? `${r.song.artist} · online match · ${everyone.length} players`
+      : r.mode === 'online' ? `${r.song.artist} · online ${r.matchMode === 'band' ? 'band' : r.matchMode === 'battle' ? 'battle' : 'versus'} · ${everyone.length} players`
         : band ? `${r.song.artist} · ${r.players.length}-player band${r.failed ? ' · FAILED' : ''}`
           : `${r.song.artist} · ${solo.instrument} · ${solo.difficulty}${solo.strum ? ' · strum' : ''}${solo.real ? ` · real ${solo.instrument}` : ''}${solo.assist ? ' · assists on (not on leaderboards)' : ''}${r.failed ? ' · FAILED' : ''}`;
     const cv = coverUrl(r.song);
@@ -1980,14 +1980,16 @@ export class UI {
     $('[data-action="watch-replay"]').hidden = !this.lastReplays.length;
     if (r.mode === 'online') {
       r = { ...r, players: everyone.map((p) => ({ ...p, stars: p.stars || 0, accuracy: p.accuracy || 0, hits: p.hits || 0, total: p.total || 0, maxStreak: p.maxStreak || 0, score: p.score || 0, instrument: p.instrument || 'guitar', difficulty: p.difficulty || '' })) };
-      r.players.sort((a, b) => b.score - a.score);
+      if (r.matchMode !== 'band') r.players.sort((a, b) => b.score - a.score);
     }
-    const stars = band ? Math.round(r.players.reduce((s, p) => s + p.stars, 0) / r.players.length) : solo.stars;
-    const gold = band ? r.players.every((p) => p.gold) : solo.gold;
+    // an online versus / battle is scored per player: the big number is yours; a band's is the band's
+    const versus = r.mode === 'online' && r.matchMode !== 'band';
+    const stars = versus ? solo.stars : band ? Math.round(r.players.reduce((s, p) => s + p.stars, 0) / r.players.length) : solo.stars;
+    const gold = versus ? solo.gold : band ? r.players.every((p) => p.gold) : solo.gold;
     const starsEl = $('#res-stars');
     starsEl.className = `stars ${gold ? 'gold' : ''}`;
     starsEl.innerHTML = [0, 1, 2, 3, 4].map((i) => `<span class="s ${i < stars ? 'on' : ''}" style="animation-delay:${0.25 + i * 0.18}s">${fa('star')}</span>`).join('');
-    const target = band ? r.bandScore : solo.score;
+    const target = versus ? solo.score : band ? r.bandScore : solo.score;
     const scoreEl = $('#res-score');
     const start = performance.now();
     const tick = () => {
@@ -2014,11 +2016,12 @@ export class UI {
     }
     $('#res-players').innerHTML = band ? r.players.map((p, i) => `
       <div class="res-player" style="--pc:${p.color}">
-        <b>${r.mode === 'online' ? `#${i + 1} ` : ''}${esc(p.name)}</b> <small>${INST_ICON[p.instrument] || ''} ${p.instrument} · ${p.difficulty}${p.remote ? ' · online' : ''}</small>
+        <b>${r.mode === 'online' && r.matchMode !== 'band' ? `#${i + 1} ` : ''}${esc(p.name)}</b> <small>${INST_ICON[p.instrument] || ''} ${p.instrument} · ${p.difficulty}${p.remote ? ' · online' : ''}</small>
         <div class="rp-score">${p.score.toLocaleString()}</div>
         <div class="rp-stars">${starsHtml(p.stars)}${p.newBest && p.prevBest ? ' · NEW BEST' : ''}</div>
         <div class="rp-line">${Math.round(p.accuracy * 100)}% · ${p.hits}/${p.total} notes · streak ${p.maxStreak}${p.failed ? ' · failed' : ''}</div>
       </div>`).join('') : '';
+    this.onlineUi.decorateResults(this.lastResultRaw); // the result as the game reported it (r above may be re-sorted)
     this.focus = 0;
     this.applyFocus(false);
   }

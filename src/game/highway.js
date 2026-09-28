@@ -730,7 +730,9 @@ export class Highway {
   update(t, dt, st) {
     this.time += dt;
     const speed = this.speed;
-    const lookahead = this.len / speed;
+    // fog (a battle attack): notes only show up on the near part of the highway
+    this.fogK = (this.fogK || 0) + ((this.fog ? 1 : 0) - (this.fogK || 0)) * Math.min(1, dt * 8);
+    const lookahead = (this.len / speed) * (1 - 0.68 * this.fogK);
     const U = this.surfaceUniforms;
     U.uTime.value = this.time;
     U.uScroll.value = t * speed;

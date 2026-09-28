@@ -1,10 +1,11 @@
-// Online screen: host (invite code over the internet, or LAN) / join, lobby (players, instruments, ready),
-// song selection, chat, match start.
+// Online screen: host (invite code over the internet, or LAN) / join (a code, or a public room), lobby (players,
+// instruments, ready, match type), song selection, chat, match start, the room's history and rematches.
 import { online, hostInfo, startHosting, stopHosting, inviteCode, songRev } from '../net/online.js';
 import { profiles, PROFILE_COLORS } from '../profile/profiles.js';
 import { getSong, getAudio, coverUrl } from '../storage/library.js';
 import { discord, inviteLink } from '../net/discord.js';
 import { settings } from '../settings.js';
+import { listRooms, announceRoom, closeRoom, newRoomKey, compatible } from '../net/rooms.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -13,6 +14,13 @@ import { instIcon, fa } from './icons.js';
 const ICON = { guitar: instIcon('guitar'), bass: instIcon('bass'), drums: instIcon('drums'), keys: instIcon('keys'), vocals: instIcon('vocals') };
 const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'];
 const DIFFS = ['easy', 'medium', 'hard', 'expert'];
+export const MATCH_MODES = [
+  ['versus', 'Versus', 'Highest score wins'],
+  ['battle', 'Battle', 'Highest score wins, and your overdrive attacks the leader: mirror, fog, amp overload or drain'],
+  ['band', 'Band', 'Play together: one band score, and overdrive saves a bandmate who failed'],
+];
+const MODE_LABEL = Object.fromEntries(MATCH_MODES.map(([v, l]) => [v, l]));
+const ago = (t) => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
 
 // the async Clipboard API refuses without focus/permission; the old copy command still works then
 async function copyText(text) {
@@ -29,7 +37,10 @@ async function copyText(text) {
 }
 
 export function installOnline(ui) {
-  const st = { inst: localStorage.getItem('stemstage.online.inst') || 'guitar', diff: localStorage.getItem('stemstage.online.diff') || 'medium', hostInfo: null, songProgress: null };
+  const st = {
+    inst: localStorage.getItem('stemstage.online.inst') || 'guitar', diff: localStorage.getItem('stemstage.online.diff') || 'medium', hostInfo: null, songProgress: null,
+    public: localStorage.getItem('stemstage.online.public') === '1', publicKey: null, listedCode: null, pubSent: '', pubAt: 0, rooms: null, roomsAt: 0,
+  };
   const app = ui.app;
 
   const me = () => online.me;
@@ -48,8 +59,9 @@ export function installOnline(ui) {
       if (t.status === 'ready' && t.url) {
         if (st.code !== inviteCode(t.url)) { st.code = inviteCode(t.url); presence(); }
         html = `<div class="invite-label">Invite code</div><div class="invite-code">${esc(st.code)}</div>
-          <div class="btn-row tight"><button class="nav-btn primary" data-nav data-action="ol-copy">Copy invite</button></div>
-          <small>Friends choose Online → Join and type this code. No port forwarding needed.</small>`;
+          <div class="btn-row tight"><button class="nav-btn primary" data-nav data-action="ol-copy">Copy invite</button>
+            <button class="nav-btn ${st.public ? 'on' : ''}" data-nav data-action="ol-public">${fa(st.public ? 'earth-americas' : 'lock')} ${st.public ? 'Public room' : 'Private room'}</button></div>
+          <small>${st.public ? 'Listed in Public rooms: anyone can find and join it.' : 'Friends choose Online → Join and type this code. No port forwarding needed.'}</small>`;
       } else if (t.status === 'error') {
         html = `<div class="invite-err">${esc(t.error || 'Could not open the room to the internet')}</div>
           <div class="btn-row tight"><button class="nav-btn" data-nav data-action="ol-host">Try again</button><button class="nav-btn" data-nav data-action="ol-host-lan">Use local network</button></div>`;
@@ -64,6 +76,7 @@ export function installOnline(ui) {
     }
     // still hosting but not in the room (page reloaded, connection dropped): rejoin as host
     if (info.hosting && info.hostKey && !online.connected && !st.connecting && ui.screen === 'online') connect(`127.0.0.1:${info.port}`, info.hostKey);
+    publicSync();
     $('[data-action="ol-stop"]').hidden = !info.hosting;
     $('[data-action="ol-host"]').hidden = info.hosting;
     $('[data-action="ol-host-lan"]').hidden = info.hosting;
@@ -112,8 +125,10 @@ export function installOnline(ui) {
     const connected = online.connected;
     $('#online-lobby').hidden = !connected;
     $('#online-connect').hidden = false;
+    $('#ol-join-panel').hidden = connected;
+    $('#ol-hist-panel').hidden = !connected;
     refreshHost();
-    if (!connected) { ui.applyFocus(false); return; }
+    if (!connected) { renderBrowse(); ui.applyFocus(false); return; }
     const room = online.room;
     presence();
     $('#ol-room').textContent = `Room ${room.code}`;
@@ -124,10 +139,17 @@ export function installOnline(ui) {
     $('#ol-song').innerHTML = song
       ? `<div class="cv" style="background:${cv ? `url('${cv}') center/cover` : ui.art(local || song)}"></div><div><b>${esc(song.title)}</b><div class="small-note">${esc(song.artist)}${song.duration ? ` · ${Math.floor(song.duration / 60)}:${String(Math.floor(song.duration % 60)).padStart(2, '0')}` : ''}</div></div>`
       : `<div class="small-note">${online.host ? 'Choose a song for the match.' : 'Waiting for the host to choose a song...'}</div>`;
+    const myProfile = profiles.current?.id;
     $('#ol-players').innerHTML = room.players.map((p) => {
       const status = !song ? '' : p.hasSong ? (p.ready || p.host ? '<span class="rd ok">READY</span>' : '<span class="rd">NOT READY</span>') : `<span class="rd">DOWNLOADING ${Math.round((p.loading || 0) * 100)}%</span>`;
-      return `<div class="ol-player" style="--pc:${p.color}"><i></i><span>${esc(p.name)}${p.host ? ` ${fa('crown', 'host')}` : ''}${p.id === online.id ? ' (you)' : ''}</span><span>${ICON[p.instrument] || ''} ${p.instrument}</span><span>${p.difficulty}</span>${status || '<span></span>'}</div>`;
+      const rec = myProfile && p.id !== online.id ? profiles.versusAgainst(myProfile, p.name) : null;
+      const vs = rec ? ` <small class="vs" title="Your versus record against ${esc(p.name)}">you ${rec.w}–${rec.l}${rec.d ? `–${rec.d}` : ''}</small>` : '';
+      return `<div class="ol-player" style="--pc:${p.color}"><i></i><span>${esc(p.name)}${p.host ? ` ${fa('crown', 'host')}` : ''}${p.id === online.id ? ' (you)' : ''}${vs}</span><span>${ICON[p.instrument] || ''} ${p.instrument}</span><span>${p.difficulty}</span>${status || '<span></span>'}</div>`;
     }).join('');
+    const mode = room.mode || 'versus';
+    $('#ol-pick-mode').innerHTML = MATCH_MODES.map(([v, l]) => `<div class="opt ${v === mode ? 'sel' : ''} ${online.host || v === mode ? '' : 'disabled'}" data-m="${v}">${l}</div>`).join('');
+    $('#ol-mode-note').textContent = `— ${MATCH_MODES.find(([v]) => v === mode)[2]}${online.host ? '' : ' (the host picks)'}`;
+    $$('#ol-pick-mode [data-m]').forEach((o) => o.addEventListener('click', () => pickMode(o.dataset.m)));
     const avail = song?.instruments?.length ? song.instruments : INSTS;
     if (!avail.includes(st.inst)) st.inst = avail[0];
     $('#ol-pick-inst').innerHTML = INSTS.map((i) => `<div class="opt ${i === st.inst ? 'sel' : ''} ${avail.includes(i) ? '' : 'disabled'}" data-i="${i}">${ICON[i]} ${i}</div>`).join('');
@@ -141,7 +163,152 @@ export function installOnline(ui) {
     $('#ol-start').style.display = online.host ? '' : 'none';
     const others = room.players.filter((p) => !p.host);
     $('#ol-start').disabled = !song || !others.every((p) => p.ready && p.hasSong);
+    rematchButtons();
+    renderHistory(room);
+    publicSync();
     ui.applyFocus(false);
+  }
+
+  function pickMode(m) {
+    if (!online.host) { ui.toast('The host picks the match type', 'err'); return; }
+    if (MODE_LABEL[m] && online.room?.mode !== m) online.setMode(m);
+  }
+
+  /** Rematch: the lobby button and the one on the results screen show who's in. */
+  function rematchButtons() {
+    const room = online.connected ? online.room : null;
+    const can = !!(room && room.phase === 'lobby' && room.song && room.history?.length);
+    const want = room?.rematch || [];
+    const total = room ? room.players.filter((p) => p.hasSong).length : 0;
+    const mine = want.includes(online.id);
+    const label = mine ? `Rematch: waiting (${want.length}/${total})` : want.length ? `Rematch (${want.length}/${total} in)` : 'Rematch';
+    for (const b of [$('#ol-rematch'), $('#res-rematch')]) {
+      if (!b) continue;
+      b.hidden = !can || (b.id === 'res-rematch' && ui.lastResultRaw?.mode !== 'online');
+      b.textContent = label;
+      b.classList.toggle('on', mine);
+    }
+  }
+
+  /** This room's matches: wins per player (versus, battle), band songs, and the last results. */
+  function renderHistory(room) {
+    const h = room.history || [];
+    const wins = new Map();
+    let draws = 0, bands = 0, bestBand = 0;
+    for (const m of h) {
+      if (m.mode === 'band') { bands++; bestBand = Math.max(bestBand, m.bandScore || 0); continue; }
+      if (m.draw) { draws++; continue; }
+      const w = m.results.find((r) => r.id === m.winnerId);
+      if (w) wins.set(w.name, { n: (wins.get(w.name)?.n || 0) + 1, color: w.color });
+    }
+    const chips = [...wins].sort((a, b) => b[1].n - a[1].n).map(([name, w]) => `<span class="ol-chip" style="--pc:${esc(w.color)}"><i></i>${esc(name)} <b>${w.n}</b></span>`);
+    if (draws) chips.push(`<span class="ol-chip">${draws} draw${draws === 1 ? '' : 's'}</span>`);
+    if (bands) chips.push(`<span class="ol-chip">${fa('users')} ${bands} band song${bands === 1 ? '' : 's'} · best <b>${bestBand.toLocaleString()}</b></span>`);
+    $('#ol-standings').innerHTML = chips.length ? chips.join('') : '<div class="small-note">No matches yet: results show up here, with wins per player.</div>';
+    $('#ol-history').innerHTML = h.slice(0, 8).map((m) => {
+      const rows = [...m.results].sort((a, b) => (m.mode === 'band' ? 0 : b.score - a.score));
+      return `<div class="oh-match"><div class="oh-head"><span class="badge">${esc(MODE_LABEL[m.mode] || m.mode)}</span><b>${esc(m.song?.title || 'Song')}</b><small>${ago(m.date)}</small></div>
+        <div class="oh-res">${m.mode === 'band' ? `<span class="oh-band">Band <b>${(m.bandScore || 0).toLocaleString()}</b></span>` : m.draw ? '<span class="oh-band">Draw</span>' : ''}${rows.map((r) => `<span class="${r.id === m.winnerId ? 'win' : ''}" style="--pc:${esc(r.color)}">${r.id === m.winnerId ? fa('crown') : '<i></i>'}${esc(r.name)} ${(r.score || 0).toLocaleString()}</span>`).join('')}</div></div>`;
+    }).join('');
+  }
+
+  // ---------------------------------------------------------------- public rooms
+  /** Keep this room's public listing up to date (or take it down): on every room change, and every 30 s. */
+  function publicSync(force = false) {
+    const info = st.hostInfo;
+    const room = online.connected && online.host ? online.room : null;
+    const listed = st.public && room && info?.hosting && info.internet && st.code;
+    if (!listed) {
+      if (st.listedCode) { closeRoom(st.listedCode, st.publicKey); st.listedCode = null; st.pubSent = ''; }
+      clearInterval(st.pubTimer); st.pubTimer = null;
+      return;
+    }
+    st.publicKey ||= newRoomKey();
+    const body = {
+      code: st.code, key: st.publicKey, name: `${online.me?.name || 'STEMSTAGE'}'s room`, host: online.me?.name || '', mode: room.mode || 'versus',
+      song: room.song?.title || '', artist: room.song?.artist || '', players: room.players.length, max: room.max || 8, playing: room.phase === 'playing',
+    };
+    const sig = JSON.stringify(body);
+    if (!force && sig === st.pubSent && Date.now() - st.pubAt < 25000) return;
+    st.pubSent = sig; st.pubAt = Date.now();
+    announceRoom(body).then(() => { st.listedCode = st.code; }).catch((e) => { st.pubSent = ''; console.warn('public room:', e.message); });
+    if (!st.pubTimer) st.pubTimer = setInterval(() => publicSync(true), 30000);
+  }
+  window.addEventListener('pagehide', () => { if (st.listedCode) closeRoom(st.listedCode, st.publicKey); });
+
+  /** Join → Public rooms: the open rooms, refreshed every 15 s while the Join panel is on screen. */
+  async function renderBrowse(force = false) {
+    const el = $('#ol-browse');
+    clearTimeout(st.browseTimer);
+    if (!el || online.connected || ui.screen !== 'online') return;
+    if (force || Date.now() - st.roomsAt > 12000) {
+      st.roomsAt = Date.now();
+      try { st.rooms = await listRooms(); st.roomsErr = null; } catch (e) { st.roomsErr = e.message; }
+    }
+    if (online.connected) return;
+    const rows = st.rooms || [];
+    const html = st.roomsErr ? '<div class="small-note">Public rooms can\u2019t be reached right now.</div>'
+      : rows.length ? rows.map((r) => {
+        const ok = compatible(r.version) && r.players < r.max;
+        return `<button class="ol-room" data-nav data-code="${esc(r.code)}" ${ok ? '' : 'disabled'}><b>${esc(r.name)}</b><span class="badge">${esc(MODE_LABEL[r.mode] || r.mode)}</span>
+          <small>${r.players}/${r.max} players · ${r.playing ? 'playing' : 'in the lobby'}${r.song ? ` · ${esc(r.song)}` : ''}${compatible(r.version) ? '' : ` · needs STEMSTAGE ${esc(r.version)}`}</small></button>`;
+      }).join('')
+        : '<div class="small-note">No public rooms right now. Host one and make it public, or join with an invite code.</div>';
+    if (el.dataset.html !== html) {
+      el.dataset.html = html;
+      el.innerHTML = html;
+      $$('[data-code]', el).forEach((b) => b.addEventListener('click', () => joinCode(b.dataset.code)));
+      ui.applyFocus(false);
+    }
+    st.browseTimer = setTimeout(() => renderBrowse(), 15000);
+  }
+
+  function joinCode(code) {
+    if (st.connecting) return;
+    $('#ol-addr').value = code;
+    localStorage.setItem('stemstage.online.last', code);
+    connect(code);
+  }
+
+  /** Quick match: the fullest open room in the lobby (or any open room). */
+  async function quickMatch() {
+    await renderBrowse(true);
+    const open = (st.rooms || []).filter((r) => compatible(r.version) && r.players < r.max);
+    const pick = open.sort((a, b) => (a.playing ? 1 : 0) - (b.playing ? 1 : 0) || b.players - a.players)[0];
+    if (!pick) { ui.toast(st.roomsErr ? 'Public rooms can\u2019t be reached right now' : 'No open public rooms right now: host one and make it public', 'err'); return; }
+    ui.toast(`Joining ${pick.name}…`);
+    joinCode(pick.code);
+  }
+
+  /** The results screen of an online match: who won, the head-to-head record, and the rematch button. */
+  function decorateResults(r) {
+    const el = $('#res-verdict');
+    if (r.mode !== 'online') { el.hidden = true; rematchButtons(); return null; }
+    const mode = r.matchMode || 'versus';
+    const mine = r.players[0];
+    const everyone = [...r.players.map((p) => ({ ...p, id: online.id })), ...(r.remotePlayers || [])];
+    let html;
+    if (mode === 'band') {
+      const total = Math.max(1, everyone.reduce((s, p) => s + (p.score || 0), 0));
+      const shares = everyone.map((p) => `${esc(p.name)} ${Math.round(((p.score || 0) / total) * 100)}%`).join(' · ');
+      html = `<b>${fa('users')} Band of ${everyone.length}</b><span>${shares}${everyone.some((p) => p.failed) ? ' · someone fell and wasn\u2019t saved' : ''}</span>`;
+    } else if (everyone.length < 2) {
+      html = '<b>No opponent</b><span>The other players\u2019 results didn\u2019t arrive</span>';
+    } else {
+      const outcome = r.onlineDraw ? 'draw' : r.onlineWinnerId === online.id ? 'win' : 'loss';
+      const winner = everyone.find((p) => p.id === r.onlineWinnerId);
+      const opponents = everyone.filter((p) => p.id !== online.id).map((p) => p.name);
+      const rec = mine?.profileId ? profiles.recordVersus(mine.profileId, { matchId: r.matchId, outcome, opponents }) : null;
+      const vsOne = opponents.length === 1 && mine?.profileId ? profiles.versusAgainst(mine.profileId, opponents[0]) : null;
+      const line = vsOne ? `You're ${vsOne.w}–${vsOne.l}${vsOne.d ? `–${vsOne.d}` : ''} against ${esc(opponents[0])}` : rec ? `Your record: ${rec.w}–${rec.l}${rec.d ? `–${rec.d}` : ''}` : 'Sign in to keep a win/loss record';
+      html = `<b class="${outcome}">${outcome === 'win' ? 'YOU WIN' : outcome === 'draw' ? 'DRAW' : `${esc(winner?.name || 'They').toUpperCase()} WINS`}</b><span>${line}${rec && rec.streak > 1 && outcome === 'win' ? ` · ${rec.streak} wins in a row` : ''}</span>`;
+      el.className = `res-verdict ${outcome}`;
+    }
+    if (mode === 'band') el.className = 'res-verdict band';
+    el.innerHTML = html;
+    el.hidden = false;
+    rematchButtons();
+    return mode;
   }
 
   function setMine(fields) {
@@ -185,10 +352,13 @@ export function installOnline(ui) {
     ui.show('hud');
     ui.lastPlay = { online: true };
     const cfg = { name: mine.name, color: mine.color, device: 'any', instrument: mine.instrument, difficulty: mine.difficulty, strum: mine.instrument !== 'drums' && ui.strumFor('any'), profileId: profiles.current?.id || null };
-    await app.game.start(song, audio, [cfg], { online: { client: online, lineup: msg.lineup, startAt: msg.startAt, matchId: msg.matchId } });
+    await app.game.start(song, audio, [cfg], { online: { client: online, lineup: msg.lineup, startAt: msg.startAt, matchId: msg.matchId, mode: msg.mode || 'versus' } });
   }
 
-  online.on('room', () => { if (ui.screen === 'online') render(); });
+  online.on('room', () => {
+    if (ui.screen === 'online') render();
+    else { rematchButtons(); publicSync(); }
+  });
   online.on('results', (list, msg) => {
     // a late finisher's result arrived after we already showed the results screen
     const r = ui.lastResultRaw;
@@ -228,6 +398,7 @@ export function installOnline(ui) {
       online.close();
       await stopHosting();
       st.code = null;
+      publicSync();
       discord.menus();
       ui.toast('Stopped hosting');
       render();
@@ -249,6 +420,21 @@ export function installOnline(ui) {
     'ol-ready': () => setMine({ ready: !me()?.ready }),
     'ol-choose': () => { ui.mode = 'online-pick'; ui.show('library'); },
     'ol-start': () => online.start(),
+    'ol-rematch': () => {
+      if (!online.connected) { ui.toast('You\u2019re not in the room any more', 'err'); return; }
+      const mine = online.room?.rematch?.includes(online.id);
+      online.rematch(!mine);
+      ui.toast(mine ? 'Rematch cancelled' : 'Rematch: it starts as soon as everyone wants it', 'ok');
+    },
+    'ol-public': () => {
+      st.public = !st.public;
+      localStorage.setItem('stemstage.online.public', st.public ? '1' : '0');
+      delete $('#ol-host-addr').dataset.html; // redraw the host panel
+      refreshHost();
+      ui.toast(st.public ? 'Your room is listed in Public rooms' : 'Your room is private again (invite code only)', 'ok');
+    },
+    'ol-quick': () => quickMatch(),
+    'ol-refresh': () => { delete $('#ol-browse').dataset.html; renderBrowse(true); },
     'ol-chat': () => {
       const el = $('#ol-chat-input');
       const v = el.value.trim();
@@ -259,6 +445,7 @@ export function installOnline(ui) {
   ui.pickerHooks.push((which, d) => {
     if (which === 'ol-inst') { const avail = online.room?.song?.instruments?.length ? online.room.song.instruments : INSTS; setMine({ instrument: avail[(avail.indexOf(st.inst) + d + avail.length) % avail.length] }); return true; }
     if (which === 'ol-diff') { setMine({ difficulty: DIFFS[Math.max(0, Math.min(3, DIFFS.indexOf(st.diff) + d))] }); return true; }
+    if (which === 'ol-mode') { const i = MATCH_MODES.findIndex(([v]) => v === (online.room?.mode || 'versus')); pickMode(MATCH_MODES[(i + d + MATCH_MODES.length) % MATCH_MODES.length][0]); return true; }
     return false;
   });
 
@@ -299,5 +486,5 @@ export function installOnline(ui) {
     ui.show('online');
   }
 
-  return { selectForRoom, render };
+  return { selectForRoom, render, decorateResults };
 }

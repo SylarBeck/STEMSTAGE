@@ -8,9 +8,13 @@
 //   GET /songs/<id>/song.json | /songs/<id>/stems/<stem>.wav | /songs/<id>/net/<stem> (compressed) | /songs/<id>/files/<file>
 //
 // Client -> server: hello{name,color,profileId,hostKey} · ping{c} · set{instrument,difficulty,ready} · select{song}
-//                   have{songId,ok,progress} · start · live{...} · event{kind} · result{result} · chat{text}
-// Server -> client: welcome{id,room} · pong{c,s} · room{room} · start{startAt,lineup,song} · live{id,...}
-//                   event{id,kind} · results{results} · chat{from,text} · closed{reason}
+//                   mode{mode} (host) · have{songId,ok,progress} · start · rematch{want} · live{...}
+//                   event{kind,target} · result{result} · chat{text}
+// Server -> client: welcome{id,room} · pong{c,s} · room{room} · start{startAt,lineup,song,mode} · live{id,...}
+//                   event{id,kind,target} · results{results,mode,winnerId,draw} · chat{from,text} · closed{reason}
+//
+// Match modes: versus (highest score wins), battle (versus + overdrive attacks the leader), band (co-op: one band
+// score, overdrive saves bandmates). room.history keeps the last matches (for the lobby and rematches).
 import http from 'node:http';
 import os from 'node:os';
 import { WebSocketServer } from 'ws';
@@ -19,6 +23,10 @@ import { send, isLocal, readJsonBody } from './library.js';
 import { createTunnel } from './tunnel.js';
 
 const COLORS = ['#ff2d7a', '#29e0ff', '#ffcf3a', '#3dff8a', '#b36bff', '#ff8a1a', '#2b8cff', '#ff5a5a'];
+const MODES = ['versus', 'battle', 'band'];
+const ATTACKS = ['mirror', 'fog', 'shake', 'drain'];
+export const MAX_PLAYERS = 8;
+const HISTORY = 20;
 
 export function lanAddresses() {
   const out = [];
@@ -35,7 +43,8 @@ export function createOnline(library) {
   const tunnel = createTunnel();
 
   const summary = () => room && {
-    code: room.code, phase: room.phase, song: room.song, startAt: room.startAt,
+    code: room.code, phase: room.phase, song: room.song, startAt: room.startAt, mode: room.mode, max: MAX_PLAYERS,
+    history: room.history, rematch: [...room.rematch],
     players: [...room.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, profileId: p.profileId, host: p.host, instrument: p.instrument,
       difficulty: p.difficulty, ready: p.ready, hasSong: p.hasSong, loading: p.loading, connected: p.connected,
@@ -45,13 +54,52 @@ export function createOnline(library) {
   const broadcast = (msg, except) => { for (const p of room.players.values()) if (p !== except) sendTo(p, msg); };
   const pushRoom = () => broadcast({ t: 'room', room: summary() });
 
+  /** The winner of a versus / battle match: the highest score (a tie is a draw). */
+  function verdict(mode, results) {
+    if (mode === 'band' || results.length < 2) return { winnerId: null, draw: false };
+    const sorted = [...results].sort((a, b) => (b.score || 0) - (a.score || 0));
+    const draw = (sorted[0].score || 0) === (sorted[1].score || 0);
+    return { winnerId: draw ? null : sorted[0].id, draw };
+  }
+
+  /** The match as the lobby's history shows it. */
+  function remember(matchId, mode, song, results) {
+    const v = verdict(mode, results);
+    const entry = {
+      matchId, mode, date: Date.now(), song: song ? { id: song.id, title: song.title, artist: song.artist } : null, ...v,
+      bandScore: results.reduce((s, r) => s + (r.score || 0), 0),
+      results: results.map((r) => ({ id: r.id, name: r.name, color: r.color, profileId: r.profileId || null, score: r.score || 0, stars: r.stars || 0,
+        accuracy: r.accuracy || 0, instrument: r.instrument, difficulty: r.difficulty, fc: !!r.fc, failed: !!r.failed })),
+    };
+    const i = room.history.findIndex((h) => h.matchId === matchId);
+    if (i >= 0) room.history[i] = entry; else room.history.unshift(entry);
+    room.history.length = Math.min(room.history.length, HISTORY);
+    return v;
+  }
+
   function finishResults() {
     clearTimeout(resultsTimer);
-    const results = [...room.players.values()].filter((p) => p.result).map((p) => ({ id: p.id, name: p.name, color: p.color, ...p.result }));
-    room.lastResults = { matchId: room.matchId, results };
-    broadcast({ t: 'results', matchId: room.matchId, results });
+    const results = [...room.players.values()].filter((p) => p.result).map((p) => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId, ...p.result }));
+    room.lastResults = { matchId: room.matchId, mode: room.matchMode, song: room.song, results };
+    const v = remember(room.matchId, room.matchMode, room.song, results);
+    broadcast({ t: 'results', matchId: room.matchId, mode: room.matchMode, results, ...v });
     room.phase = 'lobby';
+    room.rematch.clear();
     for (const p of room.players.values()) { p.ready = false; p.result = null; }
+    pushRoom();
+  }
+
+  /** Start a match with everyone who has the song. */
+  function startMatch() {
+    const lineup = [...room.players.values()].filter((q) => q.connected && q.hasSong);
+    room.phase = 'playing';
+    room.startAt = Date.now() + 5000;
+    room.matchId = `m${Date.now().toString(36)}`;
+    room.matchMode = room.mode;
+    room.lastResults = null;
+    room.rematch.clear();
+    for (const q of room.players.values()) { q.result = null; q.playing = lineup.includes(q); }
+    broadcast({ t: 'start', matchId: room.matchId, startAt: room.startAt, song: room.song, mode: room.mode, lineup: lineup.map((q) => ({ id: q.id, name: q.name, color: q.color, profileId: q.profileId, instrument: q.instrument, difficulty: q.difficulty })) });
     pushRoom();
   }
 
@@ -65,8 +113,15 @@ export function createOnline(library) {
         if (typeof msg.ready === 'boolean') p.ready = msg.ready;
         pushRoom();
         break;
+      case 'mode':
+        if (!p.host || room.phase !== 'lobby' || !MODES.includes(msg.mode)) break;
+        room.mode = msg.mode;
+        room.rematch.clear();
+        pushRoom();
+        break;
       case 'select':
         if (!p.host || room.phase !== 'lobby' || !msg.song?.id) break;
+        room.rematch.clear();
         library.prepareForNet?.(String(msg.song.id)).catch(() => {}); // compress stems for friends in the background
         room.song = { id: String(msg.song.id).slice(0, 80), title: String(msg.song.title || '').slice(0, 120), artist: String(msg.song.artist || '').slice(0, 120), duration: +msg.song.duration || 0, instruments: msg.song.instruments || [], rev: String(msg.song.rev || '').slice(0, 32) };
         for (const q of room.players.values()) { q.ready = false; q.hasSong = q.host; q.loading = 0; }
@@ -75,27 +130,38 @@ export function createOnline(library) {
       case 'have':
         if (room.song && msg.songId === room.song.id) { p.hasSong = !!msg.ok; p.loading = msg.ok ? 1 : +msg.progress || 0; pushRoom(); }
         break;
-      case 'start': {
+      case 'start':
         if (!p.host || room.phase !== 'lobby' || !room.song) break;
-        const lineup = [...room.players.values()].filter((q) => q.connected && q.hasSong);
-        room.phase = 'playing';
-        room.startAt = Date.now() + 5000;
-        room.matchId = `m${Date.now().toString(36)}`;
-        room.lastResults = null;
-        for (const q of room.players.values()) { q.result = null; q.playing = lineup.includes(q); }
-        broadcast({ t: 'start', matchId: room.matchId, startAt: room.startAt, song: room.song, lineup: lineup.map((q) => ({ id: q.id, name: q.name, color: q.color, instrument: q.instrument, difficulty: q.difficulty })) });
-        pushRoom();
+        startMatch();
+        break;
+      case 'rematch': {
+        // the same song again: it starts by itself once everyone who has the song wants it
+        if (room.phase !== 'lobby' || !room.song || !room.history.length || !p.hasSong) break;
+        if (msg.want === false) room.rematch.delete(p.id); else room.rematch.add(p.id);
+        const everyone = [...room.players.values()].filter((q) => q.connected && q.hasSong);
+        if (everyone.length && everyone.every((q) => room.rematch.has(q.id))) startMatch();
+        else pushRoom();
         break;
       }
       case 'live': if (room.phase === 'playing') broadcast({ ...msg, t: 'live', id: p.id }, p); break;
-      case 'event': broadcast({ t: 'event', id: p.id, kind: String(msg.kind).slice(0, 20), target: msg.target }, p); break;
+      case 'event': {
+        const kind = String(msg.kind).slice(0, 20);
+        // a battle attack names its target and what it does; anything else carries no payload
+        const target = kind === 'attack' && room.matchMode === 'battle' && room.players.has(msg.target?.to) && ATTACKS.includes(msg.target?.a)
+          ? { to: msg.target.to, a: msg.target.a } : undefined;
+        if (kind === 'attack' && !target) break;
+        broadcast({ t: 'event', id: p.id, kind, target }, p);
+        break;
+      }
       case 'result':
         if (room.phase !== 'playing') {
           // a late finisher: merge into the published results and re-broadcast
           const last = room.lastResults;
           if (last && p.playing && !last.results.some((r) => r.id === p.id)) {
-            last.results.push({ id: p.id, name: p.name, color: p.color, ...(msg.result || {}) });
-            broadcast({ t: 'results', matchId: last.matchId, results: last.results, update: true });
+            last.results.push({ id: p.id, name: p.name, color: p.color, profileId: p.profileId, ...(msg.result || {}) });
+            const v = remember(last.matchId, last.mode, last.song, last.results);
+            broadcast({ t: 'results', matchId: last.matchId, mode: last.mode, results: last.results, ...v, update: true });
+            pushRoom();
           }
           break;
         }
@@ -118,7 +184,7 @@ export function createOnline(library) {
     internet = wantInternet;
     if (!internet) tunnel.stop();
     hostKey = crypto.randomBytes(16).toString('hex');
-    room = { code: Math.random().toString(36).slice(2, 6).toUpperCase(), phase: 'lobby', song: null, players: new Map(), startAt: 0, hostName };
+    room = { code: Math.random().toString(36).slice(2, 6).toUpperCase(), phase: 'lobby', song: null, players: new Map(), startAt: 0, hostName, mode: 'versus', history: [], rematch: new Set() };
     server = http.createServer(async (req, res) => {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Private-Network', 'true');
@@ -143,6 +209,7 @@ export function createOnline(library) {
           if (msg.t !== 'hello') return;
           // the host proves itself with the key it got from the local control API (tunnel visitors also look "local")
           const host = !!msg.hostKey && msg.hostKey === hostKey && ![...room.players.values()].some((q) => q.host && q.connected);
+          if (!host && room.players.size >= MAX_PLAYERS) { try { ws.send(JSON.stringify({ t: 'closed', reason: `This room is full (${MAX_PLAYERS} players)` })); ws.close(); } catch { /* gone */ } return; }
           p = {
             id: `p${++seq}`, ws, host, connected: true, name: String(msg.name || 'Player').slice(0, 24), profileId: msg.profileId || null,
             color: /^#[0-9a-f]{6}$/i.test(msg.color || '') ? msg.color : COLORS[(seq - 1) % COLORS.length],
@@ -159,8 +226,11 @@ export function createOnline(library) {
         if (!p || !room) return;
         p.connected = false;
         room.players.delete(p.id);
+        room.rematch.delete(p.id);
         broadcast({ t: 'event', id: p.id, kind: 'left' });
         if (room.phase === 'playing' && [...room.players.values()].filter((q) => q.playing).every((q) => q.result)) finishResults();
+        const rest = [...room.players.values()].filter((q) => q.connected && q.hasSong);
+        if (room.phase === 'lobby' && room.rematch.size && rest.length && rest.every((q) => room.rematch.has(q.id))) { startMatch(); return; }
         pushRoom();
       });
     });

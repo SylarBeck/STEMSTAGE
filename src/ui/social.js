@@ -148,13 +148,18 @@ export function installSocial(ui) {
     ['Time played', fmtDur(t.seconds)], ['Achievements', `${Object.keys(p.achievements || {}).length}/${ACHIEVEMENTS.length}`], ['Favourite', c.favorite ? `${ICON[c.favorite]} ${c.favorite}` : '—']]
     .map(([l, v]) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`).join('')}
       </div>
-      <div class="career-cols">
+      <div class="career-cols ${c.versus ? 'three' : ''}">
         <div class="card"><h3>Instruments</h3><table class="tbl"><tr><th>Instrument</th><th>Plays</th><th>Best</th><th>Accuracy</th><th>FCs</th></tr>
           ${INSTS.map((i) => { const s = byInst[i]; return `<tr><td>${ICON[i]} ${i}</td><td>${s?.plays || 0}</td><td>${s ? s.best.toLocaleString() : '—'}</td><td>${s ? `${Math.round(s.acc * 100)}%` : '—'}</td><td>${s?.fcs || 0}</td></tr>`; }).join('')}
         </table></div>
         <div class="card"><h3>Top scores</h3><table class="tbl"><tr><th>Song</th><th>Part</th><th>Score</th><th>Stars</th></tr>
           ${topScores.map((x) => `<tr><td>${esc(x.songTitle)}</td><td>${ICON[x.instrument]} ${x.difficulty[0].toUpperCase()}</td><td>${x.score.toLocaleString()}</td><td>${starsOnly(x.stars)}${x.fc ? ` ${fa('gem')}` : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="small-note">No plays yet</td></tr>'}
         </table></div>
+        ${c.versus ? `<div class="card versus-card"><h3>Versus</h3>
+          <div class="vs-record"><b>${c.versus.wins}</b><span>W</span><b>${c.versus.losses}</b><span>L</span>${c.versus.draws ? `<b>${c.versus.draws}</b><span>D</span>` : ''}</div>
+          <p class="small-note">${c.versus.streak > 1 ? `${c.versus.streak} wins in a row · ` : ''}${c.versus.best ? `longest win streak ${c.versus.best}` : 'no wins yet'} · online versus and battle matches</p>
+          <table class="tbl"><tr><th>Rival</th><th>W</th><th>L</th><th>D</th></tr>
+          ${c.versus.rivals.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.w}</td><td>${r.l}</td><td>${r.d}</td></tr>`).join('')}</table></div>` : ''}
       </div>
       </div>
       <div class="career-page" data-page="history" ${state.careerTab === 'history' ? '' : 'hidden'}>

@@ -94,6 +94,8 @@ export class Player {
     this.trigSus = [null, null];
     this.onFire = false;
     this.highway.configure({ instrument: this.inst, lefty: this.lefty, speed: 8 + settings.noteSpeed * 2.4, accent: ACCENT[this.inst] });
+    this.highway.fog = false;
+    this._attacks = {};
     this.highway.resetScroll();
     this._baseTriggers();
   }
@@ -302,6 +304,34 @@ export class Player {
     for (const n of this.activeSus) this._endSustain(n, false);
     this.hud.setFailed(true);
     this.s.onPlayerFailed(this);
+  }
+
+  /**
+   * Battle mode: an opponent's overdrive hit this player. mirror flips the highway (the buttons stay put), fog hides
+   * the far half of it, shake rattles the camera, drain empties the overdrive meter.
+   */
+  attack(kind, ms = 7000) {
+    if (this.failed) return;
+    const hw = this.highway;
+    if (kind === 'shake' && (!settings.cameraShake || settings.calmVisuals)) kind = 'fog'; // shaking is off for this player
+    const alive = () => this.s.running && this.s.players.includes(this) && this.highway === hw;
+    const tok = (this._attacks ||= {})[kind] = {};
+    const done = (fn) => setTimeout(() => { if (this._attacks[kind] === tok && alive()) { delete this._attacks[kind]; fn(); } }, ms);
+    if (kind === 'mirror' && hw) {
+      const cfg = () => ({ instrument: this.inst, speed: hw.speed, accent: hw.accent.getHex() });
+      hw.configure({ ...cfg(), lefty: !this.lefty });
+      done(() => hw.configure({ ...cfg(), lefty: this.lefty }));
+    } else if (kind === 'fog' && hw) {
+      hw.fog = true;
+      done(() => { hw.fog = false; });
+    } else if (kind === 'shake' && hw) {
+      const iv = setInterval(() => { if (!alive() || this._attacks[kind] !== tok) { clearInterval(iv); return; } hw.shake = Math.max(hw.shake, 0.45); }, 200);
+      done(() => clearInterval(iv));
+    } else if (kind === 'drain') {
+      this.od = 0;
+    }
+    this.rumble(200, 120, 300);
+    return kind;
   }
 
   revive() {

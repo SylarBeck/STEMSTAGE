@@ -48,6 +48,15 @@ CREATE TABLE IF NOT EXISTS runs (
   score INTEGER NOT NULL, created INTEGER NOT NULL, chart_id TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS runs_chart ON runs (chart_id, player_id);
+-- public online rooms: re-announced by the host every 30 s, listed while fresh (90 s), pruned after 10 minutes
+CREATE TABLE IF NOT EXISTS rooms (
+  code TEXT PRIMARY KEY,          -- the room's invite code (the words of its Cloudflare tunnel)
+  key_hash TEXT NOT NULL,         -- sha256 of the key only the hosting game knows (to update or close it)
+  name TEXT NOT NULL, host TEXT, mode TEXT, song TEXT, artist TEXT,
+  players INTEGER NOT NULL, max INTEGER NOT NULL, playing INTEGER NOT NULL DEFAULT 0, version TEXT,
+  created INTEGER NOT NULL, updated INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rooms_updated ON rooms (updated);
 -- rate limiting (rows older than an hour are pruned)
 CREATE TABLE IF NOT EXISTS hits (ip TEXT NOT NULL, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS hits_ip ON hits (ip, ts);

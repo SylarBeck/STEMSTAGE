@@ -128,6 +128,31 @@ class Profiles {
     return p.cloud;
   }
 
+  /**
+   * Head-to-head record of online versus / battle matches: p.versus = { w, l, d, streak, best, vs: { <opponent name>: { w, l, d } } }.
+   * outcome: 'win' | 'loss' | 'draw'; a match is recorded once (by its id). → the profile's record, or null.
+   */
+  recordVersus(id, { matchId, outcome, opponents = [] }) {
+    const p = this.byId(id);
+    if (!p || !['win', 'loss', 'draw'].includes(outcome)) return null;
+    const v = (p.versus ||= { w: 0, l: 0, d: 0, streak: 0, best: 0, vs: {}, last: null });
+    if (matchId && v.last === matchId) return v;
+    v.last = matchId || null;
+    const k = outcome === 'win' ? 'w' : outcome === 'loss' ? 'l' : 'd';
+    v[k]++;
+    v.streak = outcome === 'win' ? v.streak + 1 : outcome === 'loss' ? 0 : v.streak;
+    v.best = Math.max(v.best, v.streak);
+    for (const name of opponents) {
+      const o = (v.vs[String(name).slice(0, 24)] ||= { w: 0, l: 0, d: 0 });
+      o[k]++;
+    }
+    saveProfiles(this.list).catch(() => {});
+    return v;
+  }
+
+  /** A profile's record against one opponent (by name): { w, l, d } or null. */
+  versusAgainst(id, name) { return this.byId(id)?.versus?.vs?.[name] || null; }
+
   /** Link (data: { id, username, globalName, avatar }) or unlink (null) a Discord account. */
   async setDiscord(id, data) {
     const p = this.byId(id);
@@ -315,7 +340,9 @@ class Profiles {
       accuracy: mine.length ? mine.reduce((s, x) => s + x.accuracy, 0) / mine.length : 0,
     };
     const topScores = [...mine].sort((a, b) => b.score - a.score).slice(0, 8);
-    return { profile: p, level: levelInfo(p.xp), totals, byInst, favorite: fav, recent: mine.slice(0, 9), topScores };
+    const versus = p.versus ? { wins: p.versus.w, losses: p.versus.l, draws: p.versus.d, streak: p.versus.streak, best: p.versus.best,
+      rivals: Object.entries(p.versus.vs || {}).map(([name, r]) => ({ name, ...r, games: r.w + r.l + r.d })).sort((a, b) => b.games - a.games).slice(0, 6) } : null;
+    return { profile: p, level: levelInfo(p.xp), totals, byInst, favorite: fav, recent: mine.slice(0, 9), topScores, versus };
   }
 }
 
