@@ -7,6 +7,8 @@
 //   GET  /v1/recent?limit=          newest runs
 //   POST /v1/profile                the game shares a profile card (level, achievements, stats)
 //   GET  /v1/player?id=             a shared profile + its world stats (the website's /player/ page)
+//   GET  /v1/me                     "Log in with Discord" on the website: Authorization: Bearer <Discord OAuth token>
+//                                   → the Discord user (checked with Discord) + the STEMSTAGE profiles linked to it
 //   GET  /v1/health
 //
 // Every GET answers JSON with CORS, or JSONP with ?callback=<function name>. Songs are matched across players by
@@ -259,11 +261,29 @@ async function player(url, env) {
   }, 30);
 }
 
+// ---------------------------------------------------------------- website login
+/** Who is logged in on the website: the token is checked with Discord itself, so it can't be faked. */
+async function me(req, env) {
+  const token = /^Bearer ([A-Za-z0-9._-]{10,200})$/.exec(req.headers.get('Authorization') || '')?.[1];
+  if (!token) return json({ error: 'log in with Discord first' }, 401);
+  const r = await fetch('https://discord.com/api/v10/users/@me', { headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'STEMSTAGE' } });
+  if (r.status === 401) return json({ error: 'Discord login expired' }, 401);
+  if (!r.ok) return json({ error: `Discord ${r.status}` }, 502);
+  const u = await r.json();
+  // STEMSTAGE profiles whose owner linked this Discord account in the game
+  const { results } = await env.DB.prepare(`SELECT p.id, p.name, p.discord_avatar, COALESCE(SUM(s.score), 0) AS total, COUNT(s.song_key) AS charts
+    FROM players p LEFT JOIN scores s ON s.player_id = p.id WHERE p.discord_id = ? GROUP BY p.id ORDER BY total DESC`).bind(u.id).all();
+  return json({
+    user: { id: u.id, username: u.username, globalName: u.global_name || null, avatar: u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : null },
+    players: results.map((x) => ({ playerId: x.id, name: x.name, total: x.total, charts: x.charts })),
+  });
+}
+
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (req.method === 'OPTIONS') {
-      return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' } });
+      return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400' } });
     }
     try {
       const path = url.pathname.replace(/\/+$/, '');
@@ -275,6 +295,7 @@ export default {
         if (path === '/v1/songs') return await songs(url, env);
         if (path === '/v1/recent') return await recent(url, env);
         if (path === '/v1/player') return await player(url, env);
+        if (path === '/v1/me') return await me(req, env);
         if (path === '/v1/song-key') return reply(url, { key: await songKey(url.searchParams.get('artist'), url.searchParams.get('title')) }, 3600);
         if (path === '/v1/health' || path === '') return reply(url, { ok: true, service: 'stemstage-leaderboard', version: 1 }, 5);
       }
