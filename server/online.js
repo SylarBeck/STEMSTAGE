@@ -68,7 +68,7 @@ export function createOnline(library) {
       case 'select':
         if (!p.host || room.phase !== 'lobby' || !msg.song?.id) break;
         library.prepareForNet?.(String(msg.song.id)).catch(() => {}); // compress stems for friends in the background
-        room.song = { id: String(msg.song.id).slice(0, 80), title: String(msg.song.title || '').slice(0, 120), artist: String(msg.song.artist || '').slice(0, 120), duration: +msg.song.duration || 0, instruments: msg.song.instruments || [] };
+        room.song = { id: String(msg.song.id).slice(0, 80), title: String(msg.song.title || '').slice(0, 120), artist: String(msg.song.artist || '').slice(0, 120), duration: +msg.song.duration || 0, instruments: msg.song.instruments || [], rev: String(msg.song.rev || '').slice(0, 32) };
         for (const q of room.players.values()) { q.ready = false; q.hasSong = q.host; q.loading = 0; }
         pushRoom();
         break;
