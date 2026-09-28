@@ -2,6 +2,7 @@
 // you have opens in the setlist; one you don't is searched on YouTube and imported under the world's title and
 // artist, so its ranked charts are lined up with your copy when you play.
 import { API, songKey } from '../net/leaderboard.js';
+import { cleanApi } from '../net/api-clean.js';
 import { settings } from '../settings.js';
 import { instIcon, fa } from './icons.js';
 
@@ -30,7 +31,7 @@ export function installChartLibrary(ui) {
       const r = await fetch(`${API}/v1/library?${new URLSearchParams({ limit: 150, ...(st.q ? { q: st.q } : {}) })}`, { signal: AbortSignal.timeout(8000) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || `library ${r.status}`);
-      if (ticket === st.ticket) st.rows = j.rows || [];
+      if (ticket === st.ticket) st.rows = cleanApi(Array.isArray(j.rows) ? j.rows : [], 'rows');
     } catch (e) { if (ticket === st.ticket) { st.err = e.message; st.rows = null; } }
     if (ticket === st.ticket && ui.screen === 'chartlib') render();
   }

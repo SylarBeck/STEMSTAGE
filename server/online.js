@@ -28,6 +28,33 @@ const ATTACKS = ['mirror', 'fog', 'shake', 'drain'];
 export const MAX_PLAYERS = 8;
 const HISTORY = 20;
 const HAIRS = ['short', 'long', 'mohawk', 'bun', 'shaved'], PARTS = ['guitar', 'bass', 'drums', 'keys'];
+const INSTRUMENTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'], DIFFICULTIES = ['easy', 'medium', 'hard', 'expert'];
+const EVENTS = ['od', 'fail', 'attack'];
+// what one connection may send: a steady 40 messages a second (the game sends ~10), bursts of 120
+const RATE = { perSecond: 40, burst: 120, dropLimit: 600 };
+const MAX_CONNECTIONS = 24, HELLO_MS = 10000;
+
+/** Text another player sees: no control characters or angle brackets (every game escapes it too). */
+const cleanText = (v, n) => String(v ?? '').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
+const oneOf = (list, v, fallback) => (list.includes(v) ? v : fallback);
+/**
+ * A player's numbers for the others (live scoreboard, results): finite numbers and true/false under plain names,
+ * instrument / difficulty from the known lists. Anything else (text, objects, the server's own id/name/color) is dropped.
+ */
+function cleanStats(o, maxKeys = 40) {
+  const out = {};
+  if (!o || typeof o !== 'object') return out;
+  for (const [k, v] of Object.entries(o).slice(0, 80)) {
+    if (Object.keys(out).length >= maxKeys) break;
+    if (!/^[a-zA-Z]{1,24}$/.test(k) || ['id', 'name', 'color', 'profileId', 'look'].includes(k)) continue;
+    if (k === 'instrument') { if (INSTRUMENTS.includes(v)) out[k] = v; continue; }
+    if (k === 'difficulty') { if (DIFFICULTIES.includes(v)) out[k] = v; continue; }
+    if (typeof v === 'boolean') out[k] = v;
+    else if (typeof v === 'number' && Number.isFinite(v)) out[k] = Math.max(-1e9, Math.min(1e9, v));
+  }
+  return out;
+}
+const cleanProfileId = (v) => (typeof v === 'string' && /^[\w-]{8,64}$/.test(v) ? v : null);
 /** A player's character (src/profile/looks.js) as the other players get it: colours and names from known lists only. */
 function cleanLook(l) {
   if (!l || typeof l !== 'object') return null;
@@ -88,7 +115,7 @@ export function createOnline(library) {
 
   function finishResults() {
     clearTimeout(resultsTimer);
-    const results = [...room.players.values()].filter((p) => p.result).map((p) => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId, ...p.result }));
+    const results = [...room.players.values()].filter((p) => p.result).map((p) => ({ ...p.result, id: p.id, name: p.name, color: p.color, profileId: p.profileId }));
     room.lastResults = { matchId: room.matchId, mode: room.matchMode, song: room.song, results };
     const v = remember(room.matchId, room.matchMode, room.song, results);
     broadcast({ t: 'results', matchId: room.matchId, mode: room.matchMode, results, ...v });
@@ -117,8 +144,8 @@ export function createOnline(library) {
       case 'ping': sendTo(p, { t: 'pong', c: msg.c, s: Date.now() }); break;
       case 'set':
         if (room.phase !== 'lobby') break;
-        if (typeof msg.instrument === 'string') p.instrument = msg.instrument.slice(0, 12);
-        if (typeof msg.difficulty === 'string') p.difficulty = msg.difficulty.slice(0, 12);
+        if (INSTRUMENTS.includes(msg.instrument)) p.instrument = msg.instrument;
+        if (DIFFICULTIES.includes(msg.difficulty)) p.difficulty = msg.difficulty;
         if (typeof msg.ready === 'boolean') p.ready = msg.ready;
         pushRoom();
         break;
@@ -129,15 +156,21 @@ export function createOnline(library) {
         pushRoom();
         break;
       case 'select':
-        if (!p.host || room.phase !== 'lobby' || !msg.song?.id) break;
+        if (!p.host || room.phase !== 'lobby' || !/^[A-Za-z0-9_-]{1,80}$/.test(String(msg.song?.id || ''))) break;
         room.rematch.clear();
         library.prepareForNet?.(String(msg.song.id)).catch(() => {}); // compress stems for friends in the background
-        room.song = { id: String(msg.song.id).slice(0, 80), title: String(msg.song.title || '').slice(0, 120), artist: String(msg.song.artist || '').slice(0, 120), duration: +msg.song.duration || 0, instruments: msg.song.instruments || [], rev: String(msg.song.rev || '').slice(0, 32) };
+        room.song = {
+          id: String(msg.song.id), title: cleanText(msg.song.title, 120), artist: cleanText(msg.song.artist, 120),
+          duration: Math.max(0, Math.min(7200, +msg.song.duration || 0)),
+          instruments: (Array.isArray(msg.song.instruments) ? msg.song.instruments : []).filter((i) => INSTRUMENTS.includes(i)),
+          rev: String(msg.song.rev || '').replace(/[^\w-]/g, '').slice(0, 32),
+        };
+        room.songs.add(room.song.id);
         for (const q of room.players.values()) { q.ready = false; q.hasSong = q.host; q.loading = 0; }
         pushRoom();
         break;
       case 'have':
-        if (room.song && msg.songId === room.song.id) { p.hasSong = !!msg.ok; p.loading = msg.ok ? 1 : +msg.progress || 0; pushRoom(); }
+        if (room.song && msg.songId === room.song.id) { p.hasSong = !!msg.ok; p.loading = msg.ok ? 1 : Math.max(0, Math.min(1, +msg.progress || 0)); pushRoom(); }
         break;
       case 'start':
         if (!p.host || room.phase !== 'lobby' || !room.song) break;
@@ -152,9 +185,10 @@ export function createOnline(library) {
         else pushRoom();
         break;
       }
-      case 'live': if (room.phase === 'playing') broadcast({ ...msg, t: 'live', id: p.id }, p); break;
+      case 'live': if (room.phase === 'playing') broadcast({ ...cleanStats(msg, 16), t: 'live', id: p.id }, p); break;
       case 'event': {
-        const kind = String(msg.kind).slice(0, 20);
+        const kind = msg.kind;
+        if (!EVENTS.includes(kind)) break;
         // a battle attack names its target and what it does; anything else carries no payload
         const target = kind === 'attack' && room.matchMode === 'battle' && room.players.has(msg.target?.to) && ATTACKS.includes(msg.target?.a)
           ? { to: msg.target.to, a: msg.target.a } : undefined;
@@ -167,18 +201,22 @@ export function createOnline(library) {
           // a late finisher: merge into the published results and re-broadcast
           const last = room.lastResults;
           if (last && p.playing && !last.results.some((r) => r.id === p.id)) {
-            last.results.push({ id: p.id, name: p.name, color: p.color, profileId: p.profileId, ...(msg.result || {}) });
+            last.results.push({ ...cleanStats(msg.result), id: p.id, name: p.name, color: p.color, profileId: p.profileId });
             const v = remember(last.matchId, last.mode, last.song, last.results);
             broadcast({ t: 'results', matchId: last.matchId, mode: last.mode, results: last.results, ...v, update: true });
             pushRoom();
           }
           break;
         }
-        p.result = msg.result || {};
+        p.result = cleanStats(msg.result);
         if ([...room.players.values()].filter((q) => q.playing && q.connected).every((q) => q.result)) finishResults();
         else { clearTimeout(resultsTimer); resultsTimer = setTimeout(finishResults, 20000); }
         break;
-      case 'chat': broadcast({ t: 'chat', from: p.name, color: p.color, text: String(msg.text || '').slice(0, 200) }); break;
+      case 'chat': {
+        const text = cleanText(msg.text, 200);
+        if (text) broadcast({ t: 'chat', from: p.name, color: p.color, text });
+        break;
+      }
       default: break;
     }
   }
@@ -193,15 +231,16 @@ export function createOnline(library) {
     internet = wantInternet;
     if (!internet) tunnel.stop();
     hostKey = crypto.randomBytes(16).toString('hex');
-    room = { code: Math.random().toString(36).slice(2, 6).toUpperCase(), phase: 'lobby', song: null, players: new Map(), startAt: 0, hostName, mode: 'versus', history: [], rematch: new Set() };
+    room = { code: Math.random().toString(36).slice(2, 6).toUpperCase(), phase: 'lobby', song: null, songs: new Set(), players: new Map(), startAt: 0, hostName, mode: 'versus', history: [], rematch: new Set() };
     server = http.createServer(async (req, res) => {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Private-Network', 'true');
+      res.setHeader('Access-Control-Allow-Origin', '*'); // the guests' games fetch the song from another origin
       if (req.method === 'OPTIONS') { res.statusCode = 204; res.setHeader('Access-Control-Allow-Headers', '*'); return res.end(); }
       if (req.method !== 'GET') return send(res, 405, { error: 'read only' });
-      const parts = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean).map(decodeURIComponent);
+      let parts;
+      try { parts = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean).map(decodeURIComponent); } catch { return send(res, 400, { error: 'bad path' }); }
       if (parts[0] === 'info') return send(res, 200, { name: 'STEMSTAGE', room: summary() });
-      if (parts[0] === 'songs' && parts[1]) return library.serveRead(res, parts[1], parts[2], parts[3]);
+      // only songs picked in this room: the rest of the host's library isn't shared
+      if (parts[0] === 'songs' && parts[1]) return room?.songs.has(parts[1]) ? library.serveRead(res, parts[1], parts[2], parts[3]) : send(res, 404, { error: 'not in this room' });
       return send(res, 404, { error: 'not found' });
     });
     wss = new WebSocketServer({ server, maxPayload: 256 * 1024 });
@@ -210,20 +249,34 @@ export function createOnline(library) {
     wss.on('connection', (ws, req) => {
       let p = null;
       ws.on('error', () => { /* client vanished */ });
+      if (wss.clients.size > MAX_CONNECTIONS) { ws.close(1013, 'busy'); return; }
+      // a connection that never says hello doesn't get to hold a slot
+      const helloTimer = setTimeout(() => { if (!p) ws.terminate(); }, HELLO_MS);
+      const bucket = { tokens: RATE.burst, at: Date.now(), dropped: 0 };
       ws.on('message', (raw) => {
         if (!room) return;
+        const now = Date.now();
+        bucket.tokens = Math.min(RATE.burst, bucket.tokens + ((now - bucket.at) / 1000) * RATE.perSecond);
+        bucket.at = now;
+        if (bucket.tokens < 1) {
+          if (++bucket.dropped > RATE.dropLimit) ws.terminate(); // flooding: drop the connection
+          return;
+        }
+        bucket.tokens -= 1;
         let msg;
         try { msg = JSON.parse(raw.toString()); } catch { return; }
+        if (!msg || typeof msg !== 'object') return;
         if (!p) {
           if (msg.t !== 'hello') return;
           // the host proves itself with the key it got from the local control API (tunnel visitors also look "local")
           const host = !!msg.hostKey && msg.hostKey === hostKey && ![...room.players.values()].some((q) => q.host && q.connected);
           if (!host && room.players.size >= MAX_PLAYERS) { try { ws.send(JSON.stringify({ t: 'closed', reason: `This room is full (${MAX_PLAYERS} players)` })); ws.close(); } catch { /* gone */ } return; }
           p = {
-            id: `p${++seq}`, ws, host, connected: true, name: String(msg.name || 'Player').slice(0, 24), profileId: msg.profileId || null, look: cleanLook(msg.look),
+            id: `p${++seq}`, ws, host, connected: true, name: cleanText(msg.name, 24) || 'Player', profileId: cleanProfileId(msg.profileId), look: cleanLook(msg.look),
             color: /^#[0-9a-f]{6}$/i.test(msg.color || '') ? msg.color : COLORS[(seq - 1) % COLORS.length],
             instrument: 'guitar', difficulty: 'medium', ready: false, hasSong: false, loading: 0, result: null,
           };
+          clearTimeout(helloTimer);
           room.players.set(p.id, p);
           sendTo(p, { t: 'welcome', id: p.id, host, room: summary(), serverTime: Date.now() });
           pushRoom();
@@ -232,6 +285,7 @@ export function createOnline(library) {
         onMessage(p, msg);
       });
       ws.on('close', () => {
+        clearTimeout(helloTimer);
         if (!p || !room) return;
         p.connected = false;
         room.players.delete(p.id);

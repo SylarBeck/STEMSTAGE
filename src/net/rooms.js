@@ -2,6 +2,7 @@
 // can find it in Online → Join → Public rooms (or on the website) without being sent the invite code. The host
 // re-announces the room every 30 seconds; a room that stops announcing drops off the list after 90 seconds.
 import { API } from './leaderboard.js';
+import { cleanApi } from './api-clean.js';
 
 const rand = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, '0')).join('');
 /** The key that lets only this game update or close its listing (a new one per hosting session). */
@@ -12,7 +13,7 @@ export async function listRooms() {
   const r = await fetch(`${API}/v1/rooms`, { signal: AbortSignal.timeout(6000) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `rooms ${r.status}`);
-  return j.rows || [];
+  return cleanApi(Array.isArray(j.rows) ? j.rows : [], 'rows');
 }
 
 async function post(path, body) {

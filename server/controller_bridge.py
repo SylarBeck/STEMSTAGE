@@ -36,6 +36,7 @@ import argparse
 import asyncio
 import json
 import logging
+import re
 import sys
 import threading
 import time
@@ -51,6 +52,8 @@ from websockets.exceptions import ConnectionClosed
 SONY = 0x054C
 PRODUCTS = {0x0CE6: "DualSense Wireless Controller", 0x0DF2: "DualSense Edge Wireless Controller"}
 log = logging.getLogger("bridge")
+# web pages that may connect: the game on this PC (any port) and the desktop app
+APP_ORIGIN = re.compile(r"^(https?://(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?|tauri://localhost|https?://tauri\.localhost)$", re.I)
 
 
 class Pad(pydualsense):
@@ -387,6 +390,12 @@ class Bridge:
             self.clients.discard(ws)
 
     def process_request(self, connection, request):
+        # only the game may connect: browsers send the page's Origin with a WebSocket, and any web page on this PC
+        # could otherwise read the controllers and drive their rumble, lights and triggers
+        origin = request.headers.get("Origin")
+        if origin is not None and not APP_ORIGIN.match(origin) and not request.path.startswith("/health"):
+            log.warning("refused a connection from %s", origin)
+            return connection.respond(403, "Only the STEMSTAGE game can use the controller bridge\n")
         if request.path.startswith("/health"):
             body = json.dumps({"ok": True, "service": "stemstage-controller-bridge", "controllers": self.devices()})
             resp = connection.respond(200, body)

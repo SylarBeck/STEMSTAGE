@@ -81,7 +81,8 @@ class Discord {
     if (q.get('error')) return { profileId: pending.profileId, error: q.get('error') === 'access_denied' ? 'Discord login cancelled' : q.get('error_description') || q.get('error') };
     const token = q.get('access_token');
     if (!token) return { profileId: pending.profileId, error: 'Discord didn’t send a login' };
-    try { return { profileId: pending.profileId, user: await api('me', { token }) }; } catch (e) { return { profileId: pending.profileId, error: e.message }; }
+    // the token also goes to the world API once, which checks it to show this account on the profile's runs
+    try { return { profileId: pending.profileId, user: await api('me', { token }), token }; } catch (e) { return { profileId: pending.profileId, error: e.message }; }
   }
 
   /** Live status of a Discord user (cached 20 s): { ok, status, user, custom, playing, listening } or { ok: false, error }. */

@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS players (
   secret_hash TEXT NOT NULL,      -- sha256 of the secret only that game knows
   name TEXT NOT NULL,
   discord_id TEXT, discord_avatar TEXT,
+  discord_verified INTEGER NOT NULL DEFAULT 0, -- 1 = linked with a Discord login the API checked (POST /v1/link)
   profile TEXT, profile_updated INTEGER, -- the shared profile card (JSON)
   created INTEGER NOT NULL, updated INTEGER NOT NULL
 );
@@ -20,7 +21,8 @@ CREATE TABLE IF NOT EXISTS charts (
   data TEXT NOT NULL,             -- canonical chart JSON
   fp TEXT NOT NULL,               -- fingerprint JSON (onset + loudness curves, 50 fps, base64)
   duration REAL, notes INTEGER, edited INTEGER, method TEXT, version TEXT,
-  player_id TEXT NOT NULL, created INTEGER NOT NULL
+  player_id TEXT NOT NULL, created INTEGER NOT NULL,
+  limits TEXT                     -- per difficulty [notes, highest possible score], for rejecting impossible runs
 );
 CREATE INDEX IF NOT EXISTS charts_song ON charts (song_key, instrument);
 -- the chart each song part is ranked on (the first upload; players can vote in a replacement)
@@ -31,6 +33,7 @@ CREATE TABLE IF NOT EXISTS ranked_charts (
 -- one vote per player per song part, for a chart they've played
 CREATE TABLE IF NOT EXISTS chart_votes (
   song_key TEXT NOT NULL, instrument TEXT NOT NULL, player_id TEXT NOT NULL, chart_id TEXT NOT NULL, created INTEGER NOT NULL,
+  voter TEXT,                     -- sha256 of the voter's address: one address counts once
   PRIMARY KEY (song_key, instrument, player_id)
 );
 -- each player's best run per chart ('' = played before ranked charts existed, or on an unknown chart)

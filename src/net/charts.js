@@ -11,6 +11,7 @@
 //   charts[inst].pin       the player picked this part's chart themselves (it isn't swapped for the ranked one)
 //   charts[inst].refused   { id, reason }: that ranked chart doesn't fit this recording (not tried again)
 //   song.fp                fingerprint of the recording (made once, then kept)
+import { cleanApi } from './api-clean.js';
 import { settings } from '../settings.js';
 import { API, songKey, identityOf, playerOf } from './leaderboard.js';
 import { profiles } from '../profile/profiles.js';
@@ -79,13 +80,13 @@ async function getJson(path, params, timeout = 8000) {
   const r = await fetch(`${API}${path}?${new URLSearchParams(params)}`, { signal: AbortSignal.timeout(timeout) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `charts ${r.status}`);
-  return j;
+  return cleanApi(j);
 }
 async function postJson(path, body, timeout = 15000) {
   const r = await fetch(`${API}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeout) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `charts ${r.status}`);
-  return j;
+  return cleanApi(j);
 }
 
 const lists = new Map(); // "<key>|<inst>" → { at, data }

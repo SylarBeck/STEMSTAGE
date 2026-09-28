@@ -8,6 +8,7 @@ import { createYt, createMeta, createData } from './server/extras.js';
 import { createOnline } from './server/online.js';
 import { createStream } from './server/stream.js';
 import { createDiscord } from './server/discord.js';
+import { guarded } from './server/guard.js';
 
 // On some Windows setups (e.g. virtualised AppData folders) the project's real path differs
 // from the path it was opened from; allow both so the module worker can be served in dev.
@@ -31,13 +32,13 @@ function mount(server) {
     res.setHeader('Access-Control-Allow-Origin', '*'); // polled by the desktop app's splash screen
     res.end(JSON.stringify({ ok: true, app: 'stemstage', dev: true }));
   });
-  server.middlewares.use('/api/library', services.library.handler);
-  server.middlewares.use('/api/yt', services.yt);
-  server.middlewares.use('/api/meta', services.meta);
-  server.middlewares.use('/api/data', services.data);
-  server.middlewares.use('/api/online', services.online);
-  server.middlewares.use('/api/stream', services.stream.handler);
-  server.middlewares.use('/api/discord', services.discord);
+  server.middlewares.use('/api/library', guarded(services.library.handler));
+  server.middlewares.use('/api/yt', guarded(services.yt));
+  server.middlewares.use('/api/meta', guarded(services.meta));
+  server.middlewares.use('/api/data', guarded(services.data));
+  server.middlewares.use('/api/online', guarded(services.online));
+  server.middlewares.use('/api/stream', guarded(services.stream.handler));
+  server.middlewares.use('/api/discord', guarded(services.discord));
 }
 
 if (!globalThis.__stemstageGuard) {

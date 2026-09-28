@@ -7,7 +7,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const initials = (n) => String(n || '?').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 import { instIcon, fa, starsOnly, achIcon } from './icons.js';
 import { discord, discordAvatar, STATUS_LABEL } from '../net/discord.js';
-import { submitRuns, worldBoard, worldPlayers, shareProfile } from '../net/leaderboard.js';
+import { submitRuns, worldBoard, worldPlayers, shareProfile, linkDiscordWorld } from '../net/leaderboard.js';
 import { PRESETS, PARTS, SKINS, HAIR_STYLES, HAIR_LABEL, HAIR_COLORS, OUTFITS, FINISHES, cleanLook, fromPreset } from '../profile/looks.js';
 const ICON = { guitar: instIcon('guitar'), bass: instIcon('bass'), drums: instIcon('drums'), keys: instIcon('keys'), vocals: instIcon('vocals') };
 const DIFFS = ['easy', 'medium', 'hard', 'expert'];
@@ -23,7 +23,10 @@ const ago = (t) => {
 };
 
 // a linked Discord account shows its avatar (the initials stay underneath in case it can't load)
-export const avatarHtml = (p, size = 40) => `<span class="avatar" style="--pc:${p?.color || '#555'};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px">${esc(initials(p?.name || 'G'))}${p?.discord ? `<img src="${discordAvatar(p.discord, size > 64 ? 256 : 64)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</span>`;
+// avatars that don't load (a deleted Discord avatar) are removed; one listener instead of inline onerror handlers,
+// which the game's Content-Security-Policy doesn't run
+if (typeof document !== 'undefined') document.addEventListener('error', (e) => { if (e.target?.matches?.('img[data-drop-on-error]')) e.target.remove(); }, true);
+export const avatarHtml = (p, size = 40) => `<span class="avatar" style="--pc:${p?.color || '#555'};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px">${esc(initials(p?.name || 'G'))}${p?.discord ? `<img src="${discordAvatar(p.discord, size > 64 ? 256 : 64)}" alt="" loading="lazy" data-drop-on-error>` : ''}</span>`;
 const dcIcon = '<i class="fa-brands fa-discord" aria-hidden="true"></i>';
 
 export function installSocial(ui) {
@@ -231,6 +234,7 @@ export function installSocial(ui) {
       if (!(await ui.confirmDialog('Unlink Discord?', `${p.name} stops showing ${p.discord.globalName || p.discord.username || 'the Discord account'}.`, 'Unlink'))) return;
       await profiles.setDiscord(p.id, null);
       ui.toast('Discord unlinked');
+      linkDiscordWorld(p, null).catch((e) => console.warn('world Discord unlink:', e.message));
       renderCareer();
       return;
     }
@@ -247,6 +251,7 @@ export function installSocial(ui) {
     if (!p) return;
     await profiles.setDiscord(p.id, r.user);
     ui.toast(`Discord linked: ${r.user.globalName || r.user.username}`, 'ok');
+    linkDiscordWorld(p, r.token).catch((e) => console.warn('world Discord link:', e.message));
     if (profiles.current?.id === p.id) { state.careerId = null; state.careerTab = 'overview'; ui.show('career'); }
   }
 
@@ -299,7 +304,7 @@ export function installSocial(ui) {
     content.innerHTML = '<div class="card small-note">Loading the world leaderboard…</div>';
     ui.applyFocus(false);
     const ticket = (state.worldTicket = (state.worldTicket || 0) + 1);
-    const av = (url, name) => (url ? `<img class="wl-av" src="${esc(url)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="wl-av">${esc(String(name || '?')[0].toUpperCase())}</span>`);
+    const av = (url, name) => (url ? `<img class="wl-av" src="${esc(url)}" alt="" loading="lazy" data-drop-on-error>` : `<span class="wl-av">${esc(String(name || '?')[0].toUpperCase())}</span>`);
     Promise.all([s ? worldBoard(s, state.lbInst, state.lbDiff, 25, state.lbBoard) : null, worldPlayers(15)]).then(([board, top]) => {
       if (ticket !== state.worldTicket || state.lbTab !== 'world') return;
       const me = new Set(profiles.list.map((p) => p.cloud?.id).filter(Boolean));

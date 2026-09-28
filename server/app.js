@@ -15,6 +15,7 @@ import { createYt, createMeta, createData } from './extras.js';
 import { createOnline } from './online.js';
 import { createStream } from './stream.js';
 import { createDiscord } from './discord.js';
+import { guarded, refusal } from './guard.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
@@ -31,6 +32,18 @@ const MIME = {
   '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.wasm': 'application/wasm', '.txt': 'text/plain; charset=utf-8',
 };
+
+// The game page may only run the game's own scripts: no inline <script> or on…= handlers, no plugins. Anything a
+// room, the world API or a song's metadata managed to slip into the page as HTML still couldn't run. Images,
+// audio and connections stay open (covers and avatars from anywhere, rooms at any LAN address or tunnel, and the
+// desktop app's ipc: bridge).
+const GAME_CSP = [
+  // 'unsafe-eval': the desktop app may answer its native calls by evaluating script in the page; injected <script>
+  // tags and on…= attributes stay blocked either way
+  "default-src 'self'", "script-src 'self' 'unsafe-eval'", "worker-src 'self' blob:", "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: http: https:", "media-src 'self' data: blob: http: https:", "font-src 'self' data:",
+  "connect-src 'self' http: https: ws: wss: ipc:", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+].join('; ');
 
 process.on('uncaughtException', (e) => console.error('[stemstage] uncaught error (server kept running):', e));
 process.on('unhandledRejection', (e) => console.error('[stemstage] unhandled rejection (server kept running):', e));
@@ -49,7 +62,7 @@ const services = [
   ['/api/online', createOnline(library)],
   ['/api/stream', createStream().handler],
   ['/api/discord', createDiscord()],
-];
+].map(([prefix, handler]) => [prefix, guarded(handler)]); // only the game page and local programs (server/guard.js)
 
 function serveStatic(req, res) {
   let rel;
@@ -66,6 +79,8 @@ function serveStatic(req, res) {
   }
   const ext = path.extname(file).toLowerCase();
   res.setHeader('Content-Type', MIME[ext] || 'application/octet-stream');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (file === path.join(DIST, 'index.html')) res.setHeader('Content-Security-Policy', GAME_CSP);
   res.setHeader('Content-Length', stat.size);
   res.setHeader('Cache-Control', rel.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache');
   if (req.method === 'HEAD') return res.end();
@@ -77,7 +92,9 @@ const server = http.createServer(async (req, res) => {
   if (url === '/api/health') {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*'); // the desktop splash screen polls this
-    return res.end(JSON.stringify({ ok: true, app: 'stemstage', version: VERSION, pid: process.pid, dist: DIST, songs: SONGS }));
+    // the folders only for the launcher and the game (they name the user's home folder)
+    const detail = refusal(req) ? {} : { pid: process.pid, dist: DIST, songs: SONGS };
+    return res.end(JSON.stringify({ ok: true, app: 'stemstage', version: VERSION, ...detail }));
   }
   for (const [prefix, handler] of services) {
     if (url === prefix || url.startsWith(`${prefix}/`) || url.startsWith(`${prefix}?`)) {

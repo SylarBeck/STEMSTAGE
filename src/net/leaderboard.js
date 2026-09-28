@@ -6,6 +6,7 @@ import { settings } from '../settings.js';
 import { profiles, ACHIEVEMENTS } from '../profile/profiles.js';
 import { ACH_ICON } from '../ui/icons.js';
 import { chartForRun, forgetWorldCharts } from './charts.js';
+import { cleanApi } from './api-clean.js';
 
 export const API = 'https://api.stemstage.varconstint.com';
 
@@ -24,7 +25,7 @@ async function get(path, params = {}) {
   const r = await fetch(`${API}${path}?${new URLSearchParams(params)}`, { signal: AbortSignal.timeout(10000) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `leaderboard ${r.status}`);
-  return j;
+  return cleanApi(j);
 }
 
 export const identityOf = (p) => profiles.cloudIdentity(p.id, () => ({ id: `p_${rand(12)}`, secret: rand(24) }));
@@ -54,6 +55,22 @@ export async function shareProfile(profileId) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `profile upload failed (${r.status})`);
   return j.url || profileUrl(cloud.id);
+}
+
+/**
+ * Show (token: a Discord login's OAuth token) or stop showing (null) a Discord account next to a profile's runs.
+ * The API checks the token with Discord itself, so a profile can only show an account its player logged in to.
+ */
+export async function linkDiscordWorld(p, token) {
+  if (settings.worldLeaderboard === false) return null;
+  const cloud = await identityOf(p);
+  const r = await fetch(`${API}/v1/link`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10000),
+    body: JSON.stringify({ player: playerOf(p, cloud), ...(token ? { token } : { unlink: true }) }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Discord link failed (${r.status})`);
+  return j;
 }
 
 /** A song part's world board: board = 'ranked' (the ranked chart), 'all' (best on any chart) or a chart id. */

@@ -6,6 +6,8 @@
 //   GET  /v1/songs?limit=&q=        songs with scores (key, title, artist, runs)
 //   GET  /v1/recent?limit=          newest runs
 //   POST /v1/profile                the game shares a profile card (level, achievements, stats)
+//   POST /v1/link                   link (or unlink) a Discord account: the game passes the Discord login's token,
+//                                   which the API checks with Discord itself
 //   GET  /v1/player?id=             a shared profile + its world stats (the website's /player/ page)
 //   GET  /v1/me                     "Log in with Discord" on the website: Authorization: Bearer <Discord OAuth token>
 //                                   → the Discord user (checked with Discord) + the STEMSTAGE profiles linked to it
@@ -31,8 +33,10 @@
 //
 // Players are identified by an id the game makes per profile plus a secret only that game knows: the first run
 // registers sha256(secret), later runs must present the same secret, so nobody can post under someone else's
-// name. Scores can't be verified (the game runs on the player's PC), so the API rejects impossible values and
-// rate-limits each address; moderators can delete rows with wrangler (see cloud/README.md).
+// name. A Discord account is only shown next to a player once the API has checked a Discord login for it
+// (POST /v1/link). Scores can't be verified (the game runs on the player's PC), so the API rejects impossible
+// values (on a known chart: more than its notes can score), rate-limits each address and counts chart votes once
+// per address; moderators can delete rows with wrangler (see cloud/README.md).
 //
 // Optional callback: set the secret DISCORD_WEBHOOK (a Discord channel webhook URL) to announce every new #1.
 
@@ -40,7 +44,7 @@ import { canonicalChart, chartId as idOfChart, noteCounts, INSTRUMENTS, DIFFICUL
 
 const MAX_SCORE = 20_000_000;
 const VOTE_MIN = 3; // votes a chart needs before it can replace the ranked one
-const MAX_CHART_BYTES = 1_500_000;
+const MAX_CHART_BYTES = 1_500_000, MAX_BODY_BYTES = 64_000;
 const RATE = { window: 600, max: 40 }; // runs per address per 10 minutes
 const ROOM_FRESH = 90, ROOM_KEEP = 600, ROOM_MODES = ['versus', 'battle', 'band'];
 // weekly challenges: weeks start on Monday 00:00 UTC; a season is six weeks
@@ -48,8 +52,17 @@ const WEEK0 = Date.UTC(2026, 8, 28) / 1000, WEEK = 7 * 86400, SEASON_WEEKS = 6; 
 const WEEK_DIFFS = ['hard', 'expert', 'medium', 'expert', 'hard', 'expert'];
 
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), {
-  status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store', ...extra },
+  status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra },
 });
+
+class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
+/** A POST body as JSON, refused before it's read when it's bigger than max (Content-Length) or while reading. */
+async function readJson(req, max = MAX_BODY_BYTES) {
+  if (+(req.headers.get('Content-Length') || 0) > max) throw new HttpError(413, 'request too big');
+  const text = await req.text();
+  if (text.length > max) throw new HttpError(413, 'request too big');
+  try { return JSON.parse(text); } catch { throw new HttpError(400, 'body must be JSON'); }
+}
 
 /** JSON, or JSONP when ?callback= names a function. */
 function reply(url, data, cacheSeconds = 15) {
@@ -90,26 +103,61 @@ const rankedOf = (env, key, instrument) => env.DB.prepare('SELECT chart_id FROM 
 const BEST_PER_BOARD = `SELECT * FROM (SELECT s.*, ROW_NUMBER() OVER (PARTITION BY s.player_id, s.song_key, s.instrument, s.difficulty ORDER BY s.score DESC) AS rn FROM scores s) WHERE rn = 1`;
 
 // ---------------------------------------------------------------- players
-/** Check a submitted player ({ id, secret, name, discord }): → { ok, id, name, secretHash, discordId, discordAvatar } or { error, status }. */
+/**
+ * Check a submitted player ({ id, secret, name }): → { ok, id, name, secretHash, discordId, discordAvatar } or { error, status }.
+ * The Discord account is the one stored for the player (linked through POST /v1/link); what the game says about it
+ * isn't trusted, so nobody can show someone else's Discord name and avatar on their runs.
+ */
 async function checkPlayer(env, p = {}) {
+  if (!p || typeof p !== 'object') return { error: 'bad player id/secret', status: 400 };
   const name = cleanName(p.name);
-  if (!/^[\w-]{8,64}$/.test(p.id || '') || typeof p.secret !== 'string' || p.secret.length < 16 || p.secret.length > 200) return { error: 'bad player id/secret', status: 400 };
+  if (typeof p.id !== 'string' || !/^[\w-]{8,64}$/.test(p.id) || typeof p.secret !== 'string' || p.secret.length < 16 || p.secret.length > 200) return { error: 'bad player id/secret', status: 400 };
   if (!name) return { error: 'player name required', status: 400 };
   const secretHash = await sha256(p.secret);
   // the first request registers the secret; afterwards it has to match
-  const known = await env.DB.prepare('SELECT secret_hash FROM players WHERE id = ?').bind(p.id).first();
+  const known = await env.DB.prepare('SELECT secret_hash, discord_id, discord_avatar FROM players WHERE id = ?').bind(p.id).first();
   if (known && known.secret_hash !== secretHash) return { error: 'this player id belongs to someone else', status: 403 };
-  const discordId = /^\d{15,21}$/.test(p.discord?.id || '') ? p.discord.id : null;
-  const discordAvatar = discordId && /^(a_)?[0-9a-f]{32}$/.test(p.discord?.avatar || '') ? p.discord.avatar : null;
-  return { ok: true, id: p.id, name, secretHash, discordId, discordAvatar };
+  return { ok: true, id: p.id, name, secretHash, discordId: known?.discord_id || null, discordAvatar: known?.discord_avatar || null };
 }
-const upsertPlayer = (env, pl, now) => env.DB.prepare(`INSERT INTO players (id, secret_hash, name, discord_id, discord_avatar, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)
-  ON CONFLICT(id) DO UPDATE SET name = excluded.name, discord_id = excluded.discord_id, discord_avatar = excluded.discord_avatar, updated = excluded.updated`)
-  .bind(pl.id, pl.secretHash, pl.name, pl.discordId, pl.discordAvatar, now, now);
+const upsertPlayer = (env, pl, now) => env.DB.prepare(`INSERT INTO players (id, secret_hash, name, created, updated) VALUES (?, ?, ?, ?, ?)
+  ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated = excluded.updated`)
+  .bind(pl.id, pl.secretHash, pl.name, now, now);
 
 async function rateLimited(env, ip, now) {
   const { results: [{ n }] } = await env.DB.prepare('SELECT COUNT(*) AS n FROM hits WHERE ip = ? AND ts > ?').bind(ip, now - RATE.window).all();
   return n >= RATE.max;
+}
+
+/** Discord markdown in a player's text shown as typed (no masked links, bold or mentions in the announcement). */
+const discordText = (s) => String(s ?? '').replace(/[\\`*_~|>[\]()<@#]/g, (c) => `\\${c}`).replace(/:\/\//g, ':\u200b//');
+
+/**
+ * The most a run on a chart can score, per difficulty: every note hit at the top multiplier with overdrive on
+ * (src/game/player.js: 50 a note, 25 per half second of sustain; ×4, ×6 on bass; ×2 overdrive). Vocals score per
+ * phrase (src/game/vocals.js: up to 1000 × 4 × 2), bounded by 8000 a note.
+ */
+function chartLimits(chart) {
+  const out = {};
+  const top = (chart.instrument === 'bass' ? 6 : 4) * 2;
+  for (const d of DIFFICULTIES) {
+    const notes = chart.notes[d];
+    const max = chart.instrument === 'vocals' ? notes.length * 8000 : notes.reduce((sum, n) => sum + 50 + (n[2] / 500) * 25, 0) * top;
+    out[d] = [notes.length, Math.ceil(max * 1.01) + 100];
+  }
+  return out;
+}
+
+/** A chart's limits (stored at upload; worked out once for charts uploaded before 1.8.1). null = unknown chart. */
+async function limitsOf(env, id) {
+  const row = await env.DB.prepare('SELECT song_key, instrument, data, limits FROM charts WHERE id = ?').bind(id).first();
+  if (!row) return null;
+  let limits = null;
+  try { limits = row.limits ? JSON.parse(row.limits) : null; } catch { limits = null; }
+  if (!limits) {
+    limits = chartLimits(JSON.parse(row.data));
+    await env.DB.prepare('UPDATE charts SET limits = ? WHERE id = ?').bind(JSON.stringify(limits), id).run();
+  }
+  return { songKey: row.song_key, instrument: row.instrument, limits };
 }
 
 // ---------------------------------------------------------------- POST /v1/scores
@@ -126,8 +174,7 @@ async function submit(req, env, ctx) {
   const now = Math.floor(Date.now() / 1000);
   if (await rateLimited(env, ip, now)) return json({ error: 'too many runs from this address, try again later' }, 429);
 
-  let b;
-  try { b = await req.json(); } catch { return json({ error: 'body must be JSON' }, 400); }
+  const b = await readJson(req);
   const pl = await checkPlayer(env, b?.player);
   if (pl.error) return json({ error: pl.error }, pl.status);
   const { name, discordId, discordAvatar } = pl;
@@ -142,6 +189,13 @@ async function submit(req, env, ctx) {
   const fc = b.fc ? 1 : 0;
   const key = await songKey(artist, title);
   const chart = isChartId(b.chartId) ? b.chartId : '';
+  // a run on a chart the API has: it can't have more notes, or score more, than that chart allows
+  const known = chart ? await limitsOf(env, chart) : null;
+  if (known) {
+    if (known.songKey !== key || known.instrument !== b.instrument) return json({ error: 'that chart is for another song part' }, 400);
+    const [count, max] = known.limits[b.difficulty] || [0, 0];
+    if (score > max || streak > count) return json({ error: 'score out of range for this chart' }, 400);
+  }
   const rankedId = await rankedOf(env, key, b.instrument);
   const ranked = !!chart && chart === rankedId;
   const prevTop = await env.DB.prepare('SELECT s.score, pl.name FROM scores s JOIN players pl ON pl.id = s.player_id WHERE s.song_key = ? AND s.instrument = ? AND s.difficulty = ? AND s.chart_id = ? ORDER BY s.score DESC LIMIT 1')
@@ -161,7 +215,7 @@ async function submit(req, env, ctx) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(player_id, song_key, instrument, difficulty, chart_id) DO UPDATE SET score = excluded.score, stars = excluded.stars, accuracy = excluded.accuracy,
         fc = excluded.fc, max_streak = excluded.max_streak, notes = excluded.notes, version = excluded.version, created = excluded.created`)
-      .bind(p.id, key, b.instrument, b.difficulty, chart, score, stars, accuracy, fc, streak, notes, String(b.version || '').slice(0, 16), now));
+      .bind(p.id, key, b.instrument, b.difficulty, chart, score, stars, accuracy, fc, streak, known ? known.limits[b.difficulty]?.[0] ?? notes : notes, String(b.version || '').replace(/[^\w.-]/g, '').slice(0, 16), now));
   }
   // keep the rate-limit table small
   stmts.push(env.DB.prepare('DELETE FROM hits WHERE ts < ?').bind(now - 3600));
@@ -184,9 +238,9 @@ async function announce(webhook, r) {
     body: JSON.stringify({
       username: 'STEMSTAGE', allowed_mentions: { parse: [] },
       embeds: [{
-        title: `🏆 New #1: ${r.title}${r.artist ? ` — ${r.artist}` : ''}`, url: board, color: 0xdf3a2c,
-        description: `**${r.name}** set **${r.score.toLocaleString('en-US')}** on ${r.instrument} · ${r.difficulty}${r.fc ? ' · full combo' : ''} (${'★'.repeat(Math.min(5, r.stars))})` +
-          (r.prev ? `\nBeating ${r.prev.name}'s ${r.prev.score.toLocaleString('en-US')}` : '\nThe first score on this chart'),
+        title: `🏆 New #1: ${r.title}${r.artist ? ` — ${r.artist}` : ''}`.slice(0, 256), url: board, color: 0xdf3a2c, // titles show no markdown
+        description: `**${discordText(r.name)}** set **${r.score.toLocaleString('en-US')}** on ${r.instrument} · ${r.difficulty}${r.fc ? ' · full combo' : ''} (${'★'.repeat(Math.min(5, r.stars))})` +
+          (r.prev ? `\nBeating ${discordText(r.prev.name)}'s ${r.prev.score.toLocaleString('en-US')}` : '\nThe first score on this chart'),
         ...(r.avatar ? { thumbnail: { url: r.avatar } } : {}),
       }],
     }),
@@ -213,10 +267,7 @@ async function uploadChart(req, env) {
   const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
   const now = Math.floor(Date.now() / 1000);
   if (await rateLimited(env, ip, now)) return json({ error: 'too many requests from this address, try again later' }, 429);
-  const text = await req.text();
-  if (text.length > MAX_CHART_BYTES) return json({ error: 'chart too big' }, 413);
-  let b;
-  try { b = JSON.parse(text); } catch { return json({ error: 'body must be JSON' }, 400); }
+  const b = await readJson(req, MAX_CHART_BYTES);
   const pl = await checkPlayer(env, b?.player);
   if (pl.error) return json({ error: pl.error }, pl.status);
   const title = String(b.song?.title || '').trim().slice(0, 120), artist = String(b.song?.artist || '').trim().slice(0, 120);
@@ -235,10 +286,11 @@ async function uploadChart(req, env) {
     env.DB.prepare('INSERT INTO hits (ip, ts) VALUES (?, ?)').bind(ip, now),
     upsertPlayer(env, pl, now),
     env.DB.prepare('INSERT INTO songs (key, title, artist, duration, created) VALUES (?, ?, ?, ?, ?) ON CONFLICT(key) DO NOTHING').bind(key, title, artist, clampInt(duration, 0, 7200), now),
-    env.DB.prepare(`INSERT INTO charts (id, song_key, instrument, data, fp, duration, notes, edited, method, version, player_id, created)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`)
+    env.DB.prepare(`INSERT INTO charts (id, song_key, instrument, data, fp, duration, notes, edited, method, version, player_id, created, limits)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`)
       .bind(id, key, canonical.instrument, JSON.stringify(canonical), JSON.stringify(fp), duration, counts.expert || Math.max(...Object.values(counts)),
-        b.meta?.edited ? 1 : 0, String(b.meta?.method || '').slice(0, 40) || null, String(b.meta?.version || '').slice(0, 16) || null, pl.id, now),
+        b.meta?.edited ? 1 : 0, cleanText(b.meta?.method, 40) || null, String(b.meta?.version || '').replace(/[^\w.-]/g, '').slice(0, 16) || null, pl.id, now,
+        JSON.stringify(chartLimits(canonical))),
     // the first chart of a song part is its ranked chart (players can vote in another one later)
     env.DB.prepare('INSERT INTO ranked_charts (song_key, instrument, chart_id, since) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING').bind(key, canonical.instrument, id, now),
   ]);
@@ -289,8 +341,7 @@ async function vote(req, env) {
   const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
   const now = Math.floor(Date.now() / 1000);
   if (await rateLimited(env, ip, now)) return json({ error: 'too many requests from this address, try again later' }, 429);
-  let b;
-  try { b = await req.json(); } catch { return json({ error: 'body must be JSON' }, 400); }
+  const b = await readJson(req);
   const pl = await checkPlayer(env, b?.player);
   if (pl.error) return json({ error: pl.error }, pl.status);
   if (!isChartId(b.chartId)) return json({ error: 'chartId required' }, 400);
@@ -300,11 +351,13 @@ async function vote(req, env) {
   if (!played) return json({ error: 'play this chart before voting for it' }, 403);
   await env.DB.batch([
     env.DB.prepare('INSERT INTO hits (ip, ts) VALUES (?, ?)').bind(ip, now),
-    env.DB.prepare(`INSERT INTO chart_votes (song_key, instrument, player_id, chart_id, created) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(song_key, instrument, player_id) DO UPDATE SET chart_id = excluded.chart_id, created = excluded.created`).bind(c.song_key, c.instrument, pl.id, b.chartId, now),
+    env.DB.prepare(`INSERT INTO chart_votes (song_key, instrument, player_id, chart_id, created, voter) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(song_key, instrument, player_id) DO UPDATE SET chart_id = excluded.chart_id, created = excluded.created, voter = excluded.voter`)
+      .bind(c.song_key, c.instrument, pl.id, b.chartId, now, await sha256(`vote|${ip}`)),
   ]);
   const rankedId = await rankedOf(env, c.song_key, c.instrument);
-  const count = (id) => env.DB.prepare('SELECT COUNT(*) AS n FROM chart_votes WHERE chart_id = ?').bind(id || '').first().then((r) => r.n);
+  // one address counts once, however many profiles vote from it (votes from before 1.8.1 count per player)
+  const count = (id) => env.DB.prepare('SELECT COUNT(DISTINCT COALESCE(voter, player_id)) AS n FROM chart_votes WHERE chart_id = ?').bind(id || '').first().then((r) => r.n);
   const votes = await count(b.chartId), rankedVotes = b.chartId === rankedId ? votes : await count(rankedId);
   let promoted = false;
   if (b.chartId !== rankedId && votes >= VOTE_MIN && votes > rankedVotes) {
@@ -328,8 +381,7 @@ async function announceRoom(req, env) {
   const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
   const now = Math.floor(Date.now() / 1000);
   if (await rateLimited(env, ip, now)) return json({ error: 'too many requests from this address, try again later' }, 429);
-  let b;
-  try { b = await req.json(); } catch { return json({ error: 'body must be JSON' }, 400); }
+  const b = await readJson(req, 8_000);
   const code = String(b?.code || '').toUpperCase();
   if (!isRoomCode(code) || typeof b.key !== 'string' || b.key.length < 16 || b.key.length > 100) return json({ error: 'bad room code/key' }, 400);
   const keyHash = await sha256(b.key);
@@ -355,8 +407,7 @@ async function announceRoom(req, env) {
 }
 
 async function closeRoomListing(req, env) {
-  let b;
-  try { b = JSON.parse(await req.text()); } catch { return json({ error: 'body must be JSON' }, 400); }
+  const b = await readJson(req, 8_000);
   const code = String(b?.code || '').toUpperCase();
   if (!isRoomCode(code) || typeof b.key !== 'string') return json({ error: 'bad room code/key' }, 400);
   const r = await env.DB.prepare('DELETE FROM rooms WHERE code = ? AND key_hash = ?').bind(code, await sha256(b.key)).run();
@@ -538,11 +589,10 @@ async function saveProfile(req, env) {
   const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
   const now = Math.floor(Date.now() / 1000);
   if (await rateLimited(env, ip, now)) return json({ error: 'too many requests from this address, try again later' }, 429);
-  let b;
-  try { b = await req.json(); } catch { return json({ error: 'body must be JSON' }, 400); }
+  const b = await readJson(req);
   const pl = await checkPlayer(env, b?.player);
   if (pl.error) return json({ error: pl.error }, pl.status);
-  const pr = b?.profile || {};
+  const pr = b?.profile && typeof b.profile === 'object' ? b.profile : {};
   const num = (v, max) => (Number.isFinite(+v) ? Math.max(0, Math.min(max, +v)) : 0);
   const str = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, '').slice(0, n);
   const st = pr.stats || {};
@@ -597,15 +647,54 @@ async function player(url, env) {
   }, 30);
 }
 
+// ---------------------------------------------------------------- Discord link
+/** The Discord user behind an OAuth token (scope identify), asked of Discord itself. */
+async function discordUser(token) {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9._-]{10,200}$/.test(token)) throw new HttpError(400, 'bad Discord token');
+  const r = await fetch('https://discord.com/api/v10/users/@me', { headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'STEMSTAGE' } });
+  if (r.status === 401) throw new HttpError(401, 'Discord login expired');
+  if (!r.ok) throw new HttpError(502, `Discord ${r.status}`);
+  const u = await r.json();
+  if (!/^\d{15,21}$/.test(u.id || '')) throw new HttpError(502, 'Discord sent no user');
+  return u;
+}
+
+/*
+  POST /v1/link  { player: { id, secret, name }, token: "<Discord OAuth token, scope identify>" }   link / refresh
+                 { player: { id, secret, name }, unlink: true }                                    unlink
+  The game calls it right after "Log in with Discord"; the token is checked with Discord and not kept.
+*/
+async function link(req, env) {
+  const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Math.floor(Date.now() / 1000);
+  if (await rateLimited(env, ip, now)) return json({ error: 'too many requests from this address, try again later' }, 429);
+  const b = await readJson(req, 8_000);
+  const pl = await checkPlayer(env, b?.player);
+  if (pl.error) return json({ error: pl.error }, pl.status);
+  if (b.unlink === true) {
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO hits (ip, ts) VALUES (?, ?)').bind(ip, now),
+      upsertPlayer(env, pl, now),
+      env.DB.prepare('UPDATE players SET discord_id = NULL, discord_avatar = NULL, discord_verified = 0 WHERE id = ?').bind(pl.id),
+    ]);
+    return json({ ok: true, discord: null });
+  }
+  const u = await discordUser(b.token);
+  const avatar = /^(a_)?[0-9a-f]{32}$/.test(u.avatar || '') ? u.avatar : null;
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO hits (ip, ts) VALUES (?, ?)').bind(ip, now),
+    upsertPlayer(env, pl, now),
+    env.DB.prepare('UPDATE players SET discord_id = ?, discord_avatar = ?, discord_verified = 1 WHERE id = ?').bind(u.id, avatar, pl.id),
+  ]);
+  return json({ ok: true, discord: { id: u.id, avatar: avatarOf({ discord_id: u.id, discord_avatar: avatar }) } });
+}
+
 // ---------------------------------------------------------------- website login
 /** Who is logged in on the website: the token is checked with Discord itself, so it can't be faked. */
 async function me(req, env) {
   const token = /^Bearer ([A-Za-z0-9._-]{10,200})$/.exec(req.headers.get('Authorization') || '')?.[1];
   if (!token) return json({ error: 'log in with Discord first' }, 401);
-  const r = await fetch('https://discord.com/api/v10/users/@me', { headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'STEMSTAGE' } });
-  if (r.status === 401) return json({ error: 'Discord login expired' }, 401);
-  if (!r.ok) return json({ error: `Discord ${r.status}` }, 502);
-  const u = await r.json();
+  const u = await discordUser(token);
   // STEMSTAGE profiles whose owner linked this Discord account in the game
   const { results } = await env.DB.prepare(`SELECT p.id, p.name, p.discord_avatar, COALESCE(SUM(s.score), 0) AS total, COUNT(s.song_key) AS charts
     FROM players p LEFT JOIN (${BEST_PER_BOARD}) s ON s.player_id = p.id WHERE p.discord_id = ? GROUP BY p.id ORDER BY total DESC`).bind(u.id).all();
@@ -613,6 +702,21 @@ async function me(req, env) {
     user: { id: u.id, username: u.username, globalName: u.global_name || null, avatar: u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : null },
     players: results.map((x) => ({ playerId: x.id, name: x.name, total: x.total, charts: x.charts })),
   });
+}
+
+/** The heavy summary reads (whole-table totals, the season, a chart that never changes) come from Cloudflare's edge
+ *  cache while fresh, so a flood of them doesn't reach the database. Boards, chart lists, rooms and the challenge
+ *  stay live: a player looking for the run they just finished sees it. */
+const EDGE_CACHED = new Set(['/v1/players', '/v1/songs', '/v1/recent', '/v1/library', '/v1/season', '/v1/chart', '/v1/song-key', '/v1/health', '']);
+async function cached(req, ctx, make) {
+  const cache = globalThis.caches?.default;
+  if (!cache) return make();
+  const key = new Request(req.url, { method: 'GET' });
+  const hit = await cache.match(key).catch(() => null);
+  if (hit) return hit;
+  const res = await make();
+  if (res.status === 200 && /public, max-age=[1-9]/.test(res.headers.get('Cache-Control') || '')) ctx.waitUntil(cache.put(key, res.clone()).catch(() => {}));
+  return res;
 }
 
 export default {
@@ -623,31 +727,39 @@ export default {
     }
     try {
       const path = url.pathname.replace(/\/+$/, '');
-      if (req.method === 'POST' && path === '/v1/scores') return await submit(req, env, ctx);
-      if (req.method === 'POST' && path === '/v1/profile') return await saveProfile(req, env);
-      if (req.method === 'POST' && path === '/v1/charts') return await uploadChart(req, env);
-      if (req.method === 'POST' && path === '/v1/charts/vote') return await vote(req, env);
-      if (req.method === 'POST' && path === '/v1/rooms') return await announceRoom(req, env);
-      if (req.method === 'POST' && path === '/v1/rooms/close') return await closeRoomListing(req, env);
-      if (req.method === 'GET') {
-        if (path === '/v1/leaderboard') return await leaderboard(url, env);
-        if (path === '/v1/players') return await players(url, env);
-        if (path === '/v1/songs') return await songs(url, env);
-        if (path === '/v1/recent') return await recent(url, env);
-        if (path === '/v1/player') return await player(url, env);
-        if (path === '/v1/me') return await me(req, env);
-        if (path === '/v1/charts') return await listCharts(url, env);
-        if (path === '/v1/chart') return await getChart(url, env);
-        if (path === '/v1/rooms') return await rooms(url, env);
-        if (path === '/v1/challenge') return await challenge(url, env);
-        if (path === '/v1/library') return await library(url, env);
-        if (path === '/v1/season') return await season(url, env);
-        if (path === '/v1/song-key') return reply(url, { key: await songKey(url.searchParams.get('artist'), url.searchParams.get('title')) }, 3600);
-        if (path === '/v1/health' || path === '') return reply(url, { ok: true, service: 'stemstage-leaderboard', version: 2 }, 5);
-      }
-      return json({ error: 'not found' }, 404);
+      if (req.method === 'GET' && EDGE_CACHED.has(path)) return await cached(req, ctx, () => route(req, url, path, env, ctx));
+      return await route(req, url, path, env, ctx);
     } catch (e) {
-      return json({ error: 'server error', detail: String(e?.message || e) }, 500);
+      if (e instanceof HttpError) return json({ error: e.message }, e.status);
+      console.error('[stemstage-api]', req.method, url.pathname, e?.stack || e);
+      return json({ error: 'server error' }, 500);
     }
   },
 };
+
+async function route(req, url, path, env, ctx) {
+  if (req.method === 'POST' && path === '/v1/scores') return await submit(req, env, ctx);
+  if (req.method === 'POST' && path === '/v1/profile') return await saveProfile(req, env);
+  if (req.method === 'POST' && path === '/v1/charts') return await uploadChart(req, env);
+  if (req.method === 'POST' && path === '/v1/charts/vote') return await vote(req, env);
+  if (req.method === 'POST' && path === '/v1/rooms') return await announceRoom(req, env);
+  if (req.method === 'POST' && path === '/v1/rooms/close') return await closeRoomListing(req, env);
+  if (req.method === 'POST' && path === '/v1/link') return await link(req, env);
+  if (req.method === 'GET') {
+    if (path === '/v1/leaderboard') return await leaderboard(url, env);
+    if (path === '/v1/players') return await players(url, env);
+    if (path === '/v1/songs') return await songs(url, env);
+    if (path === '/v1/recent') return await recent(url, env);
+    if (path === '/v1/player') return await player(url, env);
+    if (path === '/v1/me') return await me(req, env);
+    if (path === '/v1/charts') return await listCharts(url, env);
+    if (path === '/v1/chart') return await getChart(url, env);
+    if (path === '/v1/rooms') return await rooms(url, env);
+    if (path === '/v1/challenge') return await challenge(url, env);
+    if (path === '/v1/library') return await library(url, env);
+    if (path === '/v1/season') return await season(url, env);
+    if (path === '/v1/song-key') return reply(url, { key: await songKey(url.searchParams.get('artist'), url.searchParams.get('title')) }, 3600);
+    if (path === '/v1/health' || path === '') return reply(url, { ok: true, service: 'stemstage-leaderboard', version: 2 }, 5);
+  }
+  return json({ error: 'not found' }, 404);
+}
