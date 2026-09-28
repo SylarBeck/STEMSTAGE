@@ -2,89 +2,98 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>STEMSTAGE World Leaderboard</title>
   <meta name="description" content="The best STEMSTAGE players and runs, for every song, instrument and difficulty." />
   <meta property="og:title" content="STEMSTAGE World Leaderboard" />
   <meta property="og:description" content="Top players and record runs from STEMSTAGE, the rhythm game that plays any song." />
   <meta property="og:image" content="https://stemstage.varconstint.com/img/hero.webp" />
-  <meta name="theme-color" content="#05030a" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#0b0a09" />
   <link rel="icon" href="../img/favicon.png" />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="apple-touch-icon" href="../img/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,800&family=Big+Shoulders+Stencil+Display:wght@900&family=Permanent+Marker&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <link rel="stylesheet" href="../css/site.css" />
   <style>
-    :root { --bg: #05030a; --panel: rgba(18, 12, 34, 0.78); --line: rgba(255, 255, 255, 0.09); --ink: #f4f1fb; --dim: #a79fbe; --accent: #ff2d7a; --accent-2: #29e0ff; --gold: #ffcf3a; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Rajdhani', system-ui, sans-serif; font-size: 18px; }
-    a { color: var(--accent-2); text-decoration: none; }
-    nav { position: sticky; top: 0; z-index: 5; backdrop-filter: blur(14px); background: rgba(5, 3, 10, 0.78); border-bottom: 1px solid var(--line); }
-    nav .in { max-width: 1180px; margin: 0 auto; padding: 0 16px; height: 60px; display: flex; align-items: center; gap: 18px; }
-    nav .brand { display: flex; align-items: center; gap: 10px; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 0.16em; color: var(--ink); }
-    nav .brand img { width: 30px; height: 30px; border-radius: 8px; }
-    nav .links { margin-left: auto; display: flex; gap: 18px; font-weight: 600; align-items: center; }
-    nav .links a { color: var(--dim); }
-    @media (max-width: 640px) { nav .links > a { display: none; } }
-    header { max-width: 1180px; margin: 0 auto; padding: 48px 16px 8px; }
-    .kicker { font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 0.3em; color: var(--accent); text-transform: uppercase; }
-    h1 { font-family: 'Orbitron', sans-serif; font-size: clamp(26px, 5vw, 44px); margin: 8px 0; text-transform: uppercase; }
-    h1 span { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-    header p { color: var(--dim); margin: 0; max-width: 700px; }
-    main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
-    .card { border-radius: 18px; background: var(--panel); border: 1px solid var(--line); padding: 20px; min-width: 0; }
-    .card h2 { font-family: 'Orbitron', sans-serif; font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; margin: 0 0 14px; display: flex; align-items: center; gap: 10px; }
-    .card h2 i { color: var(--accent-2); }
-    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-    select { flex: 1 1 160px; min-width: 0; background: rgba(255, 255, 255, 0.06); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font: 600 16px 'Rajdhani', sans-serif; }
-    select option { background: #120c22; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-    td { padding: 9px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); white-space: nowrap; }
-    td.name { white-space: normal; }
-    tr.top1 td { background: rgba(255, 207, 58, 0.07); }
-    .num { font-variant-numeric: tabular-nums; }
-    .pos { font-family: 'Orbitron', sans-serif; font-weight: 800; color: var(--dim); width: 36px; }
-    tr.top1 .pos { color: var(--gold); }
-    .av { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; vertical-align: middle; margin-right: 8px; object-fit: cover; background: rgba(255, 255, 255, 0.1); font-size: 12px; font-weight: 800; }
-    .stars { color: var(--gold); letter-spacing: 1px; }
-    .gem { color: var(--accent-2); margin-left: 4px; }
-    .muted { color: var(--dim); }
-    .scroll { overflow-x: auto; }
-    .recent li { list-style: none; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
-    .recent ul { margin: 0; padding: 0; }
-    .recent small { display: block; color: var(--dim); }
-    a.pl { color: var(--ink); }
-    a.pl:hover { color: var(--accent-2); }
-    .api { grid-column: 1 / -1; color: var(--dim); font-size: 16px; }
-    .api code { color: var(--gold); background: rgba(255, 255, 255, 0.05); padding: 1px 6px; border-radius: 6px; }
+    .page-head { padding: 34px 0 10px; }
+    .page-head .scrawl { font-size: clamp(18px, 4.6vw, 24px); margin: 14px 0 0 4px; color: var(--ink); opacity: 0.9; }
+    .page-head p { color: var(--dim); max-width: 700px; margin: 14px 0 0; }
+    @media (min-width: 720px) { .page-head { padding: 54px 0 16px; } }
+    .boards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; padding-top: 22px; padding-bottom: 64px; }
+    @media (min-width: 1000px) { .boards { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; } }
+    .side { display: grid; gap: 20px; min-width: 0; }
+    .panel { min-width: 0; }
+    .panel h2 { font-family: var(--display); font-size: 28px; line-height: 1.05; text-transform: uppercase; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+    .panel h2 i { color: var(--gold); font-size: 22px; }
+    .filters { display: grid; gap: 8px; margin-bottom: 14px; }
+    .filters select { width: 100%; }
+    @media (min-width: 560px) { .filters { grid-template-columns: 2fr 1fr 1fr; } }
+    .recent { list-style: none; margin: 0; padding: 0; }
+    .recent li { padding: 11px 0; border-bottom: 1px solid var(--line); }
+    .recent li:first-child { border-top: 2px solid var(--line-2); }
+    .recent small { display: block; color: var(--dim); font-size: 15px; margin-top: 2px; }
+    .recent .num { font-variant-numeric: tabular-nums; font-weight: 700; }
+    .recent a.pl { color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 800; }
+    .api { grid-column: 1 / -1; color: var(--dim); font-size: 16px; margin: 0; overflow-wrap: anywhere; }
   </style>
 </head>
 <body>
-  <nav><div class="in">
-    <a class="brand" href="../"><img src="../img/icon.png" alt="" />STEMSTAGE</a>
-    <div class="links"><a href="../">Home</a><a href="../#download">Download</a><a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a></div>
-  </div></nav>
-  <header>
-    <div class="kicker">World leaderboard</div>
-    <h1>The best on <span>every stage</span></h1>
-    <p>Runs from every STEMSTAGE player who's signed in to a profile. Everyone who imported the same song plays for the same board.</p>
+  <nav class="nav">
+    <div class="wrap">
+      <a class="brand" href="../">STEMSTAGE</a>
+      <div class="links"><a href="../">Home</a><a class="here" href="./" aria-current="page">Leaderboard</a><a href="../#screens">Screenshots</a><a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a></div>
+      <div class="right">
+        <a class="btn primary nav-dl" href="../#download"><i class="fa-solid fa-download"></i> Download</a>
+        <button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav-panel"><i class="fa-solid fa-bars"></i><span>Menu</span></button>
+      </div>
+    </div>
+    <div class="nav-panel" id="nav-panel">
+      <a href="../">Home</a>
+      <a class="here" href="./">Leaderboard</a>
+      <a href="../#screens">Screenshots</a>
+      <hr />
+      <a class="small" href="https://github.com/SylarBeck/STEMSTAGE/wiki/Leaderboard-API"><i class="fa-solid fa-code"></i> Leaderboard API</a>
+      <a class="small" href="https://github.com/SylarBeck/STEMSTAGE/wiki"><i class="fa-solid fa-book"></i> Wiki</a>
+      <a class="btn primary block" href="../#download"><i class="fa-solid fa-download"></i> Download</a>
+    </div>
+  </nav>
+
+  <header class="page-head">
+    <div class="wrap">
+      <h1 class="torn">World leaderboard</h1>
+      <div class="scrawl">the best on every stage</div>
+      <p>Runs from every STEMSTAGE player who's signed in to a profile. Everyone who imported the same song plays for the same board.</p>
+    </div>
   </header>
-  <main>
-    <section class="card">
+
+  <main class="wrap boards">
+    <section class="panel">
       <h2><i class="fa-solid fa-ranking-star"></i> Song boards</h2>
       <div class="filters">
         <select id="song" aria-label="Song"><option>Loading songs…</option></select>
         <select id="inst" aria-label="Instrument"><option value="guitar">Guitar</option><option value="bass">Bass</option><option value="drums">Drums</option><option value="keys">Keys</option><option value="vocals">Vocals</option></select>
         <select id="diff" aria-label="Difficulty"><option value="expert">Expert</option><option value="hard">Hard</option><option value="medium">Medium</option><option value="easy">Easy</option></select>
       </div>
-      <div class="scroll"><table id="board"><tr><td class="muted">Loading…</td></tr></table></div>
+      <table class="table" id="board"><tr><td class="muted">Loading…</td></tr></table>
     </section>
-    <div style="display:grid;gap:18px;align-content:start;min-width:0">
-      <section class="card"><h2><i class="fa-solid fa-crown"></i> Top players</h2><div class="scroll"><table id="players"><tr><td class="muted">Loading…</td></tr></table></div></section>
-      <section class="card recent"><h2><i class="fa-solid fa-bolt"></i> Latest records</h2><ul id="recent"><li class="muted">Loading…</li></ul></section>
+    <div class="side">
+      <section class="panel"><h2><i class="fa-solid fa-crown"></i> Top players</h2><table class="table" id="players"><tr><td class="muted">Loading…</td></tr></table></section>
+      <section class="panel"><h2><i class="fa-solid fa-bolt"></i> Latest records</h2><ul class="recent" id="recent"><li class="muted">Loading…</li></ul></section>
     </div>
     <p class="api">Build on it: the leaderboard is a public API at <code>https://api.stemstage.varconstint.com/v1/</code> (<code>leaderboard</code>, <code>players</code>, <code>songs</code>, <code>recent</code>). JSON with CORS, or JSONP with <code>?callback=yourFunction</code>. Docs: <a href="https://github.com/SylarBeck/STEMSTAGE/wiki/Leaderboard-API">wiki → Leaderboard API</a>.</p>
   </main>
+
+  <footer>
+    <div class="wrap">
+      <a class="brand" href="../">STEMSTAGE</a>
+      <div class="flinks"><a href="../">Home</a><a href="../#download">Download</a><a href="https://github.com/SylarBeck/STEMSTAGE">GitHub</a><a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a></div>
+    </div>
+  </footer>
+
+  <script src="../js/site.js"></script>
   <script>
     // ?api= points the page at a local copy of the API (npx wrangler dev) for testing; localhost only
     const localApi = new URLSearchParams(location.search).get('api');
@@ -102,6 +111,7 @@
     if (params.get('inst')) $('inst').value = params.get('inst');
     if (params.get('diff')) $('diff').value = params.get('diff');
 
+    // on a phone the accuracy and streak columns fold away and the stars sit under the score
     async function board() {
       const song = $('song').value;
       if (!song) { $('board').innerHTML = '<tr><td class="muted">No scores yet — play a song in STEMSTAGE while signed in to a profile.</td></tr>'; return; }
@@ -109,9 +119,10 @@
       $('board').innerHTML = '<tr><td class="muted">Loading…</td></tr>';
       try {
         const b = await get('leaderboard', { song, instrument: $('inst').value, difficulty: $('diff').value, limit: 100 });
-        $('board').innerHTML = '<tr><th>#</th><th>Player</th><th>Score</th><th>Stars</th><th>Accuracy</th><th>Streak</th></tr>' + (b.rows.map((r, i) => `
-          <tr class="${i === 0 ? 'top1' : ''}" data-player="${esc(r.playerId)}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td><td class="num">${r.score.toLocaleString()}</td>
-          <td>${stars(r.stars)}${r.fc ? '<i class="fa-solid fa-gem gem" title="Full combo"></i>' : ''}</td><td class="num">${Math.round(r.accuracy * 100)}%</td><td class="num">${r.maxStreak}</td></tr>`).join('')
+        $('board').innerHTML = '<tr><th>#</th><th>Player</th><th class="num">Score</th><th class="wide-only">Stars</th><th class="num wide-only">Acc.</th><th class="num wide-only">Streak</th></tr>' + (b.rows.map((r, i) => `
+          <tr class="${i === 0 ? 'top1' : ''}" data-player="${esc(r.playerId)}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td>
+          <td class="num">${r.score.toLocaleString()}<small class="narrow-only">${stars(r.stars)}${r.fc ? '<i class="fa-solid fa-gem gem" title="Full combo"></i>' : ''}</small></td>
+          <td class="wide-only">${stars(r.stars)}${r.fc ? '<i class="fa-solid fa-gem gem" title="Full combo"></i>' : ''}</td><td class="num wide-only">${Math.round(r.accuracy * 100)}%</td><td class="num wide-only">${r.maxStreak}</td></tr>`).join('')
           || '<tr><td colspan="6" class="muted">Nobody has played this part yet. Be the first!</td></tr>');
       } catch { fail($('board'), 'This board'); }
     }
@@ -130,13 +141,13 @@
     new MutationObserver(markMine).observe(document.querySelector('main'), { childList: true, subtree: true });
 
     get('players', { limit: 25 }).then((p) => {
-      $('players').innerHTML = '<tr><th>#</th><th>Player</th><th>Total</th><th>★</th></tr>' + (p.rows.map((r, i) => `
+      $('players').innerHTML = '<tr><th>#</th><th>Player</th><th class="num">Total</th><th class="num">★</th></tr>' + (p.rows.map((r, i) => `
         <tr class="${i === 0 ? 'top1' : ''}" data-player="${esc(r.playerId)}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td><td class="num">${r.total.toLocaleString()}</td><td class="num">${r.stars}</td></tr>`).join('')
         || '<tr><td colspan="4" class="muted">No players yet.</td></tr>');
     }).catch(() => fail($('players'), 'Top players'));
 
     get('recent', { limit: 12 }).then((r) => {
-      $('recent').innerHTML = r.rows.map((x) => `<li data-player="${esc(x.playerId)}"><a class="pl" href="../player/?id=${encodeURIComponent(x.playerId)}">${av(x)}<b>${esc(x.player)}</b></a> · <span class="num">${x.score.toLocaleString()}</span> ${stars(x.stars)}
+      $('recent').innerHTML = r.rows.map((x) => `<li data-player="${esc(x.playerId)}"><a class="pl" href="../player/?id=${encodeURIComponent(x.playerId)}">${av(x)}${esc(x.player)}</a> · <span class="num">${x.score.toLocaleString()}</span> ${stars(x.stars)}
         <small>${esc(x.song.title)}${x.song.artist ? ` — ${esc(x.song.artist)}` : ''} · ${esc(x.instrument)} ${esc(x.difficulty)} · ${ago(x.date)}</small></li>`).join('') || '<li class="muted">No runs yet.</li>';
     }).catch(() => { $('recent').innerHTML = '<li class="muted">Latest records can\'t be loaded right now.</li>'; });
   </script>

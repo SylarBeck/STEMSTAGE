@@ -1,7 +1,9 @@
-// Brand kit: app icon, wordmark, horizontal logo and the GitHub banner / social preview.
-// Writes SVG sources + PNGs to brand/ and the favicon to public/icon.png.
+// Brand kit: app icon, wordmark, horizontal logo, the GitHub social preview and the README banner.
+// Same look as the game: a stencilled logo sprayed in bone with a red pass that didn't line up, masking tape,
+// the real stage behind it. Writes SVG sources + PNGs to brand/, the game's favicon to public/icon.png and the
+// website's favicon + home-screen icon to site/img/.
 // Run: npm run brand   (then `npx tauri icon brand/icon-1024.png` regenerates the app icons)
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
@@ -9,127 +11,122 @@ import { Resvg } from '@resvg/resvg-js';
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const brand = path.join(root, 'brand');
 mkdirSync(brand, { recursive: true });
-const FONTS = ['Orbitron-Black.ttf', 'Orbitron-Bold.ttf', 'Rajdhani-Bold.ttf', 'Rajdhani-SemiBold.ttf', 'Rajdhani-Medium.ttf'].map((f) => path.join(brand, 'fonts', f));
-const LANES = ['#2bff5a', '#ff2b4a', '#ffe62b', '#2b8cff', '#ff8a1a'];
+// static fonts only: resvg can't pick a weight out of a variable font, so the stencil is a Black instance
+const FONTS = readdirSync(path.join(brand, 'fonts')).filter((f) => f.endsWith('.ttf')).map((f) => path.join(brand, 'fonts', f));
+const STENCIL = 'Big Shoulders Stencil Display Black';
+const INK = '#ece5d3', RED = '#df3a2c', GOLD = '#f0b429', BG = '#0b0a09', DARK = '#15120e';
+const LANES = ['#2ed24f', '#f2332b', '#ffd21f', '#2f84f0', '#ff8a1a'];
 
-function png(svg, width, file) {
-  const out = new Resvg(svg, { fitTo: { mode: 'width', value: width }, font: { fontFiles: FONTS, loadSystemFonts: false, defaultFontFamily: 'Rajdhani' }, background: 'rgba(0,0,0,0)' }).render().asPng();
+function png(svg, width, file, background = 'rgba(0,0,0,0)') {
+  const out = new Resvg(svg, { fitTo: { mode: 'width', value: width }, font: { fontFiles: FONTS, loadSystemFonts: false, defaultFontFamily: 'Barlow Condensed' }, background }).render().asPng();
   writeFileSync(file, out);
   console.log(`${path.relative(root, file)}  ${width}px  ${(out.length / 1024).toFixed(0)} KB`);
 }
-const dataUri = (file) => `data:image/png;base64,${readFileSync(file).toString('base64')}`;
+const dataUri = (file) => `data:image/${file.endsWith('.jpg') ? 'jpeg' : 'png'};base64,${readFileSync(file).toString('base64')}`;
+const TAPE = dataUri(path.join(root, 'public', 'ui', 'tape.png'));
+const STAGE = dataUri(path.join(brand, 'stage.jpg'));
 
-// ---------------------------------------------------------------- highway motif (shared)
-function highway({ x0, x1, yTop, yBot, vx, vw, lanes = 5, id = 'h', gems = [], strike = 0.83, rails = true }) {
-  // trapezoid from the bottom edge (x0..x1 at yBot) to the horizon (vx ± vw/2 at yTop)
-  const L = (t, y) => { const k = (y - yTop) / (yBot - yTop); const left = vx - vw / 2 + (x0 - (vx - vw / 2)) * k; const right = vx + vw / 2 + (x1 - (vx + vw / 2)) * k; return left + (right - left) * t; };
-  const yAt = (d) => yTop + (yBot - yTop) * d;
-  let s = `<path d="M${x0} ${yBot} L${vx - vw / 2} ${yTop} L${vx + vw / 2} ${yTop} L${x1} ${yBot} Z" fill="url(#${id}Board)"/>`;
-  for (let i = 1; i < lanes; i++) s += `<path d="M${L(i / lanes, yBot)} ${yBot} L${L(i / lanes, yTop)} ${yTop}" stroke="rgba(190,200,255,0.28)" stroke-width="${(yBot - yTop) * 0.004}"/>`;
-  for (const d of [0.35, 0.55, 0.7, strike - 0.07]) { const y = yAt(d); s += `<path d="M${L(0, y)} ${y} L${L(1, y)} ${y}" stroke="rgba(255,255,255,${0.05 + d * 0.12})" stroke-width="${2 + d * 3}"/>`; }
-  const ys = yAt(strike);
-  s += `<path d="M${L(0, ys)} ${ys} L${L(1, ys)} ${ys}" stroke="#fff" stroke-width="${(yBot - yTop) * 0.012}" opacity=".9"/>`;
-  if (rails) {
-    for (const t of [0, 1]) s += `<path d="M${L(t, yBot)} ${yBot} L${L(t, yTop)} ${yTop}" stroke="url(#${id}Rail)" stroke-width="${(yBot - yTop) * 0.018}" stroke-linecap="round" filter="url(#${id}Glow)"/><path d="M${L(t, yBot)} ${yBot} L${L(t, yTop)} ${yTop}" stroke="url(#${id}Rail)" stroke-width="${(yBot - yTop) * 0.008}" stroke-linecap="round"/>`;
-  }
-  for (const [lane, d] of gems) {
-    const y = yAt(d), w = (L(1, y) - L(0, y)) / lanes, cx = L((lane + 0.5) / lanes, y);
-    s += `<ellipse cx="${cx}" cy="${y + w * 0.06}" rx="${w * 0.42}" ry="${w * 0.17}" fill="#000" opacity=".5"/>
-      <rect x="${cx - w * 0.4}" y="${y - w * 0.16}" width="${w * 0.8}" height="${w * 0.28}" rx="${w * 0.12}" fill="${LANES[lane]}"/>
-      <rect x="${cx - w * 0.28}" y="${y - w * 0.13}" width="${w * 0.56}" height="${w * 0.09}" rx="${w * 0.045}" fill="#fff" opacity=".75"/>`;
-  }
-  // smashers at the strikeline
-  for (let lane = 0; lane < lanes; lane++) {
-    const w = (L(1, ys) - L(0, ys)) / lanes, cx = L((lane + 0.5) / lanes, ys);
-    s += `<rect x="${cx - w * 0.36}" y="${ys - w * 0.11}" width="${w * 0.72}" height="${w * 0.22}" rx="${w * 0.1}" fill="none" stroke="${LANES[lane]}" stroke-width="${w * 0.05}" filter="url(#${id}Glow)"/>
-      <rect x="${cx - w * 0.36}" y="${ys - w * 0.11}" width="${w * 0.72}" height="${w * 0.22}" rx="${w * 0.1}" fill="rgba(10,8,20,.6)" stroke="${LANES[lane]}" stroke-width="${w * 0.03}"/>`;
-  }
-  return s;
-}
-const highwayDefs = (id, glow = 10) => `
-  <linearGradient id="${id}Board" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#140c26" stop-opacity="0"/><stop offset=".35" stop-color="#140c26" stop-opacity=".85"/><stop offset="1" stop-color="#0b0716"/></linearGradient>
-  <linearGradient id="${id}Rail" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff2d7a"/><stop offset=".6" stop-color="#b44bff"/><stop offset="1" stop-color="#29e0ff" stop-opacity="0"/></linearGradient>
-  <filter id="${id}Glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${glow}"/></filter>`;
+/** The logo: bone letters over a red pass offset down-right by `off`. */
+const logo = (x, y, size, { anchor = 'middle', off = size * 0.035, spacing = 0 } = {}) => `
+  <text x="${x + off}" y="${y + off}" text-anchor="${anchor}" font-family="${STENCIL}" font-size="${size}" letter-spacing="${spacing}" fill="${RED}">STEMSTAGE</text>
+  <text x="${x}" y="${y}" text-anchor="${anchor}" font-family="${STENCIL}" font-size="${size}" letter-spacing="${spacing}" fill="${INK}">STEMSTAGE</text>`;
+/** A strip of masking tape with marker on it, centred on (cx, cy). */
+const tape = (cx, cy, w, h, text, size, rot = -2) => `
+  <g transform="rotate(${rot} ${cx} ${cy})">
+    <image x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" preserveAspectRatio="none" href="${TAPE}"/>
+    <text x="${cx}" y="${cy + size * 0.34}" text-anchor="middle" font-family="Permanent Marker" font-size="${size}" fill="${DARK}">${text}</text>
+  </g>`;
 
 // ---------------------------------------------------------------- app icon
+// a stencilled S under a stage light, with the five fret colours along the bottom
 const SQ = 'M224 0 H800 A224 224 0 0 1 1024 224 V800 A224 224 0 0 1 800 1024 H224 A224 224 0 0 1 0 800 V224 A224 224 0 0 1 224 0 Z';
-const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <defs>
-    <radialGradient id="bg" cx="50%" cy="34%" r="78%"><stop offset="0" stop-color="#3a1466"/><stop offset=".5" stop-color="#150a2a"/><stop offset="1" stop-color="#05030b"/></radialGradient>
-    <linearGradient id="sFill" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#ffd0e4"/><stop offset=".22" stop-color="#ff4d91"/><stop offset=".62" stop-color="#ff2d7a"/><stop offset="1" stop-color="#ff7a2f"/></linearGradient>
-    <filter id="sGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="30"/></filter>
-    <radialGradient id="flare" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#29e0ff" stop-opacity=".55"/><stop offset="1" stop-color="#29e0ff" stop-opacity="0"/></radialGradient>
-    <clipPath id="clip"><path d="${SQ}"/></clipPath>
-    ${highwayDefs('i', 14)}
-  </defs>
-  <g clip-path="url(#clip)">
-    <rect width="1024" height="1024" fill="url(#bg)"/>
-    <ellipse cx="512" cy="330" rx="300" ry="120" fill="url(#flare)"/>
-    ${highway({ x0: 40, x1: 984, yTop: 330, yBot: 1060, vx: 512, vw: 90, id: 'i', gems: [[0, 0.55], [2, 0.68], [3, 0.42]], strike: 0.84 })}
-    <text x="512" y="742" text-anchor="middle" font-family="Orbitron" font-weight="900" font-size="640" fill="#ff2d7a" filter="url(#sGlow)" opacity=".85">S</text>
-    <text x="512" y="742" text-anchor="middle" font-family="Orbitron" font-weight="900" font-size="640" fill="url(#sFill)" stroke="#fff" stroke-opacity=".35" stroke-width="6">S</text>
-  </g>
-  <path d="${SQ}" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="8"/>
+const iconBody = () => `
+    <rect width="1024" height="1024" fill="${BG}"/>
+    <rect width="1024" height="1024" fill="url(#spot)"/>
+    <text x="548" y="826" text-anchor="middle" font-family="${STENCIL}" font-size="880" fill="${RED}">S</text>
+    <text x="512" y="790" text-anchor="middle" font-family="${STENCIL}" font-size="880" fill="${INK}">S</text>
+    ${LANES.map((c, i) => `<rect x="${214 + i * 124}" y="900" width="100" height="30" rx="6" fill="${c}"/>`).join('')}`;
+const iconDefs = `
+    <radialGradient id="spot" cx="50%" cy="-8%" r="100%"><stop offset="0" stop-color="#ffb24a" stop-opacity=".5"/><stop offset=".42" stop-color="#8a2c14" stop-opacity=".28"/><stop offset="1" stop-color="${BG}" stop-opacity="0"/></radialGradient>`;
+const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>${iconDefs}<clipPath id="clip"><path d="${SQ}"/></clipPath></defs>
+  <g clip-path="url(#clip)">${iconBody()}</g>
+  <path d="${SQ}" fill="none" stroke="rgba(236,229,211,0.14)" stroke-width="10"/>
 </svg>`;
+// full-bleed square for places that round the corners themselves (iOS home screen)
+const iconSquare = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024" width="1024" height="1024"><defs>${iconDefs}</defs>${iconBody()}</svg>`;
 writeFileSync(path.join(brand, 'icon.svg'), iconSvg);
 png(iconSvg, 1024, path.join(brand, 'icon-1024.png'));
 png(iconSvg, 256, path.join(root, 'public', 'icon.png'));
+png(iconSvg, 64, path.join(root, 'site', 'img', 'favicon.png'));
+png(iconSquare, 180, path.join(root, 'site', 'img', 'apple-touch-icon.png'), BG);
 
-// ---------------------------------------------------------------- wordmark
-const wordmark = (w = 1400, h = 260, tagline = true) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
-  <defs>
-    <linearGradient id="wm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#ffe3ef"/><stop offset="1" stop-color="#ffb3cf"/></linearGradient>
-    <filter id="wg" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="14"/></filter>
-    <filter id="wc" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="40"/></filter>
-  </defs>
-  <text x="${w / 2}" y="170" text-anchor="middle" font-family="Orbitron" font-weight="900" font-size="168" letter-spacing="10" fill="#29e0ff" filter="url(#wc)" opacity=".45">STEMSTAGE</text>
-  <text x="${w / 2}" y="170" text-anchor="middle" font-family="Orbitron" font-weight="900" font-size="168" letter-spacing="10" fill="#ff2d7a" filter="url(#wg)" opacity=".9">STEMSTAGE</text>
-  <text x="${w / 2 - 5}" y="170" text-anchor="middle" font-family="Orbitron" font-weight="900" font-size="168" letter-spacing="10" fill="#29e0ff" opacity=".55">STEMSTAGE</text>
-  <text x="${w / 2}" y="170" text-anchor="middle" font-family="Orbitron" font-weight="900" font-size="168" letter-spacing="10" fill="url(#wm)">STEMSTAGE</text>
-  ${tagline ? `<text x="${w / 2}" y="238" text-anchor="middle" font-family="Orbitron" font-weight="700" font-size="30" letter-spacing="14" fill="#29e0ff">ANY SONG · ANY INSTRUMENT · SPLIT BY AI</text>` : ''}
+// ---------------------------------------------------------------- wordmark (transparent)
+const wordmark = (w = 1400, h = 340) => `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+  ${logo(w / 2 - 6, 222, 250)}
+  ${tape(w / 2, 294, 760, 72, 'any song · any instrument · split by AI', 36)}
 </svg>`;
 writeFileSync(path.join(brand, 'wordmark.svg'), wordmark());
 png(wordmark(), 1400, path.join(brand, 'wordmark.png'));
 
 // ---------------------------------------------------------------- horizontal logo (icon + wordmark)
-const horizontal = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1700 300" width="1700" height="300">
+const horizontal = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1400 300" width="1400" height="300">
   <image x="10" y="10" width="280" height="280" href="${dataUri(path.join(brand, 'icon-1024.png'))}"/>
-  <svg x="300" y="20" width="1400" height="260" viewBox="0 0 1400 260">${wordmark().replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')}</svg>
+  ${logo(326, 238, 236, { anchor: 'start' })}
 </svg>`;
-png(horizontal, 1700, path.join(brand, 'logo-horizontal.png'));
+png(horizontal, 1400, path.join(brand, 'logo-horizontal.png'));
 
-// ---------------------------------------------------------------- banner / social preview (1280x640)
-const pic = (k) => dataUri(path.join(root, 'public', 'controllers', `${k}.png`));
+// ---------------------------------------------------------------- GitHub social preview (1280x640, under 1 MB for GitHub)
+const shot = dataUri(path.join(root, 'docs', 'screenshots', 'overdrive.png'));
+/** Rubber stamps in rows starting at (x, y); widths are estimated from the text so they sit side by side. */
+const stamps = (x, y, rows) => rows.map((row, r) => {
+  let cx = x;
+  return row.map(([text, color, rot]) => {
+    const w = text.length * 12.4 + 30, sx = cx;
+    cx += w + 16;
+    return `<g transform="rotate(${rot} ${sx + w / 2} ${y + r * 52 + 17})"><rect x="${sx}" y="${y + r * 52}" width="${w}" height="34" fill="none" stroke="${color}" stroke-width="3"/>
+      <text x="${sx + w / 2}" y="${y + r * 52 + 24}" text-anchor="middle" font-family="Barlow Condensed" font-weight="800" font-size="19" letter-spacing="2.2" fill="${color}">${text}</text></g>`;
+  }).join('');
+}).join('');
 const banner = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1280 640" width="1280" height="640">
   <defs>
-    <radialGradient id="bbg" cx="72%" cy="30%" r="85%"><stop offset="0" stop-color="#2b0f52"/><stop offset=".45" stop-color="#12081f"/><stop offset="1" stop-color="#05030a"/></radialGradient>
-    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
-    <linearGradient id="beamP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff2d7a" stop-opacity=".35"/><stop offset="1" stop-color="#ff2d7a" stop-opacity="0"/></linearGradient>
-    <linearGradient id="beamC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#29e0ff" stop-opacity=".3"/><stop offset="1" stop-color="#29e0ff" stop-opacity="0"/></linearGradient>
-    <pattern id="led" width="9" height="9" patternUnits="userSpaceOnUse"><circle cx="4.5" cy="4.5" r="1.6" fill="#ff2d7a" opacity=".35"/></pattern>
-    <linearGradient id="ledFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#05030a"/></linearGradient>
-    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter>
-    ${highwayDefs('b', 9)}
-    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#05030a" stop-opacity=".95"/><stop offset=".45" stop-color="#05030a" stop-opacity=".6"/><stop offset=".62" stop-color="#05030a" stop-opacity="0"/></linearGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${BG}" stop-opacity=".94"/><stop offset=".5" stop-color="${BG}" stop-opacity=".72"/><stop offset="1" stop-color="${BG}" stop-opacity=".35"/></linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1"><stop offset=".55" stop-color="${BG}" stop-opacity="0"/><stop offset="1" stop-color="${BG}" stop-opacity=".9"/></linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="3"/></filter>
+    <filter id="drop" x="-10%" y="-10%" width="130%" height="130%"><feGaussianBlur in="SourceAlpha" stdDeviation="10"/><feOffset dy="12"/><feComponentTransfer><feFuncA type="linear" slope=".6"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
-  <rect width="1280" height="640" fill="url(#bbg)"/>
-  <rect x="620" y="40" width="640" height="300" fill="url(#led)"/>
-  <rect x="620" y="40" width="640" height="300" fill="url(#ledFade)"/>
-  <path d="M760 0 L700 640 L900 640 Z" fill="url(#beamP)"/><path d="M1180 0 L1000 640 L1180 640 Z" fill="url(#beamC)"/><path d="M980 0 L880 640 L1060 640 Z" fill="url(#beam)"/>
-  ${highway({ x0: 640, x1: 1340, yTop: 250, yBot: 700, vx: 960, vw: 70, id: 'b', gems: [[0, 0.62], [1, 0.46], [2, 0.74], [4, 0.36], [3, 0.55]], strike: 0.86 })}
-  <rect width="1280" height="640" fill="url(#fade)"/>
-  <image x="70" y="84" width="120" height="120" href="${dataUri(path.join(brand, 'icon-1024.png'))}"/>
-  <svg x="40" y="210" width="700" height="130" viewBox="0 0 1400 260">${wordmark().replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')}</svg>
-  <text x="76" y="392" font-family="Rajdhani" font-weight="700" font-size="34" fill="#eef0ff">The rhythm game that plays <tspan fill="#ff2d7a">any song</tspan>.</text>
-  <text x="76" y="432" font-family="Rajdhani" font-weight="600" font-size="23" fill="#b9b7d6">AI splits your music into stems and charts guitar, bass, drums, keys and vocals.</text>
-  ${['Demucs AI stems', 'DualSense triggers + haptics', 'Rock Band gear + MIDI', 'Up to 4 players'].map((t, i) => {
-    const x = [76, 276, 76, 320][i], w = [186, 256, 230, 170][i], y = i < 2 ? 468 : 518;
-    return `<rect x="${x}" y="${y}" width="${w}" height="40" rx="20" fill="rgba(255,255,255,0.06)" stroke="rgba(170,150,255,0.35)"/><text x="${x + w / 2}" y="${y + 26}" text-anchor="middle" font-family="Rajdhani" font-weight="700" font-size="19" fill="#eef0ff">${t}</text>`;
-  }).join('')}
-  <image x="860" y="392" width="290" height="189" href="${pic('dualsense')}"/>
-  <image x="1060" y="444" width="210" height="137" href="${pic('guitar')}"/>
-  <text x="76" y="606" font-family="Orbitron" font-weight="700" font-size="15" letter-spacing="4" fill="#6f6c93">DESKTOP APP FOR WINDOWS · THREE.JS · TAURI · DEMUCS</text>
+  <image width="1280" height="640" preserveAspectRatio="xMidYMid slice" href="${STAGE}" opacity=".85" filter="url(#soft)"/>
+  <rect width="1280" height="640" fill="url(#shade)"/>
+  <rect width="1280" height="640" fill="url(#floor)"/>
+  <g transform="rotate(3 1010 300)" filter="url(#drop)">
+    <rect x="770" y="160" width="480" height="290" fill="#f5f1e6"/>
+    <image x="782" y="172" width="456" height="256.5" preserveAspectRatio="xMidYMid slice" href="${shot}"/>
+    <text x="1226" y="444" text-anchor="end" font-family="Permanent Marker" font-size="17" fill="${DARK}">overdrive, 2× score</text>
+  </g>
+  <image x="950" y="140" width="130" height="36" preserveAspectRatio="none" href="${TAPE}" transform="rotate(-4 1015 158)"/>
+  ${logo(70, 196, 158, { anchor: 'start' })}
+  ${tape(318, 250, 520, 54, 'any song · any instrument · split by AI', 25)}
+  <text x="74" y="352" font-family="Anton" font-size="50" fill="${INK}">THE RHYTHM GAME THAT</text>
+  <text x="74" y="408" font-family="Anton" font-size="50" fill="${INK}">PLAYS ANY SONG</text>
+  <text x="76" y="450" font-family="Barlow Condensed" font-weight="600" font-size="24" fill="#cfc7b4">AI splits your music into stems and charts guitar, bass, drums, keys and vocals.</text>
+  ${stamps(76, 480, [[['DEMUCS AI STEMS', RED, -2], ['DUALSENSE TRIGGERS', GOLD, 1.5], ['ROCK BAND GEAR + MIDI', INK, -1]], [['UP TO 4 PLAYERS', INK, 1], ['REAL GUITAR + KEYS', RED, -1.5]]])}
+  <text x="76" y="608" font-family="Barlow Condensed" font-weight="800" font-size="17" letter-spacing="4" fill="#8d8575">FREE FOR WINDOWS &amp; LINUX · THREE.JS · TAURI · DEMUCS</text>
 </svg>`;
 writeFileSync(path.join(brand, 'banner.svg'), banner);
 png(banner, 1280, path.join(brand, 'banner.png'));
 png(banner, 2560, path.join(brand, 'banner@2x.png'));
+
+// ---------------------------------------------------------------- README banner (2000x800): the logo on the stage
+const hero = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 2000 800" width="2000" height="800">
+  <defs>
+    <radialGradient id="hshade" cx="50%" cy="48%" r="62%"><stop offset="0" stop-color="${BG}" stop-opacity=".78"/><stop offset=".6" stop-color="${BG}" stop-opacity=".45"/><stop offset="1" stop-color="${BG}" stop-opacity=".2"/></radialGradient>
+    <linearGradient id="hfloor" x1="0" y1="0" x2="0" y2="1"><stop offset=".6" stop-color="${BG}" stop-opacity="0"/><stop offset="1" stop-color="${BG}"/></linearGradient>
+  </defs>
+  <image width="2000" height="800" preserveAspectRatio="xMidYMid slice" href="${STAGE}"/>
+  <rect width="2000" height="800" fill="url(#hshade)"/>
+  <rect width="2000" height="800" fill="url(#hfloor)"/>
+  ${logo(1000, 452, 330)}
+  ${tape(1000, 556, 1010, 92, 'any song · any instrument · split by AI', 48)}
+  <text x="1000" y="700" text-anchor="middle" font-family="Barlow Condensed" font-weight="800" font-size="30" letter-spacing="10" fill="#b6ad99">GUITAR · BASS · DRUMS · KEYS · VOCALS</text>
+</svg>`;
+png(hero, 2000, path.join(brand, 'banner-hero.png'), BG);
