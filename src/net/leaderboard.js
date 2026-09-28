@@ -5,6 +5,7 @@
 import { settings } from '../settings.js';
 import { profiles, ACHIEVEMENTS } from '../profile/profiles.js';
 import { ACH_ICON } from '../ui/icons.js';
+import { chartForRun, forgetWorldCharts } from './charts.js';
 
 export const API = 'https://api.stemstage.varconstint.com';
 
@@ -26,8 +27,8 @@ async function get(path, params = {}) {
   return j;
 }
 
-const identityOf = (p) => profiles.cloudIdentity(p.id, () => ({ id: `p_${rand(12)}`, secret: rand(24) }));
-const playerOf = (p, cloud) => ({ id: cloud.id, secret: cloud.secret, name: p.name, ...(p.discord ? { discord: { id: p.discord.id, avatar: p.discord.avatar } } : {}) });
+export const identityOf = (p) => profiles.cloudIdentity(p.id, () => ({ id: `p_${rand(12)}`, secret: rand(24) }));
+export const playerOf = (p, cloud) => ({ id: cloud.id, secret: cloud.secret, name: p.name, ...(p.discord ? { discord: { id: p.discord.id, avatar: p.discord.avatar } } : {}) });
 
 /** A profile's public page. */
 export const profileUrl = (cloudId) => `https://stemstage.varconstint.com/player/?id=${encodeURIComponent(cloudId)}`;
@@ -54,12 +55,14 @@ export async function shareProfile(profileId) {
   return j.url || profileUrl(cloud.id);
 }
 
-export const worldBoard = async (song, instrument, difficulty, limit = 25) => get('/v1/leaderboard', { song: await songKey(song.artist, song.title), instrument, difficulty, limit });
+/** A song part's world board: board = 'ranked' (the ranked chart), 'all' (best on any chart) or a chart id. */
+export const worldBoard = async (song, instrument, difficulty, limit = 25, board = 'ranked') => get('/v1/leaderboard', { song: await songKey(song.artist, song.title), instrument, difficulty, limit, chart: board });
 export const worldPlayers = (limit = 25) => get('/v1/players', { limit });
 
 /**
- * Send a finished run for every signed-in player in it. Returns [{ name, rank, newTop, personalBest }] for the
- * runs that were accepted (errors are logged, never shown mid-results).
+ * Send a finished run for every signed-in player in it, with the chart it was played on (uploaded first when the
+ * world doesn't have it: see charts.js). Returns [{ name, instrument, rank, newTop, personalBest, ranked,
+ * rankedChart, firstChart }] for the runs that were accepted (errors are logged, never shown mid-results).
  */
 export async function submitRuns(r) {
   if (settings.worldLeaderboard === false || r.practice || r.mode === 'replay') return [];
@@ -69,18 +72,21 @@ export async function submitRuns(r) {
     const p = profiles.byId(res.profileId);
     if (!p) continue;
     const cloud = await identityOf(p);
+    let chart = null;
+    try { chart = await chartForRun(r.song, res.instrument, p); } catch (e) { console.warn('chart upload:', e.message); }
     const body = {
       player: playerOf(p, cloud),
       song: { title: r.song.title, artist: r.song.artist, duration: Math.round(r.song.duration || 0) },
-      instrument: res.instrument, difficulty: res.difficulty, score: res.score, stars: res.stars, accuracy: res.accuracy,
+      instrument: res.instrument, difficulty: res.difficulty, ...(chart ? { chartId: chart.id } : {}), score: res.score, stars: res.stars, accuracy: res.accuracy,
       fc: res.total > 0 && res.hits === res.total, maxStreak: res.maxStreak, notes: res.total, version: __APP_VERSION__,
     };
     try {
       const resp = await fetch(`${API}/v1/scores`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });
       const j = await resp.json().catch(() => ({}));
-      if (resp.ok) out.push({ name: p.name, ...j });
+      if (resp.ok) out.push({ name: p.name, instrument: res.instrument, firstChart: !!chart?.first, ...j });
       else console.warn('world leaderboard:', j.error || resp.status);
     } catch (e) { console.warn('world leaderboard:', e.message); }
+    forgetWorldCharts();
     // keep the public profile page (level, stats, achievements) up to date too
     shareProfile(p.id).catch((e) => console.warn('profile sync:', e.message));
   }

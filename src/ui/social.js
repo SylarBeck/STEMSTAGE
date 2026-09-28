@@ -11,6 +11,7 @@ import { submitRuns, worldBoard, worldPlayers, shareProfile } from '../net/leade
 const ICON = { guitar: instIcon('guitar'), bass: instIcon('bass'), drums: instIcon('drums'), keys: instIcon('keys'), vocals: instIcon('vocals') };
 const DIFFS = ['easy', 'medium', 'hard', 'expert'];
 const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'];
+const BOARDS = [['ranked', 'Ranked chart'], ['all', 'All charts']];
 const fmtDur = (s) => (s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m` : `${Math.floor(s / 60)}m`);
 const ago = (t) => {
   const d = (Date.now() - t) / 1000;
@@ -25,7 +26,7 @@ export const avatarHtml = (p, size = 40) => `<span class="avatar" style="--pc:${
 const dcIcon = '<i class="fa-brands fa-discord" aria-hidden="true"></i>';
 
 export function installSocial(ui) {
-  const state = { formColor: PROFILE_COLORS[0], pinFor: null, lbTab: 'overall', lbSong: 0, lbInst: 'guitar', lbDiff: 'expert', careerId: null, afterSignIn: 'menu', careerTab: 'overview' };
+  const state = { formColor: PROFILE_COLORS[0], pinFor: null, lbTab: 'overall', lbSong: 0, lbInst: 'guitar', lbDiff: 'expert', lbBoard: 'ranked', careerId: null, afterSignIn: 'menu', careerTab: 'overview' };
   const CAREER_TABS = [['overview', 'Overview'], ['history', 'History'], ['achievements', 'Achievements']];
 
   // ---------------------------------------------------------------- profiles screen
@@ -266,20 +267,29 @@ export function installSocial(ui) {
     filters.innerHTML = s ? `
         <div class="picker" data-nav data-picker="lb-song"><label>Song</label><div class="picker-options"><div class="opt sel">${esc(s.title)} — ${esc(s.artist)}</div></div></div>
         <div class="picker" data-nav data-picker="lb-inst"><label>Instrument</label><div class="picker-options">${INSTS.map((i) => `<div class="opt ${i === state.lbInst ? 'sel' : ''}" data-i="${i}">${ICON[i]} ${i}</div>`).join('')}</div></div>
-        <div class="picker" data-nav data-picker="lb-diff"><label>Difficulty</label><div class="picker-options">${DIFFS.map((d) => `<div class="opt ${d === state.lbDiff ? 'sel' : ''}" data-d="${d}">${d}</div>`).join('')}</div></div>` : '';
+        <div class="picker" data-nav data-picker="lb-diff"><label>Difficulty</label><div class="picker-options">${DIFFS.map((d) => `<div class="opt ${d === state.lbDiff ? 'sel' : ''}" data-d="${d}">${d}</div>`).join('')}</div></div>
+        <div class="picker" data-nav data-picker="lb-board"><label>Board</label><div class="picker-options">${BOARDS.map(([v, l]) => `<div class="opt ${v === state.lbBoard ? 'sel' : ''}" data-b="${v}">${l}</div>`).join('')}</div></div>` : '';
     $$('[data-i]', filters).forEach((o) => o.addEventListener('click', () => { state.lbInst = o.dataset.i; renderLeaderboard(); }));
     $$('[data-d]', filters).forEach((o) => o.addEventListener('click', () => { state.lbDiff = o.dataset.d; renderLeaderboard(); }));
+    $$('[data-b]', filters).forEach((o) => o.addEventListener('click', () => { state.lbBoard = o.dataset.b; renderLeaderboard(); }));
     content.innerHTML = '<div class="card small-note">Loading the world leaderboard…</div>';
     ui.applyFocus(false);
     const ticket = (state.worldTicket = (state.worldTicket || 0) + 1);
     const av = (url, name) => (url ? `<img class="wl-av" src="${esc(url)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="wl-av">${esc(String(name || '?')[0].toUpperCase())}</span>`);
-    Promise.all([s ? worldBoard(s, state.lbInst, state.lbDiff) : null, worldPlayers(15)]).then(([board, top]) => {
+    Promise.all([s ? worldBoard(s, state.lbInst, state.lbDiff, 25, state.lbBoard) : null, worldPlayers(15)]).then(([board, top]) => {
       if (ticket !== state.worldTicket || state.lbTab !== 'world') return;
       const me = new Set(profiles.list.map((p) => p.cloud?.id).filter(Boolean));
+      const others = board?.otherCharts ? ` · ${board.otherCharts} other chart${board.otherCharts === 1 ? '' : 's'} (Song options → World charts)` : '';
+      const note = !board ? '' : {
+        ranked: `Runs on the ranked chart: everyone here played the same notes${others}`,
+        unranked: 'No ranked chart yet: these runs were played before ranked charts, each on its own import’s chart',
+        all: 'Everyone’s best on any chart. Charts differ, so this is for fun: the ranked board is the one that counts',
+        chart: 'Runs on one uploaded chart',
+      }[board.mode] || '';
       content.innerHTML = `<div class="world-grid">
-        <div class="card"><h3>${s ? `${esc(s.title)} · ${esc(state.lbInst)} · ${esc(state.lbDiff)}` : 'No songs yet'}</h3><table class="tbl"><tr><th>#</th><th>Player</th><th>Score</th><th>Stars</th><th>Accuracy</th><th>Streak</th></tr>
-          ${(board?.rows || []).map((r, i) => `<tr class="${me.has(r.playerId) ? 'me' : ''}"><td>${i + 1}</td><td>${av(r.avatar, r.player)} ${esc(r.player)}</td><td>${r.score.toLocaleString()}</td><td>${starsOnly(r.stars)}${r.fc ? ` ${fa('gem')}` : ''}</td><td>${Math.round(r.accuracy * 100)}%</td><td>${r.maxStreak}</td></tr>`).join('') || '<tr><td colspan="6" class="small-note">Nobody has a world score on this chart yet. Play it to be the first!</td></tr>'}
-        </table></div>
+        <div class="card"><h3>${s ? `${esc(s.title)} · ${esc(state.lbInst)} · ${esc(state.lbDiff)}` : 'No songs yet'}${board?.mode === 'ranked' ? ' <span class="stamp-ranked">Ranked</span>' : ''}</h3><table class="tbl"><tr><th>#</th><th>Player</th><th>Score</th><th>Stars</th><th>Accuracy</th><th>Streak</th></tr>
+          ${(board?.rows || []).map((r, i) => `<tr class="${me.has(r.playerId) ? 'me' : ''}"><td>${i + 1}</td><td>${av(r.avatar, r.player)} ${esc(r.player)}${board.mode === 'all' && r.ranked ? ' <small class="dim">ranked</small>' : ''}</td><td>${r.score.toLocaleString()}</td><td>${starsOnly(r.stars)}${r.fc ? ` ${fa('gem')}` : ''}</td><td>${Math.round(r.accuracy * 100)}%</td><td>${r.maxStreak}</td></tr>`).join('') || '<tr><td colspan="6" class="small-note">Nobody has a world score on this chart yet. Play it to be the first!</td></tr>'}
+        </table>${note ? `<p class="small-note">${esc(note)}</p>` : ''}</div>
         <div class="card"><h3>Top players</h3><table class="tbl"><tr><th>#</th><th>Player</th><th>Total</th><th>Stars</th></tr>
           ${top.rows.map((r, i) => `<tr class="${me.has(r.playerId) ? 'me' : ''}"><td>${i + 1}</td><td>${av(r.avatar, r.player)} ${esc(r.player)}</td><td>${r.total.toLocaleString()}</td><td>${r.stars}</td></tr>`).join('') || '<tr><td colspan="4" class="small-note">No world scores yet.</td></tr>'}
         </table><p class="small-note">Also at stemstage.varconstint.com/leaderboard</p></div></div>`;
@@ -294,6 +304,7 @@ export function installSocial(ui) {
     if (which === 'lb-song') state.lbSong = (state.lbSong + d + ui.songs.length) % Math.max(1, ui.songs.length);
     if (which === 'lb-inst') state.lbInst = INSTS[(INSTS.indexOf(state.lbInst) + d + INSTS.length) % INSTS.length];
     if (which === 'lb-diff') state.lbDiff = DIFFS[Math.max(0, Math.min(3, DIFFS.indexOf(state.lbDiff) + d))];
+    if (which === 'lb-board') state.lbBoard = BOARDS[(BOARDS.findIndex(([v]) => v === state.lbBoard) + (d || 1) + BOARDS.length) % BOARDS.length][0];
     renderLeaderboard();
   }
 
@@ -318,8 +329,12 @@ export function installSocial(ui) {
     for (const s of summaries) for (const a of s.achievements) ui.toast(`${s.name}: ${a.name} — ${a.desc}`, 'ok', 'trophy');
     submitRuns(r).then((list) => {
       for (const w of list) {
-        if (w.newTop) ui.toast(`${w.name}: new WORLD RECORD on this chart!`, 'ok', 'earth-americas');
-        else if (w.personalBest) ui.toast(`${w.name}: world rank #${w.rank} on this chart`, 'ok', 'earth-americas');
+        if (w.firstChart) ui.toast(`${w.name}: your ${w.instrument} chart is now the ranked chart for this song — everyone plays it`, 'ok', 'crown');
+        // the board people compete on: the ranked chart (or, before a song has one, the old unranked board)
+        const competing = w.ranked || (!w.rankedChart && !w.chartId);
+        if (competing && w.newTop) ui.toast(`${w.name}: new WORLD RECORD on the ranked chart!`, 'ok', 'earth-americas');
+        else if (competing && w.personalBest) ui.toast(`${w.name}: world rank #${w.rank} on the ranked chart`, 'ok', 'earth-americas');
+        else if (w.personalBest) ui.toast(`${w.name}: #${w.rank} on your own ${w.instrument} chart (not the ranked one, so it has its own board)`, 'ok', 'earth-americas');
       }
     });
   }

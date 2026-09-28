@@ -312,6 +312,15 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
 .band-row small { margin-left: auto; text-transform: none; }
 .band-row.bad { color: var(--gold); }
 .lb-mini { margin: 4px 0 2px; }
+.world-line { display: flex; align-items: center; gap: 8px; margin: 2px 0 6px; padding: 0 2px; color: var(--dim); font-size: 15px; font-weight: 700; min-width: 0; }
+.world-line:empty { display: none; }
+.stamp-ranked { display: inline-block; vertical-align: 4px; margin-left: 8px; color: var(--gold); font-family: var(--body); font-weight: 800; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; padding: 0 6px; border: 1.5px solid currentColor; line-height: 1.4; transform: rotate(-2deg); }
+.world-line > i { font-size: 14px; }
+.world-line .stamp { flex: none; font-weight: 800; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; padding: 0 6px; border: 1.5px solid currentColor; line-height: 1.4; transform: rotate(-2deg); }
+.world-line .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.world-line.ranked { color: var(--gold); }
+.world-line.ranked .txt { color: var(--ink, #ece5d3); }
+.world-line.soon .stamp { color: var(--accent); }
 .song-detail .picker { margin: 3px 0; padding: 6px 10px; }
 .song-detail .picker label { margin-bottom: 6px; }
 .song-detail .opt.inst { padding: 8px 4px 7px; gap: 5px; }

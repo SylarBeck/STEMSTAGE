@@ -44,6 +44,7 @@ export const DEFAULTS = {
   hudSize: 'normal',     // normal | large | huge (score, meters and judgements)
   discordPresence: true, // Rich Presence: show the song you're playing in your Discord status
   worldLeaderboard: true, // send your runs (signed-in profiles) to the world leaderboard
+  rankedCharts: true,    // play each song's ranked world chart (downloaded + lined up with your recording)
   discordInvites: 'link', // online rooms on Discord: 'link' (Join room link, works for everyone) | 'discord' (Discord's Join button)
   discordClientId: '',   // override STEMSTAGE's Discord application ID (forks / testing); '' = the one built in
   lastInstrument: 'guitar',

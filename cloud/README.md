@@ -18,6 +18,19 @@ Optional: announce new #1 scores in a Discord channel (Channel settings → Inte
 npx wrangler secret put DISCORD_WEBHOOK
 ```
 
+## Updating an existing database
+
+New versions that change the database come with a file in `migrations/`. Run the ones you haven't run yet, in order, then deploy:
+
+```bash
+cd cloud
+npx wrangler d1 execute stemstage --remote --file migrations/0002_profiles.sql       # 1.5.0: shared profile cards
+npx wrangler d1 execute stemstage --remote --file migrations/0003_ranked_charts.sql  # 1.6.0: ranked charts + votes
+npx wrangler deploy
+```
+
+`0003_ranked_charts.sql` rebuilds the `scores` table (its key gains `chart_id`) and keeps every existing score as "unranked" (`chart_id = ''`). Run it once: a second run stops at its first line (*duplicate column name*) without changing anything.
+
 Later changes: `npx wrangler deploy` from `cloud/` (or the **Cloud** GitHub workflow, with the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`).
 
 ## Try it locally
@@ -29,6 +42,14 @@ npx wrangler dev --local --port 8799
 ```
 
 ## Moderation
+
+Charts: a broken chart that became ranked can be replaced by players' votes, or by hand:
+
+```bash
+npx wrangler d1 execute stemstage --remote --command "SELECT c.id, c.song_key, c.instrument, p.name, c.notes, c.created FROM charts c JOIN players p ON p.id = c.player_id ORDER BY c.created DESC LIMIT 20"
+npx wrangler d1 execute stemstage --remote --command "UPDATE ranked_charts SET chart_id = '<better chart id>' WHERE song_key = '<key>' AND instrument = 'guitar'"
+```
+
 
 Scores can't be verified (the game runs on the player's PC), so remove bad ones by hand:
 

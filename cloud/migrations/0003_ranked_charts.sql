@@ -1,18 +1,11 @@
--- STEMSTAGE leaderboard (Cloudflare D1). A new database: npx wrangler d1 execute stemstage --remote --file cloud/schema.sql
--- (an existing one is upgraded with the files in migrations/, in order)
-CREATE TABLE IF NOT EXISTS players (
-  id TEXT PRIMARY KEY,            -- made by the game, one per profile
-  secret_hash TEXT NOT NULL,      -- sha256 of the secret only that game knows
-  name TEXT NOT NULL,
-  discord_id TEXT, discord_avatar TEXT,
-  profile TEXT, profile_updated INTEGER, -- the shared profile card (JSON)
-  created INTEGER NOT NULL, updated INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS songs (
-  key TEXT PRIMARY KEY,           -- sha256(normalised artist | title), first 16 hex
-  title TEXT NOT NULL, artist TEXT, duration INTEGER,
-  created INTEGER NOT NULL
-);
+-- Ranked charts (1.6.0). npx wrangler d1 execute stemstage --remote --file migrations/0003_ranked_charts.sql
+-- Every import makes its own AI chart, so boards now say which chart a run was played on. Runs from before
+-- this have chart_id '' (unranked).
+
+-- first, so running the file a second time stops here (duplicate column) before touching scores
+ALTER TABLE runs ADD COLUMN chart_id TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS runs_chart ON runs (chart_id, player_id);
+
 -- charts players uploaded: the notes (no audio) + a fingerprint of the uploader's recording for lining it up
 CREATE TABLE IF NOT EXISTS charts (
   id TEXT PRIMARY KEY,            -- sha256 of the canonical chart, first 16 hex
@@ -33,21 +26,17 @@ CREATE TABLE IF NOT EXISTS chart_votes (
   song_key TEXT NOT NULL, instrument TEXT NOT NULL, player_id TEXT NOT NULL, chart_id TEXT NOT NULL, created INTEGER NOT NULL,
   PRIMARY KEY (song_key, instrument, player_id)
 );
--- each player's best run per chart ('' = played before ranked charts existed, or on an unknown chart)
-CREATE TABLE IF NOT EXISTS scores (
+
+-- best run per player per chart (the primary key gains chart_id, so the table is rebuilt)
+CREATE TABLE scores_new (
   player_id TEXT NOT NULL, song_key TEXT NOT NULL, instrument TEXT NOT NULL, difficulty TEXT NOT NULL, chart_id TEXT NOT NULL DEFAULT '',
   score INTEGER NOT NULL, stars INTEGER, accuracy REAL, fc INTEGER, max_streak INTEGER, notes INTEGER, version TEXT,
   created INTEGER NOT NULL,
   PRIMARY KEY (player_id, song_key, instrument, difficulty, chart_id)
 );
+INSERT INTO scores_new (player_id, song_key, instrument, difficulty, chart_id, score, stars, accuracy, fc, max_streak, notes, version, created)
+  SELECT player_id, song_key, instrument, difficulty, '', score, stars, accuracy, fc, max_streak, notes, version, created FROM scores;
+DROP TABLE scores;
+ALTER TABLE scores_new RENAME TO scores;
 CREATE INDEX IF NOT EXISTS scores_board ON scores (song_key, instrument, difficulty, chart_id, score DESC);
 CREATE INDEX IF NOT EXISTS scores_recent ON scores (created DESC);
--- every submitted run (history / play counts; a vote needs a run on that chart)
-CREATE TABLE IF NOT EXISTS runs (
-  player_id TEXT NOT NULL, song_key TEXT NOT NULL, instrument TEXT NOT NULL, difficulty TEXT NOT NULL,
-  score INTEGER NOT NULL, created INTEGER NOT NULL, chart_id TEXT NOT NULL DEFAULT ''
-);
-CREATE INDEX IF NOT EXISTS runs_chart ON runs (chart_id, player_id);
--- rate limiting (rows older than an hour are pruned)
-CREATE TABLE IF NOT EXISTS hits (ip TEXT NOT NULL, ts INTEGER NOT NULL);
-CREATE INDEX IF NOT EXISTS hits_ip ON hits (ip, ts);
