@@ -18,6 +18,10 @@ Nothing to set up for players: log in with Discord and your status follows what 
 
 Discord's answer is used once to read your profile and isn't stored. The link (your Discord user ID, username, display name and avatar ID) is saved with your STEMSTAGE profile in `Documents/STEMSTAGE/data/profiles.json`. **Unlink Discord** on the same page removes it.
 
+## Log in on the website
+
+**Log in** (top right on stemstage.varconstint.com) also uses Discord. Once logged in, the menu lists your STEMSTAGE profiles (the ones linked to that Discord account in the game), the leaderboard highlights your rows, and your profile page says **This is you**. The login stays in that browser only; **Log out** in the same menu removes it.
+
 ## Automatic status (Rich Presence)
 
 When the Discord desktop app is running on the same PC, STEMSTAGE updates your status automatically. Friends see:
@@ -63,6 +67,6 @@ Login and Rich Presence use one Discord application owned by the project. Its **
 
 Setting up the application (maintainers, once):
 1. <https://discord.com/developers/applications> → **New Application** → name it **STEMSTAGE** (Discord shows this name: "Playing STEMSTAGE").
-2. **OAuth2 → Redirects**, add: `http://127.0.0.1:5173/discord/callback`, `http://localhost:5173/discord/callback`, `http://localhost:5174/discord/callback`
+2. **OAuth2 → Redirects**, add: `http://127.0.0.1:5173/discord/callback`, `http://localhost:5173/discord/callback`, `http://localhost:5174/discord/callback` (the game) and `https://stemstage.varconstint.com/login/` (the website)
 3. **Rich Presence → Art Assets:** upload `brand/icon-1024.png` with the key **`stemstage`**.
 4. The **Application ID** is `DISCORD_APP_ID` in `src/net/discord.js` (STEMSTAGE's is `1553872601603117127`). Forks build with `VITE_DISCORD_CLIENT_ID=<id>`, and the `discordClientId` setting overrides it.

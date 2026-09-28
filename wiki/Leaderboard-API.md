@@ -23,6 +23,7 @@ Every `GET` returns JSON with CORS (`Access-Control-Allow-Origin: *`), so any we
 | `GET /v1/recent?limit=20` | Newest personal bests, with `song: { key, title, artist }` |
 | `GET /v1/player?id=p_…` | A player's public profile: `{ id, name, avatar, since, updated, profile: { color, level, rank, xp, progress, favorite, stats, instruments, achievements: [{ id, name, desc, icon, at }] }, world: { rank, total, charts, stars, fcs, records }, best: [...] }` (`records` = charts where they hold #1) |
 | `GET /v1/song-key?artist=Eagles&title=Hotel%20California` | The board key for a song: `{ key }` |
+| `GET /v1/me` + header `Authorization: Bearer <Discord OAuth token>` | The website's Discord login: `{ user: { id, username, globalName, avatar }, players: [{ playerId, name, total, charts }] }`. The token is checked with Discord (**401** if it's not valid) |
 | `GET /v1/health` | `{ ok: true }` |
 
 `instrument` is one of `guitar bass drums keys vocals`, and `difficulty` one of `easy medium hard expert`. Dates are Unix seconds. `avatar` is the player's linked Discord avatar URL, or `null`.
