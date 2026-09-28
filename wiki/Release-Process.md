@@ -18,6 +18,14 @@
 
 `tauri-apps/tauri-action` runs `npm run tauri build`, so keep the `"tauri": "tauri"` script in `package.json`.
 
+## Bundled runtime versions
+
+`tools/fetch-runtime.mjs` bundles Node.js 22 LTS and a pinned uv release (currently 0.12.19).
+It downloads uv directly from its versioned GitHub release, without querying the GitHub API.
+This avoids intermittent Linux build failures when shared CI runners exhaust GitHub's anonymous API quota.
+Set `STEMSTAGE_UV_VERSION` to a numeric release such as `0.12.19` to test a newer uv version,
+then update the default in the script when adopting it for all builds.
+
 ## Update signing
 
 Installed copies (Windows, Linux AppImage) check `https://github.com/<repo>/releases/latest/download/latest.json` and only install files signed with the key whose public half is in `tauri.conf.json` → `plugins.updater.pubkey`.
