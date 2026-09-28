@@ -519,11 +519,42 @@ fn is_local_page(url: &tauri::Url) -> bool {
 }
 
 /// The main window from tauri.conf.json (`create: false` there), plus microphone / MIDI access for the game.
+/// WebView2 remembers a microphone "Block" per site (answered, or dismissed, in an older version's prompt) and
+/// then refuses the microphone before our permission handler is asked. Turn a saved decision for the game's
+/// own addresses into "Allow". Runs before the window exists, so WebView2 isn't using the file.
+#[cfg(windows)]
+fn allow_saved_mic(app: &tauri::AppHandle) {
+    let Ok(dir) = app.path().app_local_data_dir() else { return };
+    let file = plain_path(dir).join("EBWebView").join("Default").join("Preferences");
+    let Ok(text) = fs::read_to_string(&file) else { return };
+    let Ok(mut prefs) = serde_json::from_str::<serde_json::Value>(&text) else { return };
+    let mut changed = false;
+    for kind in ["media_stream_mic", "midi_sysex"] {
+        let Some(sites) = prefs.pointer_mut(&format!("/profile/content_settings/exceptions/{kind}")).and_then(|v| v.as_object_mut()) else { continue };
+        for (origin, v) in sites.iter_mut() {
+            let ours = ["http://127.0.0.1:5173,", "http://localhost:5173,"].iter().any(|p| origin.starts_with(p));
+            if ours && v.get("setting").and_then(|s| s.as_i64()) != Some(1) {
+                v["setting"] = serde_json::json!(1);
+                changed = true;
+            }
+        }
+    }
+    if changed {
+        if let Ok(out) = serde_json::to_string(&prefs) {
+            let _ = fs::write(&file, out);
+        }
+    }
+}
+#[cfg(not(windows))]
+fn allow_saved_mic(_: &tauri::AppHandle) {}
+
 fn create_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
+    allow_saved_mic(app);
     let cfg = app.config().app.windows.iter().find(|w| w.label == "main").cloned().expect("main window config");
     let window = WebviewWindowBuilder::from_config(app, &cfg)?
         .on_permission_request(|webview, kind| {
-            let local = webview.url().map(|u| is_local_page(&u)).unwrap_or(false);
+            // the game page (or an address WebView2 can't report mid-navigation: this window only loads the game and Discord's login)
+            let local = webview.url().map(|u| is_local_page(&u)).unwrap_or(true);
             match kind {
                 PermissionKind::Microphone | PermissionKind::Midi if local => PermissionResponse::Allow,
                 _ => PermissionResponse::Default,

@@ -43,6 +43,8 @@ class App {
       if (key === 'menuMusic' && !this.game.running) { this.menuMusic(false, true); setTimeout(() => this.menuMusic(true), 400); }
       if (key === 'fullscreen') setFullscreen(settings.fullscreen);
     });
+    // Windows' microphone prompt: the game just left fullscreen so it can be seen
+    window.addEventListener('stemstage:mic-prompt', () => this.ui.toast('Allow microphone access in the Windows prompt (it may be at the top or bottom of the screen)', 'ok', 'microphone'));
     window.addEventListener('error', (e) => this.ui.toast(`Error: ${e.message}`, 'err'));
     window.addEventListener('unhandledrejection', (e) => this.ui.toast(`Error: ${e.reason?.message || e.reason}`, 'err'));
   }

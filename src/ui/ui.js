@@ -18,7 +18,7 @@ import { tourStars, TOUR_MAX, dailyDone } from '../profile/career.js';
 import { Osk } from './osk.js';
 import { controllerPicture, detectController, glyph } from './controller-art.js';
 import { buildChartPack, download } from '../export/exporters.js';
-import { Mic } from '../audio/pitch.js';
+import { Mic, requestMic } from '../audio/pitch.js';
 import { checkForUpdates, autoCheck } from './updates.js';
 import { padName, isDualSensePad, srcKey } from '../input/input.js';
 import { bindings } from '../input/bindings.js';
@@ -1702,7 +1702,7 @@ export class UI {
   async settingAction(a) {
     if (a === 'calibrate') this.startCalibration();
     if (a === 'chooseMic') {
-      try { await navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => s.getTracks().forEach((t) => t.stop())); } catch { /* labels stay hidden */ }
+      try { await requestMic({ audio: true }).then((s) => s.getTracks().forEach((t) => t.stop())); } catch { /* labels stay hidden */ }
       const devs = await Mic.devices();
       this.openSheet({
         title: 'Microphone', sub: 'The input you sing into',
@@ -1735,7 +1735,7 @@ export class UI {
     }
     if (a === 'testInstrument') this.testMic({ instrument: true });
     if (a === 'chooseInstrumentInput') {
-      try { await navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => s.getTracks().forEach((t) => t.stop())); } catch { /* labels stay hidden */ }
+      try { await requestMic({ audio: true }).then((s) => s.getTracks().forEach((t) => t.stop())); } catch { /* labels stay hidden */ }
       const devs = await Mic.devices();
       this.openSheet({
         title: 'Instrument input', sub: 'Where your guitar or bass comes in',

@@ -36,6 +36,31 @@ export function yin(buf, sampleRate, minHz = 70, maxHz = 1100) {
 
 export const hzToMidi = (hz) => (hz > 0 ? 69 + 12 * Math.log2(hz / 440) : 0);
 
+/**
+ * getUserMedia that can't get stuck behind the game. Windows asks the user the first time a desktop app uses the
+ * microphone, and in fullscreen that prompt can open *behind* the game window, where it can't be clicked. When
+ * the request is still waiting after a moment, the desktop app leaves fullscreen until it's answered, and
+ * 'stemstage:mic-prompt' tells the UI to point at the prompt.
+ */
+export async function requestMic(constraints) {
+  if (!navigator.mediaDevices?.getUserMedia) throw new Error('Audio input is not available here (the page needs http://127.0.0.1 or https)');
+  const win = window.__TAURI__?.window?.getCurrentWindow?.();
+  let leftFullscreen = false, settled = false;
+  const timer = setTimeout(async () => {
+    if (settled) return;
+    window.dispatchEvent(new CustomEvent('stemstage:mic-prompt'));
+    if (!win) return;
+    try { if (await win.isFullscreen() && !settled) { leftFullscreen = true; await win.setFullscreen(false); } } catch { /* no permission */ }
+  }, 600);
+  try {
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } finally {
+    settled = true;
+    clearTimeout(timer);
+    if (leftFullscreen) try { await win.setFullscreen(true); } catch { /* stay windowed */ }
+  }
+}
+
 export class Mic {
   constructor(ctx) {
     this.ctx = ctx;
@@ -53,8 +78,7 @@ export class Mic {
   async start(deviceId = '', { raw = false, lowHz = 70 } = {}) {
     if (this.stream) return;
     this.lowHz = lowHz;
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Audio input is not available here (the page needs http://127.0.0.1 or https)');
-    const open = (id) => navigator.mediaDevices.getUserMedia({
+    const open = (id) => requestMic({
       audio: { deviceId: id ? { exact: id } : undefined, echoCancellation: !raw, noiseSuppression: false, autoGainControl: false },
     });
     try {
