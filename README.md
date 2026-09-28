@@ -12,10 +12,10 @@
   <img alt="Linux" src="https://img.shields.io/badge/Linux-AppImage%20%7C%20deb%20%7C%20rpm-FCC624?logo=linux&logoColor=black" />
   <img alt="Tauri 2" src="https://img.shields.io/badge/desktop-Tauri%202-24C8DB?logo=tauri&logoColor=white" />
   <img alt="three.js" src="https://img.shields.io/badge/3D-three.js-000000?logo=threedotjs&logoColor=white" />
-  <img alt="Demucs" src="https://img.shields.io/badge/AI-Demucs%20%2B%20basic--pitch-ff2d7a" />
+  <img alt="Demucs" src="https://img.shields.io/badge/AI-Demucs%20%2B%20basic--pitch-df3a2c" />
   <img alt="Node 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" />
-  <a href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/SylarBeck/STEMSTAGE?color=ff2d7a" /></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-29e0ff" /></a>
+  <a href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/SylarBeck/STEMSTAGE?color=df3a2c" /></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f0b429" /></a>
 </p>
 
 <p align="center"><a href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><b>⬇ Download for Windows or Linux</b></a> · <a href="https://stemstage.varconstint.com/"><b>🌐 Website</b></a> · <a href="https://github.com/SylarBeck/STEMSTAGE/wiki"><b>📖 Wiki</b></a></p>
