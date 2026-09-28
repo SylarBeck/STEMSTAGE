@@ -139,7 +139,8 @@ export class Hud extends HudBase {
   }
 
   /** Online scoreboard (null hides it). rows: [{ name, color, instrument, score, streak, mult, odActive, failed, left, mine }] */
-  remote(rows) {
+  /** Online scoreboard. mode: versus / battle (a ranking) or band (the line-up and one band score). */
+  remote(rows, { mode = 'versus' } = {}) {
     let el = document.getElementById('hud-remote');
     if (!rows) { if (el) el.hidden = true; return; }
     if (!el) {
@@ -149,9 +150,12 @@ export class Hud extends HudBase {
       this.root.appendChild(el);
     }
     el.hidden = false;
-    el.innerHTML = `<div class="hr-title">MATCH</div>` + rows.map((r, i) => `
+    const band = mode === 'band';
+    el.classList.toggle('band', band);
+    const total = rows.reduce((s, r) => s + (r.score || 0), 0);
+    el.innerHTML = `<div class="hr-title">${band ? 'BAND' : mode === 'battle' ? 'BATTLE' : 'MATCH'}${band ? `<b class="hr-total">${total.toLocaleString()}</b>` : ''}</div>` + rows.map((r, i) => `
       <div class="hr-row ${r.mine ? 'mine' : ''} ${r.failed ? 'failed' : ''} ${r.left ? 'left' : ''}" style="--pc:${r.color}">
-        <span class="hr-pos">${i + 1}</span><i></i><span class="hr-name">${escapeHtml(r.name)} ${ICON[r.instrument] || ''}</span>
+        <span class="hr-pos">${band ? (ICON[r.instrument] || '') : i + 1}</span><i></i><span class="hr-name">${escapeHtml(r.name)} ${band ? '' : ICON[r.instrument] || ''}</span>
         <b>${Number(r.score || 0).toLocaleString()}</b><em class="${r.odActive ? 'od' : ''}">${r.mult || 1}×</em>
       </div>`).join('');
   }

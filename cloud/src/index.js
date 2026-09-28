@@ -13,6 +13,8 @@
 //   GET  /v1/charts?song=&instrument=   the charts players uploaded for a song part, ranked one first, with votes
 //   GET  /v1/chart?id=              one chart in full (the game downloads it and lines it up with its own audio)
 //   POST /v1/charts/vote            vote for the chart a song part should be ranked on
+//   GET  /v1/rooms                  public online rooms (hosts re-announce every 30 s; listed for 90 s)
+//   POST /v1/rooms                  a host lists / refreshes its room   POST /v1/rooms/close   takes it down
 //   GET  /v1/health
 //
 // Every GET answers JSON with CORS, or JSONP with ?callback=<function name>. Songs are matched across players by
@@ -37,6 +39,7 @@ const MAX_SCORE = 20_000_000;
 const VOTE_MIN = 3; // votes a chart needs before it can replace the ranked one
 const MAX_CHART_BYTES = 1_500_000;
 const RATE = { window: 600, max: 40 }; // runs per address per 10 minutes
+const ROOM_FRESH = 90, ROOM_KEEP = 600, ROOM_MODES = ['versus', 'battle', 'band'];
 
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), {
   status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store', ...extra },
@@ -306,6 +309,61 @@ async function vote(req, env) {
   return json({ ok: true, chartId: b.chartId, votes, voteMin: VOTE_MIN, rankedVotes, rankedChart: promoted ? b.chartId : rankedId, promoted });
 }
 
+// ---------------------------------------------------------------- public rooms
+/*
+  POST /v1/rooms  { code: "WORD-WORD-WORD-WORD", key, name, host, mode, song, artist, players, max, playing, version }
+  The first announce of a code registers sha256(key); later announces and the close need the same key. Room
+  announces don't count toward the run rate limit (a host sends one every 30 s), but a busy address is refused.
+*/
+const cleanText = (s, n) => String(s ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
+const isRoomCode = (c) => /^[A-Z]{2,20}(-[A-Z]{2,20}){1,9}$/.test(c || '');
+
+async function announceRoom(req, env) {
+  const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Math.floor(Date.now() / 1000);
+  if (await rateLimited(env, ip, now)) return json({ error: 'too many requests from this address, try again later' }, 429);
+  let b;
+  try { b = await req.json(); } catch { return json({ error: 'body must be JSON' }, 400); }
+  const code = String(b?.code || '').toUpperCase();
+  if (!isRoomCode(code) || typeof b.key !== 'string' || b.key.length < 16 || b.key.length > 100) return json({ error: 'bad room code/key' }, 400);
+  const keyHash = await sha256(b.key);
+  const known = await env.DB.prepare('SELECT key_hash FROM rooms WHERE code = ?').bind(code).first();
+  if (known && known.key_hash !== keyHash) return json({ error: 'this room belongs to someone else' }, 403);
+  const max = clampInt(b.max, 2, 16) ?? 8;
+  const row = {
+    name: cleanText(b.name, 40) || 'STEMSTAGE room', host: cleanText(b.host, 24), mode: ROOM_MODES.includes(b.mode) ? b.mode : 'versus',
+    song: cleanText(b.song, 120), artist: cleanText(b.artist, 120), players: clampInt(b.players, 1, max) ?? 1, max, playing: b.playing ? 1 : 0,
+    version: /^\d+\.\d+\.\d+$/.test(b.version || '') ? b.version : null,
+  };
+  await env.DB.batch([
+    // a new listing counts toward the address's rate limit; refreshing one doesn't
+    ...(known ? [] : [env.DB.prepare('INSERT INTO hits (ip, ts) VALUES (?, ?)').bind(ip, now)]),
+    env.DB.prepare(`INSERT INTO rooms (code, key_hash, name, host, mode, song, artist, players, max, playing, version, created, updated)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(code) DO UPDATE SET name = excluded.name, host = excluded.host, mode = excluded.mode,
+        song = excluded.song, artist = excluded.artist, players = excluded.players, max = excluded.max, playing = excluded.playing,
+        version = excluded.version, updated = excluded.updated`)
+      .bind(code, keyHash, row.name, row.host, row.mode, row.song, row.artist, row.players, row.max, row.playing, row.version, now, now),
+    env.DB.prepare('DELETE FROM rooms WHERE updated < ?').bind(now - ROOM_KEEP),
+  ]);
+  return json({ ok: true, code, listedFor: ROOM_FRESH });
+}
+
+async function closeRoomListing(req, env) {
+  let b;
+  try { b = JSON.parse(await req.text()); } catch { return json({ error: 'body must be JSON' }, 400); }
+  const code = String(b?.code || '').toUpperCase();
+  if (!isRoomCode(code) || typeof b.key !== 'string') return json({ error: 'bad room code/key' }, 400);
+  const r = await env.DB.prepare('DELETE FROM rooms WHERE code = ? AND key_hash = ?').bind(code, await sha256(b.key)).run();
+  return json({ ok: true, closed: !!r.meta?.changes });
+}
+
+async function rooms(url, env) {
+  const now = Math.floor(Date.now() / 1000);
+  const { results } = await env.DB.prepare(`SELECT code, name, host, mode, song, artist, players, max, playing, version, created, updated FROM rooms
+    WHERE updated >= ? ORDER BY playing ASC, players DESC, updated DESC LIMIT ?`).bind(now - ROOM_FRESH, limitOf(url, 50, 100)).all();
+  return reply(url, { rows: results.map((r) => ({ ...r, playing: !!r.playing })) }, 5);
+}
+
 // ---------------------------------------------------------------- reads
 /*
   GET /v1/leaderboard?song=<key>&instrument=&difficulty=&chart=
@@ -393,6 +451,8 @@ async function saveProfile(req, env) {
       stars: Math.round(num(st.stars, 1e7)), fcs: Math.round(num(st.fcs, 1e7)), bestStreak: Math.round(num(st.bestStreak, 1e6)),
       accuracy: num(st.accuracy, 1), notes: Math.round(num(st.notes, 1e10)),
     },
+    // online versus / battle record
+    ...(pr.versus ? { versus: { wins: Math.round(num(pr.versus.wins, 1e6)), losses: Math.round(num(pr.versus.losses, 1e6)), draws: Math.round(num(pr.versus.draws, 1e6)), best: Math.round(num(pr.versus.best, 1e6)) } } : {}),
     instruments: Object.fromEntries(INSTRUMENTS.filter((i) => pr.instruments?.[i]).map((i) => {
       const x = pr.instruments[i];
       return [i, { plays: Math.round(num(x.plays, 1e7)), best: Math.round(num(x.best, MAX_SCORE)), accuracy: num(x.accuracy, 1), fcs: Math.round(num(x.fcs, 1e7)) }];
@@ -463,6 +523,8 @@ export default {
       if (req.method === 'POST' && path === '/v1/profile') return await saveProfile(req, env);
       if (req.method === 'POST' && path === '/v1/charts') return await uploadChart(req, env);
       if (req.method === 'POST' && path === '/v1/charts/vote') return await vote(req, env);
+      if (req.method === 'POST' && path === '/v1/rooms') return await announceRoom(req, env);
+      if (req.method === 'POST' && path === '/v1/rooms/close') return await closeRoomListing(req, env);
       if (req.method === 'GET') {
         if (path === '/v1/leaderboard') return await leaderboard(url, env);
         if (path === '/v1/players') return await players(url, env);
@@ -472,6 +534,7 @@ export default {
         if (path === '/v1/me') return await me(req, env);
         if (path === '/v1/charts') return await listCharts(url, env);
         if (path === '/v1/chart') return await getChart(url, env);
+        if (path === '/v1/rooms') return await rooms(url, env);
         if (path === '/v1/song-key') return reply(url, { key: await songKey(url.searchParams.get('artist'), url.searchParams.get('title')) }, 3600);
         if (path === '/v1/health' || path === '') return reply(url, { ok: true, service: 'stemstage-leaderboard', version: 2 }, 5);
       }

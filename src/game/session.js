@@ -38,13 +38,15 @@ export class Session {
   // ---------------------------------------------------------------- lifecycle
   /**
    * cfgs: [{ name, instrument, difficulty, device, strum, profileId }]
-   * opts: { practice: { speed, startAt }, online: { client, lineup, startAt }, replay, ghost, onStatus }
+   * opts: { practice: { speed, startAt }, online: { client, lineup, startAt, matchId, mode }, replay, ghost, onStatus }
+   *   online.mode: versus (highest score wins) | battle (overdrive attacks the leader) | band (co-op, one band score)
    *   replay: a recorded run to play back (cfgs[0] is built from it); ghost: a recorded run to race
    */
   async start(song, audio, cfgs, opts = {}) {
     this.song = song; this.audio = audio; this.cfgs = cfgs; this.opts = opts;
     this.practice = opts.practice || null;
     this.online = opts.online || null;
+    this.matchMode = this.online ? this.online.mode || 'versus' : null;
     this.replay = opts.replay || null;
     this.ghost = !this.replay && cfgs.length === 1 ? opts.ghost || null : null;
     this.solo = cfgs.length === 1;
@@ -87,10 +89,10 @@ export class Session {
     this.stage.setShot('wide');
     const title = this.replay ? `REPLAY · ${this.replay.name} · ${cfgs[0].instrument} · ${cfgs[0].difficulty} · ${new Date(this.replay.date).toLocaleDateString()}`
       : this.practice ? `PRACTICE · ${Math.round(this.practice.speed * 100)}% · from ${fmt(this.startTime)}`
-      : this.online ? `${song.artist} · online match · ${this.online.lineup.length} players`
+      : this.online ? `${song.artist} · ${MODE_TITLE[this.matchMode]} · ${this.online.lineup.length} players`
         : this.solo ? `${song.artist} · ${cfgs[0].instrument} · ${cfgs[0].difficulty}` : `${song.artist} · ${cfgs.length}-player band`;
     this.hud.reset(song.title, title);
-    this.hud.remote(this.online ? this._remoteRows() : null);
+    this.hud.remote(this.online ? this._remoteRows() : null, { mode: this.matchMode });
     this.hud.ghost(this.ghost ? { name: this.ghost.name, score: 0, delta: 0 } : null);
     this.hud.replayBadge(!!this.replay);
     this._setupOnline();
@@ -134,11 +136,21 @@ export class Session {
       c.on('live', (m) => { this.remote.set(m.id, m); }),
       c.on('event', (m) => {
         const who = this.online.lineup.find((r) => r.id === m.id);
+        const band = this.matchMode === 'band';
         if (m.kind === 'od') {
-          if (who) this.hud.callout(`${who.name}: OVERDRIVE!`, '#f6c945');
-          for (const p of this.players) if (p.failed) p.revive(); // their overdrive saves us too
-        } else if (m.kind === 'fail' && who) this.hud.callout(`${who.name} failed — overdrive to save them!`, '#e5402f');
-        else if (m.kind === 'left' && who) { this.hud.callout(`${who.name} left`, '#a59d8b'); this.remote.set(m.id, { ...(this.remote.get(m.id) || {}), left: true }); }
+          if (who && this.matchMode !== 'battle') this.hud.callout(`${who.name}: OVERDRIVE!`, '#f6c945');
+          if (band) for (const p of this.players) if (p.failed) p.revive(); // a bandmate's overdrive saves us
+        } else if (m.kind === 'fail' && who) this.hud.callout(band ? `${who.name} failed — overdrive to save them!` : `${who.name} is out!`, '#e5402f');
+        else if (m.kind === 'attack' && who && m.target) {
+          const me = this.players[0];
+          if (m.target.to === c.id && !this.finished) {
+            const got = me.attack ? me.attack(m.target.a) : ((me.od = 0), 'drain');
+            if (got) this.hud.callout(`${who.name}: ${ATTACK_NAME[got]}!`, '#df3a2c');
+          } else {
+            const victim = this.online.lineup.find((r) => r.id === m.target.to);
+            if (victim) this.hud.callout(`${who.name} → ${victim.name}: ${ATTACK_NAME[m.target.a]}`, '#a59d8b');
+          }
+        } else if (m.kind === 'left' && who) { this.hud.callout(`${who.name} left`, '#a59d8b'); this.remote.set(m.id, { ...(this.remote.get(m.id) || {}), left: true }); }
       }),
     ];
   }
@@ -146,11 +158,25 @@ export class Session {
   _remoteRows() {
     if (!this.online) return null;
     const me = this.players[0];
-    return this.online.lineup.map((r) => {
+    const rows = this.online.lineup.map((r) => {
       const mine = r.id === this.online.client.id;
       const live = mine ? { score: Math.floor(me.score), streak: me.streak, mult: me.mult * (me.odActive ? 2 : 1), odActive: me.odActive, failed: me.failed } : this.remote.get(r.id) || {};
       return { ...r, mine, score: live.score || 0, streak: live.streak || 0, mult: live.mult || 1, odActive: !!live.odActive, failed: !!live.failed, left: !!live.left };
-    }).sort((a, b) => b.score - a.score);
+    });
+    // a band keeps its line-up order; a match is a ranking
+    return this.matchMode === 'band' ? rows : rows.sort((a, b) => b.score - a.score);
+  }
+
+  /** Battle mode: our overdrive hits the player in the lead (or the runner-up, when that's us). */
+  _attack() {
+    const c = this.online.client;
+    const rivals = this.online.lineup.filter((r) => r.id !== c.id && !this.remote.get(r.id)?.left && !this.remote.get(r.id)?.failed);
+    if (!rivals.length) return;
+    const score = (r) => this.remote.get(r.id)?.score || 0;
+    const target = rivals.sort((a, b) => score(b) - score(a))[0];
+    const a = ATTACKS[Math.floor(Math.random() * ATTACKS.length)];
+    c.event('attack', { to: target.id, a });
+    this.hud.callout(`${ATTACK_NAME[a]} → ${target.name}`, '#f0b429');
   }
 
   stop() {
@@ -224,8 +250,10 @@ export class Session {
       this.fx.shock = 0;
       this.fx.aberration = Math.max(this.fx.aberration, 0.012);
     }
-    for (const p of this.players) if (p !== player && p.failed) p.revive();
+    // bandmates are saved by overdrive; online opponents (versus, battle) are on their own
+    if (!this.online || this.matchMode === 'band') for (const p of this.players) if (p !== player && p.failed) p.revive();
     this.online?.client.event('od');
+    if (this.matchMode === 'battle') this._attack();
   }
 
   /** Stream mode: a viewer typed !hype. */
@@ -300,7 +328,7 @@ export class Session {
         odActive: me.odActive, rock: +me.rock.toFixed(2), audible: me.audible, failed: me.failed, instrument: me.inst,
       });
     }
-    if (this.online && now - this.lastBoard > 250) { this.lastBoard = now; this.hud.remote(this._remoteRows()); }
+    if (this.online && now - this.lastBoard > 250) { this.lastBoard = now; this.hud.remote(this._remoteRows(), { mode: this.matchMode }); }
 
     // stem muting: an instrument drops out while every player on it (local or remote) is missing or failed
     const insts = new Set(this.players.map((p) => p.inst));
@@ -399,13 +427,23 @@ export class Session {
       const others = (remoteResults || []).filter((r) => r.id !== c.id).map((r) => ({ ...r, remote: true }));
       result.remotePlayers = others;
       const all = [...players.map((p) => ({ ...p, id: c.id })), ...others];
-      // "winning" needs an opponent whose result actually arrived
-      result.onlineWinnerId = all.length > 1 ? all.sort((a, b) => (b.score || 0) - (a.score || 0))[0]?.id || null : null;
+      result.matchMode = this.matchMode;
+      result.matchId = this.online.matchId;
+      // the room's verdict ("winning" needs an opponent whose result actually arrived); a band has no winner
+      const v = c.lastResults?.matchId === this.online.matchId ? c.lastResults : null;
+      const sorted = [...all].sort((a, b) => (b.score || 0) - (a.score || 0));
+      const draw = v ? v.draw : all.length > 1 && (sorted[0].score || 0) === (sorted[1].score || 0);
+      result.onlineDraw = this.matchMode !== 'band' && !!draw;
+      result.onlineWinnerId = this.matchMode === 'band' || all.length < 2 || draw ? null : v?.winnerId || sorted[0]?.id || null;
       result.bandScore = all.reduce((s, r) => s + (r.score || 0), 0);
     }
     if (!this.replay && !this.practice) discord.results(this.song, result);
     this.onEnd?.(result);
   }
 }
+
+const ATTACKS = ['mirror', 'fog', 'shake', 'drain'];
+const ATTACK_NAME = { mirror: 'MIRROR', fog: 'FOG', shake: 'AMP OVERLOAD', drain: 'DRAIN' };
+const MODE_TITLE = { versus: 'online versus', battle: 'online battle', band: 'online band' };
 
 function fmt(s) { return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`; }

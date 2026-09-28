@@ -22,8 +22,9 @@ Every `GET` returns JSON with CORS (`Access-Control-Allow-Origin: *`), so any we
 | `GET /v1/leaderboard?song=<key>&instrument=guitar&difficulty=expert&chart=ranked&limit=50` | One board: `{ song, instrument, difficulty, mode, chart, rankedChart, otherCharts, rows: [{ player, playerId, avatar, score, stars, accuracy, fc, maxStreak, date, chart, ranked }] }`. `chart=ranked` (default) is the ranked chart's board (`mode: "ranked"`), or before the part has one, runs from before ranked charts (`mode: "unranked"`); `chart=all` is everyone's best on any chart (`mode: "all"`); `chart=<chart id>` is one chart's board (`mode: "chart"`) |
 | `GET /v1/charts?song=<key>&instrument=guitar&player=<id>` | The charts players uploaded for a song part, ranked first: `{ rankedChart, voteMin, myVote, rows: [{ id, ranked, votes, runs, players, notes, duration, edited, method, version, uploader, date }] }` (`notes` = expert notes, `myVote` needs `player`) |
 | `GET /v1/chart?id=<chart id>` | One chart in full: `{ id, song, instrument, duration, edited, method, version, uploader, date, chart, fp }` (see **Ranked charts**) |
+| `GET /v1/rooms?limit=50` | Public online rooms, lobbies first, then fullest: `{ rows: [{ code, name, host, mode, song, artist, players, max, playing, version, created, updated }] }`. A room is listed while its host keeps announcing it (every 30 s; it drops off after 90 s) |
 | `GET /v1/recent?limit=20` | Newest personal bests, with `song: { key, title, artist }` and `ranked` |
-| `GET /v1/player?id=p_…` | A player's public profile: `{ id, name, avatar, since, updated, profile: { color, level, rank, xp, progress, favorite, stats, instruments, achievements: [{ id, name, desc, icon, at }] }, world: { rank, total, charts, stars, fcs, records }, best: [...] }` (`records` = charts where they hold #1) |
+| `GET /v1/player?id=p_…` | A player's public profile: `{ id, name, avatar, since, updated, profile: { color, level, rank, xp, progress, favorite, stats, versus, instruments, achievements: [{ id, name, desc, icon, at }] }, world: { rank, total, charts, stars, fcs, records }, best: [...] }` (`records` = charts where they hold #1) |
 | `GET /v1/song-key?artist=Eagles&title=Hotel%20California` | The board key for a song: `{ key }` |
 | `GET /v1/me` + header `Authorization: Bearer <Discord OAuth token>` | The website's Discord login: `{ user: { id, username, globalName, avatar }, players: [{ playerId, name, total, charts }] }`. The token is checked with Discord (**401** if it's not valid) |
 | `GET /v1/health` | `{ ok: true }` |
@@ -81,9 +82,15 @@ A chart's id is the first 16 hex digits of the sha256 of its canonical JSON (int
 
 `POST /v1/charts/vote` with `{ player, chartId }` → `{ ok, chartId, votes, voteMin, rankedVotes, rankedChart, promoted }`. **403** until the player has a run on that chart.
 
+## Public rooms (the game does this)
+
+`POST /v1/rooms` with `{ code, key, name, host, mode, song, artist, players, max, playing, version }` lists a room or refreshes its listing → `{ ok, code, listedFor }`. `code` is the room's invite code (letters and dashes). `key` is a random string the hosting game makes; the first announce registers `sha256(key)`, and later announces need the same key (**403** otherwise). `mode` is `versus`, `battle` or `band`.
+
+`POST /v1/rooms/close` with `{ code, key }` takes the listing down → `{ ok, closed }`.
+
 ## Profiles (the game does this)
 
-`POST /v1/profile` with the same `player` object plus `profile: { color, level, rank, xp, progress, favorite, stats: { plays, songs, seconds, stars, fcs, bestStreak, accuracy, notes }, instruments: { guitar: { plays, best, accuracy, fcs }, … }, achievements: [{ id, name, desc, icon, at }] }` → `{ ok, url }`. The game sends it after every run it submits and when you press **Share profile**. The public page is `https://stemstage.varconstint.com/player/?id=<player id>`.
+`POST /v1/profile` with the same `player` object plus `profile: { color, level, rank, xp, progress, favorite, stats: { plays, songs, seconds, stars, fcs, bestStreak, accuracy, notes }, versus: { wins, losses, draws, best }, instruments: { guitar: { plays, best, accuracy, fcs }, … }, achievements: [{ id, name, desc, icon, at }] }` → `{ ok, url }`. The game sends it after every run it submits and when you press **Share profile**. The public page is `https://stemstage.varconstint.com/player/?id=<player id>`.
 
 ## Callback: Discord announcements
 

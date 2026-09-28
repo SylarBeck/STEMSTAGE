@@ -138,7 +138,7 @@ export class OnlineClient {
       case 'start': this.remoteLive.clear(); this.matchId = msg.matchId; this.lastResults = null; this.emit('start', msg); break;
       case 'live': this.remoteLive.set(msg.id, msg); this.emit('live', msg); break;
       case 'event': this.emit('event', msg); break;
-      case 'results': this.lastResults = { matchId: msg.matchId, results: msg.results }; this.emit('results', msg.results, msg); break;
+      case 'results': this.lastResults = { matchId: msg.matchId, results: msg.results, mode: msg.mode, winnerId: msg.winnerId || null, draw: !!msg.draw }; this.emit('results', msg.results, msg); break;
       case 'chat': this.emit('chat', msg); break;
       case 'closed': this.emit('closed', msg.reason); break;
       default: break;
@@ -185,6 +185,10 @@ export class OnlineClient {
   set(fields) { this.send({ t: 'set', ...fields }); }
   select(song) { this.send({ t: 'select', song }); }
   start() { this.send({ t: 'start' }); }
+  /** Host: versus | battle | band. */
+  setMode(mode) { this.send({ t: 'mode', mode }); }
+  /** Ask for the same song again (it starts once everyone wants it). */
+  rematch(want = true) { this.send({ t: 'rematch', want }); }
   live(state) { this.send({ t: 'live', ...state }); }
   event(kind, target) { this.send({ t: 'event', kind, target }); }
   result(result) { this.send({ t: 'result', result }); }
