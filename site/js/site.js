@@ -17,7 +17,11 @@
     btn.querySelector('span').textContent = on ? 'Close' : 'Menu';
     btn.querySelector('i').className = `fa-solid ${on ? 'fa-xmark' : 'fa-bars'}`;
   };
-  btn?.addEventListener('click', () => setOpen(!nav.classList.contains('open')));
+  btn?.addEventListener('click', () => {
+    const on = !nav.classList.contains('open');
+    if (on) document.querySelector('.ss-menu')?.setAttribute('hidden', ''); // one menu open at a time
+    setOpen(on);
+  });
   nav?.querySelector('.nav-panel')?.addEventListener('click', (e) => { if (e.target.closest('a')) setOpen(false); });
   addEventListener('keydown', (e) => { if (e.key === 'Escape') { setOpen(false); closeShot(); } });
   matchMedia('(min-width: 1000px)').addEventListener?.('change', (m) => { if (m.matches) setOpen(false); });
