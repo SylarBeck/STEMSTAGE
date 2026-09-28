@@ -27,6 +27,15 @@ const MODES = ['versus', 'battle', 'band'];
 const ATTACKS = ['mirror', 'fog', 'shake', 'drain'];
 export const MAX_PLAYERS = 8;
 const HISTORY = 20;
+const HAIRS = ['short', 'long', 'mohawk', 'bun', 'shaved'], PARTS = ['guitar', 'bass', 'drums', 'keys'];
+/** A player's character (src/profile/looks.js) as the other players get it: colours and names from known lists only. */
+function cleanLook(l) {
+  if (!l || typeof l !== 'object') return null;
+  const hex = (v) => (/^#[0-9a-f]{6}$/i.test(v || '') ? v : null);
+  const out = { part: PARTS.includes(l.part) ? l.part : 'guitar', hair: HAIRS.includes(l.hair) ? l.hair : 'short' };
+  for (const k of ['skin', 'hairColor', 'top', 'pants', 'finish']) { const v = hex(l[k]); if (!v) return null; out[k] = v; }
+  return out;
+}
 
 export function lanAddresses() {
   const out = [];
@@ -99,7 +108,7 @@ export function createOnline(library) {
     room.lastResults = null;
     room.rematch.clear();
     for (const q of room.players.values()) { q.result = null; q.playing = lineup.includes(q); }
-    broadcast({ t: 'start', matchId: room.matchId, startAt: room.startAt, song: room.song, mode: room.mode, lineup: lineup.map((q) => ({ id: q.id, name: q.name, color: q.color, profileId: q.profileId, instrument: q.instrument, difficulty: q.difficulty })) });
+    broadcast({ t: 'start', matchId: room.matchId, startAt: room.startAt, song: room.song, mode: room.mode, lineup: lineup.map((q) => ({ id: q.id, name: q.name, color: q.color, profileId: q.profileId, instrument: q.instrument, difficulty: q.difficulty, look: q.look })) });
     pushRoom();
   }
 
@@ -211,7 +220,7 @@ export function createOnline(library) {
           const host = !!msg.hostKey && msg.hostKey === hostKey && ![...room.players.values()].some((q) => q.host && q.connected);
           if (!host && room.players.size >= MAX_PLAYERS) { try { ws.send(JSON.stringify({ t: 'closed', reason: `This room is full (${MAX_PLAYERS} players)` })); ws.close(); } catch { /* gone */ } return; }
           p = {
-            id: `p${++seq}`, ws, host, connected: true, name: String(msg.name || 'Player').slice(0, 24), profileId: msg.profileId || null,
+            id: `p${++seq}`, ws, host, connected: true, name: String(msg.name || 'Player').slice(0, 24), profileId: msg.profileId || null, look: cleanLook(msg.look),
             color: /^#[0-9a-f]{6}$/i.test(msg.color || '') ? msg.color : COLORS[(seq - 1) % COLORS.length],
             instrument: 'guitar', difficulty: 'medium', ready: false, hasSong: false, loading: 0, result: null,
           };

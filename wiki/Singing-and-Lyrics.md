@@ -6,7 +6,15 @@ Choose **🎤 Sing** on the vocals part (or Settings → Singing → Vocals: *mi
 
 - The karaoke track shows the melody as bars and your voice as an arrow. Scoring is octave-free, and each phrase is rated from Messy to Awesome.
 - **Guide vocals** keeps the original singer in the mix. Off, it's karaoke.
-- In a band, one player sings on the mic and other vocalists use buttons.
+- In a band, one player sings on the mic and other vocalists use buttons. Online, every singer uses their own microphone.
+
+## Harmonies
+
+When the AI transcriber charts the vocals, the notes it hears sung along with the lead (a third to an octave away) become two harmony parts: **Harmony 2** above the lead and **Harmony 3** below it. With **Sing** chosen, the song screen shows a **Part** picker: Lead, Harmony 2 or Harmony 3.
+
+The track shows your part as bars and the other parts as faint lines, so you can hear where you sit. Online, each singer can take a different part.
+
+Songs charted before this (or without the AI splitter) get harmonies with Song options → **Re-chart with AI**. Harmony runs count for XP and your career, but the world leaderboard ranks the lead vocal part only.
 
 If the game can't use the microphone, see [Troubleshooting → Microphone](Troubleshooting#microphone).
 

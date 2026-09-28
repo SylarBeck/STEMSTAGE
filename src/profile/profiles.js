@@ -173,7 +173,7 @@ class Profiles {
   // ---------------------------------------------------------------- progress
   xpForPlay(r) {
     const base = r.score / 400 + r.stars * 40 + (r.fc ? 150 : 0) + r.accuracy * 60 + r.hits * 0.3;
-    return Math.round(base * (DIFF_XP[r.difficulty] || 1));
+    return Math.round(base * (DIFF_XP[r.difficulty] || 1) * (r.pro ? 1.25 : 1));
   }
 
   /** Unlock an achievement for a profile. Returns the achievement if newly unlocked. */
@@ -194,6 +194,14 @@ class Profiles {
     if (['guitar', 'bass', 'drums', 'keys', 'vocals'].every((i) => insts.has(i))) this._unlock(p, 'all_instruments', fresh);
     if (levelInfo(p.xp).level >= 10) this._unlock(p, 'level_10', fresh);
     if (mine.reduce((s, x) => s + (x.stars || 0), 0) >= 100) this._unlock(p, 'stars_100', fresh);
+  }
+
+  /** A profile's character (see looks.js): null takes it back to the default band member. */
+  setLook(id, look) {
+    const p = this.byId(id);
+    if (!p) return;
+    if (look) p.look = look; else delete p.look;
+    this.saveSoon();
   }
 
   /** Save profiles, debounced (force: now). */
@@ -226,7 +234,7 @@ class Profiles {
         id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, profileId: p.id, profileName: p.name,
         songId: song.id, songTitle: song.title, songArtist: song.artist, instrument: r.instrument, difficulty: r.difficulty,
         score: r.score, stars: r.stars, gold: !!r.gold, accuracy: +r.accuracy.toFixed(4), maxStreak: r.maxStreak,
-        hits: r.hits, total: r.total, miss: r.miss, fc, failed: !!r.failed, od: r.odActivations || 0, mode, assist: !!r.assist, real: r.real || null,
+        hits: r.hits, total: r.total, miss: r.miss, fc, failed: !!r.failed, od: r.odActivations || 0, mode, assist: !!r.assist, real: r.real || null, pro: !!r.pro,
         seconds: Math.round(song.duration || 0), date: Date.now(),
       };
       entries.push(entry);

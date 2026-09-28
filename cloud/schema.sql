@@ -57,6 +57,13 @@ CREATE TABLE IF NOT EXISTS rooms (
   created INTEGER NOT NULL, updated INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS rooms_updated ON rooms (updated);
+-- weekly challenges: the song part of each week, picked once (see migrations/0005_challenges.sql)
+CREATE TABLE IF NOT EXISTS challenges (
+  week INTEGER PRIMARY KEY,       -- weeks since Monday 28 September 2026 (UTC)
+  song_key TEXT NOT NULL, instrument TEXT NOT NULL, difficulty TEXT NOT NULL, chart_id TEXT NOT NULL,
+  created INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS runs_week ON runs (chart_id, difficulty, created);
 -- rate limiting (rows older than an hour are pruned)
 CREATE TABLE IF NOT EXISTS hits (ip TEXT NOT NULL, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS hits_ip ON hits (ip, ts);

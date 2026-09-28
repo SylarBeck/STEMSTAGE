@@ -90,7 +90,7 @@ export class Session {
     const title = this.replay ? `REPLAY · ${this.replay.name} · ${cfgs[0].instrument} · ${cfgs[0].difficulty} · ${new Date(this.replay.date).toLocaleDateString()}`
       : this.practice ? `PRACTICE · ${Math.round(this.practice.speed * 100)}% · from ${fmt(this.startTime)}`
       : this.online ? `${song.artist} · ${MODE_TITLE[this.matchMode]} · ${this.online.lineup.length} players`
-        : this.solo ? `${song.artist} · ${cfgs[0].instrument} · ${cfgs[0].difficulty}` : `${song.artist} · ${cfgs.length}-player band`;
+        : this.solo ? `${song.artist} · ${cfgs[0].instrument}${cfgs[0].part ? ` (harmony ${cfgs[0].part + 1})` : ''} · ${cfgs[0].difficulty}${cfgs[0].rules?.pro || (!cfgs[0].rules && settings.proMode) ? ' · PRO' : ''}` : `${song.artist} · ${cfgs.length}-player band`;
     this.hud.reset(song.title, title);
     this.hud.remote(this.online ? this._remoteRows() : null, { mode: this.matchMode });
     this.hud.ghost(this.ghost ? { name: this.ghost.name, score: 0, delta: 0 } : null);

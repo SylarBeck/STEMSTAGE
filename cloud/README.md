@@ -27,6 +27,7 @@ cd cloud
 npx wrangler d1 execute stemstage --remote --file migrations/0002_profiles.sql       # 1.5.0: shared profile cards
 npx wrangler d1 execute stemstage --remote --file migrations/0003_ranked_charts.sql  # 1.6.0: ranked charts + votes
 npx wrangler d1 execute stemstage --remote --file migrations/0004_rooms.sql          # 1.7.0: public online rooms
+npx wrangler d1 execute stemstage --remote --file migrations/0005_challenges.sql     # 1.8.0: weekly challenges
 npx wrangler deploy
 ```
 

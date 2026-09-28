@@ -46,7 +46,7 @@ export function installOnline(ui) {
   const me = () => online.me;
   const identity = () => {
     const p = profiles.current;
-    return { name: p?.name || `Guest ${Math.floor(Math.random() * 900 + 100)}`, color: p?.color || PROFILE_COLORS[Math.floor(Math.random() * PROFILE_COLORS.length)], profileId: p?.id || null };
+    return { name: p?.name || `Guest ${Math.floor(Math.random() * 900 + 100)}`, color: p?.color || PROFILE_COLORS[Math.floor(Math.random() * PROFILE_COLORS.length)], profileId: p?.id || null, look: p?.look || null };
   };
 
   async function refreshHost() {
@@ -351,7 +351,10 @@ export function installOnline(ui) {
     ui.stopPreview?.();
     ui.show('hud');
     ui.lastPlay = { online: true };
-    const cfg = { name: mine.name, color: mine.color, device: 'any', instrument: mine.instrument, difficulty: mine.difficulty, strum: mine.instrument !== 'drums' && ui.strumFor('any'), profileId: profiles.current?.id || null };
+    ui.applyVenue(true);
+    ui.applyLooks(msg.lineup.map((r) => ({ instrument: r.instrument, look: r.look, profileId: r.id === online.id ? profiles.current?.id : null })));
+    const mic = mine.instrument === 'vocals' && settings.vocalMode === 'mic';
+    const cfg = { name: mine.name, color: mine.color, device: 'any', instrument: mine.instrument, difficulty: mine.difficulty, strum: mine.instrument !== 'drums' && ui.strumFor('any'), profileId: profiles.current?.id || null, mic, part: mic ? settings.vocalPart || 0 : 0 };
     await app.game.start(song, audio, [cfg], { online: { client: online, lineup: msg.lineup, startAt: msg.startAt, matchId: msg.matchId, mode: msg.mode || 'versus' } });
   }
 

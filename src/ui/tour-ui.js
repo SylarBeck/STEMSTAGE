@@ -1,7 +1,11 @@
-// Tour screen: venues unlocked by stars (each a gig played as a marathon) + today's daily challenge.
+// Tour screen: venues unlocked by stars (each a gig played as a marathon), today's daily challenge, and the
+// world's weekly challenge + season standings.
 import { profiles } from '../profile/profiles.js';
 import { VENUES, TOUR_MAX, DIFFS, tourStars, unlocked, gigSongs, recordGig, dailyChallenge, dailyMet, dailyDone, completeDaily } from '../profile/career.js';
-import { coverUrl } from '../storage/library.js';
+import { coverUrl, getSong } from '../storage/library.js';
+import { weeklyChallenge, seasonStandings, findLocalSong, timeLeft } from '../net/challenge.js';
+import { allowRanked } from '../net/charts.js';
+import { settings } from '../settings.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -12,7 +16,7 @@ const vIcon = (v) => fa(VENUE_ICON[v.id] || 'star');
 const ICON = Object.fromEntries(INSTS);
 
 export function installTour(ui) {
-  const st = { venue: 0, diff: null };
+  const st = { venue: 0, diff: null, view: 'venue', weekly: null, season: null, wkErr: null, wkSong: null, wkAt: 0 };
   const songById = (id) => ui.songs.find((s) => s.id === id);
   const minIdx = (v) => DIFFS.indexOf(v.minDiff);
 
@@ -31,6 +35,69 @@ export function installTour(ui) {
       ${done ? '' : '<button class="nav-btn primary" data-nav data-action="tour-daily">Play challenge</button>'}</div>`;
   }
 
+  // ---------------------------------------------------------------- weekly challenge + season
+  const place = (n) => `#${n}`;
+  async function loadWeekly(fresh = false) {
+    if (!fresh && Date.now() - st.wkAt < 30_000) return;
+    st.wkAt = Date.now();
+    try {
+      [st.weekly, st.season] = await Promise.all([weeklyChallenge(fresh), seasonStandings(fresh)]);
+      st.wkErr = null;
+      st.wkSong = st.weekly && !st.weekly.none ? await findLocalSong(ui.songs, st.weekly.song.key) : null;
+    } catch (e) { st.wkErr = e.message; }
+    if (ui.screen === 'tour') render(true);
+  }
+
+  function weeklyCard() {
+    if (settings.worldLeaderboard === false) return '';
+    const c = st.weekly;
+    const body = st.wkErr ? '<div class="small-note">The weekly challenge can\u2019t be reached right now.</div>'
+      : !c ? '<div class="small-note">Loading this week\u2019s challenge…</div>'
+        : c.none ? '<div class="small-note">No weekly challenge yet: it starts once a song has a ranked chart.</div>'
+          : `<b>${esc(c.song.title)}</b><small>${esc(c.song.artist)} · ${ICON[c.instrument]} ${c.instrument} · ${c.difficulty}</small>
+            <div class="dl-foot"><span>${fa('hourglass-half')} ${timeLeft(c.ends)}</span>${c.me ? `<span class="ok">${fa('trophy')} ${place(c.me.rank)} of ${c.players}</span>` : `<span>${c.players} player${c.players === 1 ? '' : 's'}</span>`}</div>`;
+    return `<div class="daily weekly panel ${st.view === 'weekly' ? 'sel' : ''}">
+      <div class="dl-k">WEEKLY CHALLENGE${c && !c.none ? ` · SEASON ${c.season}` : ''}</div>${body}
+      <button class="nav-btn" data-nav data-action="tour-weekly">${fa('ranking-star')} Weekly &amp; season</button></div>`;
+  }
+
+  function weeklyDetail() {
+    const c = st.weekly, s = st.season;
+    if (!c || c.none) return `<div class="vd-banner"><i>${fa('ranking-star')}</i><div><h2>Weekly challenge</h2><p>${c?.none ? 'Starts once a song has a ranked chart: play any song while signed in to make the first one.' : st.wkErr ? 'Can\u2019t be reached right now.' : 'Loading…'}</p></div></div>`;
+    const me = profiles.current?.cloud?.id;
+    const row = (r, cols) => `<tr class="${r.playerId === me ? 'me' : ''}"><td>${r.rank}</td><td>${esc(r.player)}</td>${cols(r)}</tr>`;
+    const play = st.wkSong
+      ? `<button class="nav-btn primary" data-nav data-action="tour-weekly-play">${fa('play')} Play it (${c.instrument} · ${c.difficulty})</button>`
+      : `<button class="nav-btn primary" data-nav data-action="tour-weekly-find">${fa('magnifying-glass')} Find it on YouTube</button><div class="small-note">You don\u2019t have this song yet. Import it and the ranked chart is lined up with your copy.</div>`;
+    return `<div class="vd-banner wk"><i>${fa('ranking-star')}</i><div><h2>${esc(c.song.title)}</h2><p>${esc(c.song.artist)} · ${ICON[c.instrument]} ${c.instrument} · ${c.difficulty} · week ${c.week + 1} · ${timeLeft(c.ends)}</p></div></div>
+      <p class="small-note">Everyone plays the ranked chart. Your best run this week counts, and your place earns season points (100 for first, down to 10 for taking part).</p>
+      <div class="btn-row">${play}</div>
+      <div class="wk-cols">
+        <div><h4>This week</h4><table class="tbl"><tr><th>#</th><th>Player</th><th>Score</th><th>Pts</th></tr>
+          ${c.rows.slice(0, 10).map((r) => row(r, (x) => `<td>${x.score.toLocaleString()}</td><td>${x.points}</td>`)).join('') || '<tr><td colspan="4" class="small-note">No runs yet: be the first.</td></tr>'}
+          ${c.me && c.me.rank > 10 ? row(c.me, (x) => `<td>${x.score.toLocaleString()}</td><td>${x.points}</td>`) : ''}</table></div>
+        <div><h4>Season ${s?.season ?? c.season} <small>${s ? timeLeft(s.ends) : ''}</small></h4><table class="tbl"><tr><th>#</th><th>Player</th><th>Points</th><th>Wins</th></tr>
+          ${(s?.rows || []).slice(0, 10).map((r) => row(r, (x) => `<td>${x.points}</td><td>${x.wins}</td>`)).join('') || '<tr><td colspan="4" class="small-note">No points yet this season.</td></tr>'}
+          ${s?.me && s.me.rank > 10 ? row(s.me, (x) => `<td>${x.points}</td><td>${x.wins}</td>`) : ''}</table>
+          <div class="wk-weeks">${(s?.weeks || []).map((w) => `<span>W${w.week + 1}: ${esc(w.song.title)}${w.winner ? ` · ${fa('crown')} ${esc(w.winner.player)}` : ''}</span>`).join('')}</div></div>
+      </div>`;
+  }
+
+  async function playWeekly() {
+    const c = st.weekly;
+    const s = st.wkSong && ui.songs.find((x) => x.id === st.wkSong.id);
+    if (!c || !s) return;
+    if (!s.charts?.[c.instrument]?.available) { ui.toast(`This song has no ${c.instrument} chart: re-chart it with AI`, 'err'); return; }
+    // only runs on the ranked chart count: a part pinned to another chart goes back to the ranked one
+    const part = s.charts[c.instrument];
+    if (part.pin || part.refused) { const song = await getSong(s.id); await allowRanked(song, c.instrument); await ui.reloadSongs(); ui.toast('This part is back on the ranked chart for the weekly challenge', 'ok'); }
+    ui.selected = ui.songs.find((x) => x.id === s.id) || s;
+    ui.instrument = c.instrument;
+    ui.difficulty = c.difficulty;
+    ui.mode = 'solo';
+    ui.play({ ghost: null });
+  }
+
   function render(keep = false) {
     const p = profiles.current;
     const el = $('#tour');
@@ -42,9 +109,12 @@ export function installTour(ui) {
     }
     const stars = tourStars(p);
     st.venue = Math.min(st.venue, VENUES.length - 1);
+    // the stage behind the tour screen is the venue you're looking at (the arena for one that's still locked)
+    ui.app.stage.setVenue(unlocked(p, VENUES[st.venue]) ? VENUES[st.venue].id : 'arena');
     el.innerHTML = `
       <div class="tour-col" data-nav-group="venues">
         ${dailyCard(p)}
+        ${weeklyCard()}
         <div class="tour-total"><span>TOUR STARS</span><b>${fa('star')} ${stars}</b><small>/ ${TOUR_MAX}</small><div class="xpbar"><div style="width:${Math.round((stars / TOUR_MAX) * 100)}%"></div></div></div>
         <div class="venues">${VENUES.map((v, i) => {
           const open = unlocked(p, v);
@@ -53,9 +123,10 @@ export function installTour(ui) {
             <i>${open ? vIcon(v) : fa('lock')}</i><div><b>${esc(v.name)}</b><small>${open ? `${fa('star')} ${rec?.stars || 0} / ${v.songs * 5}` : `Needs ${fa('star')} ${v.need}`}</small></div></button>`;
         }).join('')}</div>
       </div>
-      <div class="venue-detail panel" data-nav-group="gig">${detail(p)}</div>`;
+      <div class="venue-detail panel" data-nav-group="gig">${st.view === 'weekly' ? weeklyDetail() : detail(p)}</div>`;
     bind(el);
-    $$('[data-venue]', el).forEach((b) => b.addEventListener('click', () => { st.venue = +b.dataset.venue; st.diff = null; render(true); }));
+    $$('[data-venue]', el).forEach((b) => b.addEventListener('click', () => { st.venue = +b.dataset.venue; st.diff = null; st.view = 'venue'; render(true); }));
+    loadWeekly();
     if (!keep) ui.applyFocus(false); else ui.applyFocus(false);
   }
 
@@ -114,10 +185,11 @@ export function installTour(ui) {
     ui.play({ ghost: null });
   }
 
-  /** Every solo result: does it beat today's challenge? */
+  /** Every solo result: does it beat today's challenge? Does it place on this week's? */
   async function onResult(r) {
     const p = profiles.current;
     if (!p || r.mode !== 'solo' || r.practice) return;
+    weeklyResult(r);
     const ch = daily();
     const me = r.players[0];
     if (!ch || dailyDone(p, ch.date) || r.song.id !== ch.songId || me.instrument !== ch.instrument || DIFFS.indexOf(me.difficulty) < DIFFS.indexOf(ch.difficulty)) return;
@@ -128,11 +200,26 @@ export function installTour(ui) {
     for (const a of out.achievements) ui.toast(`${a.name} — ${a.desc}`, 'ok', 'trophy');
   }
 
+  /** A run on this week's challenge: its place on the board once the world has it. */
+  async function weeklyResult(r) {
+    const c = st.weekly, me = r.players[0];
+    if (!c || c.none || !st.wkSong || r.song.id !== st.wkSong.id || me.instrument !== c.instrument || me.difficulty !== c.difficulty) return;
+    const sent = await ui.lastSubmit?.catch(() => []);
+    if (!sent?.some((x) => x.ranked && x.chartId === c.chart)) return;
+    try {
+      st.weekly = await weeklyChallenge(true);
+      if (st.weekly.me) ui.toast(`Weekly challenge: you're ${place(st.weekly.me.rank)} of ${st.weekly.players} (${st.weekly.me.points} season points)`, 'ok', 'ranking-star');
+    } catch { /* offline */ }
+  }
+
   ui.screenHooks.tour = async () => { if (!ui.songs.length) await ui.reloadSongs(); render(); };
   Object.assign(ui.actionHooks, {
     tour: () => ui.show('tour'),
     'tour-play': () => playGig(),
     'tour-daily': () => playDaily(),
+    'tour-weekly': () => { st.view = st.view === 'weekly' ? 'venue' : 'weekly'; loadWeekly(true); render(true); },
+    'tour-weekly-play': () => playWeekly(),
+    'tour-weekly-find': () => { const c = st.weekly; if (c?.song) ui.findOnYouTube(c.song.artist, c.song.title); },
   });
   ui.pickerHooks.push((which, d) => {
     if (which === 'tour-inst') { const i = INSTS.findIndex(([v]) => v === ui.instrument); ui.instrument = INSTS[(i + d + INSTS.length) % INSTS.length][0]; render(true); return true; }

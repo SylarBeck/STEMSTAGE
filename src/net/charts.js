@@ -126,9 +126,10 @@ async function applyChart(song, inst, got, offset) {
   const part = song.charts[inst];
   // the player's chart stays in part.own; a download they edited counts as theirs now
   const untouched = part.world && (await partChart(inst, part)).downloaded;
-  const own = untouched ? part.own : { notes: part.notes, phrases: part.phrases, edited: part.edited, aiNotes: part.aiNotes, aiPhrases: part.aiPhrases };
+  const own = untouched ? part.own : { notes: part.notes, phrases: part.phrases, edited: part.edited, aiNotes: part.aiNotes, aiPhrases: part.aiPhrases, harmonies: part.harmonies };
   const { notes, phrases } = fromWire(got.chart, offset, song);
   const next = { available: notes.expert.length > 0 || DIFFICULTIES.some((d) => notes[d].length), reason: '', notes, phrases, own };
+  if (part.harmonies) next.harmonies = part.harmonies; // vocal harmonies come from this recording: they stay
   const hash = await chartId(canonicalChart(wireChart(inst, next)));
   next.world = { id: got.id, offset: +offset.toFixed(4), hash, uploader: got.uploader || null, edited: !!got.edited, at: Date.now() };
   song.charts[inst] = next;
@@ -214,6 +215,11 @@ export async function chartForRun(song, inst, profile) {
   if (!part?.available) return null;
   const c = await partChart(inst, part);
   if (c.downloaded || uploaded.has(c.id) || !song.fp) return { id: c.id, first: false };
+  const j = await postChart(song, inst, part, c, profile);
+  return { id: j.chartId, first: !j.known && j.ranked };
+}
+
+async function postChart(song, inst, part, c, profile) {
   const cloud = await identityOf(profile);
   const j = await postJson('/v1/charts', {
     player: playerOf(profile, cloud),
@@ -223,7 +229,22 @@ export async function chartForRun(song, inst, profile) {
   });
   uploaded.add(c.id);
   forget(j.songKey, inst);
-  return { id: j.chartId, first: !j.known && j.ranked };
+  return j;
+}
+
+/**
+ * Song options → World charts → Share my chart: put a part's chart in the chart library now, without a run
+ * (a chart fixed in the editor, for others to play and vote for). `audio`: the stems or a loader (for the
+ * fingerprint of a song that hasn't got one yet). → { id, known, ranked, downloaded }
+ */
+export async function shareChart(song, inst, profile, audio) {
+  const part = song.charts?.[inst];
+  if (!part?.available) throw new Error(`this song has no ${inst} chart`);
+  const c = await partChart(inst, part);
+  if (c.downloaded) return { id: c.id, known: true, downloaded: true };
+  await ensureFingerprint(song, audio);
+  const j = await postChart(song, inst, part, c, profile);
+  return { id: j.chartId, known: j.known, ranked: j.ranked };
 }
 
 /** Vote for the chart a song part should be ranked on (the player must have finished a run on it). */

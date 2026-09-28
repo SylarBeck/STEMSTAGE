@@ -12,6 +12,33 @@ const PALETTES = [
   [0xffc233, 0x3050e0],
 ];
 
+// The tour's venues: how many people fit, what hangs from the ceiling, what's behind the band and how much
+// pyro the fire marshal allows. wall: 0 = the LED wall, 1 = bare brick, 2 = a theatre curtain.
+export const VENUE_LOOKS = {
+  garage: { crowd: 0.03, heads: 0, stacks: 0, truss: false, pillars: false, wall: 1, wallDim: 0.9, fog: 0.03, bg: 0x060403, fogColor: 0x0b0806, light: 0.55, pyro: 0, phones: false,
+    gels: [[0xffb25e, 0x7a2a12], [0xffd9a0, 0xa4331c]] },
+  club: { crowd: 0.12, heads: 4, stacks: 1, truss: false, pillars: false, wall: 0, wallDim: 0.55, fog: 0.042, bg: 0x05030a, fogColor: 0x0a0610, light: 0.75, pyro: 0, phones: false,
+    gels: [[0xb14cff, 0xff2d6a], [0x3a6bff, 0xff4fd0], [0xff9a2e, 0x7a1cff]] },
+  bar: { crowd: 0.2, heads: 6, stacks: 1, truss: false, pillars: true, wall: 0, wallDim: 0.7, fog: 0.032, bg: 0x070306, fogColor: 0x0c0609, light: 0.85, pyro: 0.3, phones: false,
+    gels: [[0xff3d8b, 0x19d3ff], [0xff9a2e, 0xd7261c], [0xffe14d, 0xff3d8b]] },
+  theater: { crowd: 0.45, heads: 8, stacks: 2, truss: true, pillars: false, wall: 2, wallDim: 1, fog: 0.022, bg: 0x070404, fogColor: 0x0b0806, light: 0.95, pyro: 0.5, phones: true,
+    gels: [[0xffd9a0, 0xb81d3a], [0xffc233, 0x7a0f22], [0xf2ecdf, 0xd02a1e]] },
+  arena: { crowd: 1, heads: 99, stacks: 4, truss: true, pillars: true, wall: 0, wallDim: 1, fog: 0.021, bg: 0x040302, fogColor: 0x0b0806, light: 1, pyro: 1, phones: true, gels: PALETTES },
+  stadium: { crowd: 1, heads: 99, stacks: 4, truss: true, pillars: true, wall: 0, wallDim: 1.1, fog: 0.014, bg: 0x03050c, fogColor: 0x05070f, light: 1.1, pyro: 1.3, phones: true,
+    gels: [[0xf2ecdf, 0x2447d8], [0xffc233, 0x3050e0], [0x9fd8ff, 0xd02a1e]] },
+  festival: { crowd: 1, heads: 99, stacks: 4, truss: true, pillars: true, wall: 0, wallDim: 1.15, fog: 0.012, bg: 0x0a0f24, fogColor: 0x0d1330, light: 1.15, pyro: 1.5, phones: true,
+    gels: [[0xff9a2e, 0x1cc8a0], [0xffe14d, 0xff3d8b], [0x9b5cff, 0x33e0ff]] },
+};
+
+// Band members as they look out of the box; a player's character (profiles → look) replaces the one on their part.
+export const HAIR_STYLES = ['short', 'long', 'mohawk', 'bun', 'shaved'];
+export const DEFAULT_LOOKS = {
+  guitar: { skin: '#2a2026', hair: 'short', hairColor: '#0c0c12', top: '#3a0d1c', pants: '#0c0c12', finish: '#d81b3a' },
+  bass: { skin: '#2a2026', hair: 'short', hairColor: '#0c0c12', top: '#0d1c3a', pants: '#0c0c12', finish: '#1b5ed8' },
+  drums: { skin: '#2a2026', hair: 'short', hairColor: '#0c0c12', top: '#2a1a08', pants: '#0c0c12', finish: '#b86a1b' },
+  keys: { skin: '#2a2026', hair: 'short', hairColor: '#0c0c12', top: '#1c0d3a', pants: '#0c0c12', finish: '#0a0a0a' },
+};
+
 const GOLD = new THREE.Color(1, 0.8, 0.3);
 const WHITE = new THREE.Color(1, 1, 1);
 const CROWD_COUNT = { low: 350, high: 950, ultra: 1700 };
@@ -19,10 +46,27 @@ const CROWD_COUNT = { low: 350, high: 950, ultra: 1700 };
 const ledVertex = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
 const ledFragment = /* glsl */`
   varying vec2 vUv;
-  uniform float uTime, uPulse, uBass, uOD, uLevel, uDim;
+  uniform float uTime, uPulse, uBass, uOD, uLevel, uDim, uStyle;
   uniform vec3 uA, uB;
   uniform sampler2D uSpec;
   void main() {
+    if (uStyle > 1.5) { // theatre: a red velvet curtain
+      float fold = 0.55 + 0.45 * sin(vUv.x * 150.0 + sin(vUv.y * 3.0) * 0.6);
+      vec3 cur = vec3(0.42, 0.04, 0.06) * fold * (0.35 + 0.65 * smoothstep(0.0, 0.9, vUv.y));
+      gl_FragColor = vec4(cur * (0.6 + uPulse * 0.25) * uDim, 1.0);
+      return;
+    }
+    if (uStyle > 0.5) { // garage: bare brick in a pool of warm light
+      vec2 b = vUv * vec2(26.0, 19.0);
+      b.x += 0.5 * mod(floor(b.y), 2.0);
+      vec2 fb = fract(b);
+      float mortar = smoothstep(0.02, 0.06, fb.x) * smoothstep(0.03, 0.09, fb.y);
+      float n = fract(sin(dot(floor(b), vec2(12.9898, 78.233))) * 43758.5453);
+      vec3 brick = vec3(0.30, 0.10, 0.06) * (0.55 + 0.45 * n);
+      float glow = 0.3 + 0.7 * exp(-pow((vUv.x - 0.5) * 2.2, 2.0)) * smoothstep(1.0, 0.2, vUv.y);
+      gl_FragColor = vec4((brick * mortar * (0.55 + uPulse * 0.3) + uA * 0.05) * glow * uDim, 1.0);
+      return;
+    }
     vec2 grid = vec2(176.0, 72.0);
     vec2 cell = fract(vUv * grid) - 0.5;
     float dotMask = smoothstep(0.5, 0.2, length(cell));
@@ -129,6 +173,7 @@ export class Stage {
     this._band();
     this._crowd();
     this._fx();
+    this.setVenue('arena');
   }
 
   // ---------------------------------------------------------------- build
@@ -176,6 +221,7 @@ export class Stage {
     // speaker stacks + amps
     const cabMat = new THREE.MeshStandardMaterial({ color: 0x111016, roughness: 0.7, metalness: 0.2 });
     const grilleMat = new THREE.MeshStandardMaterial({ color: 0x040306, roughness: 1 });
+    this.stacks = [];
     for (const sx of [-1, 1]) {
       for (let k = 0; k < 4; k++) {
         const cab = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.3, 1.6), cabMat);
@@ -184,6 +230,7 @@ export class Stage {
         gr.position.set(0, 0, 0.81);
         cab.add(gr);
         this.scene.add(cab);
+        this.stacks.push({ mesh: cab, level: k });
       }
       for (let k = 0; k < 2; k++) {
         const amp = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.1, 0.8), cabMat);
@@ -201,13 +248,14 @@ export class Stage {
 
   _ledWall() {
     this.ledUniforms = {
-      uTime: { value: 0 }, uPulse: { value: 0 }, uBass: { value: 0 }, uOD: { value: 0 }, uLevel: { value: 0 }, uDim: { value: 1 },
+      uTime: { value: 0 }, uPulse: { value: 0 }, uBass: { value: 0 }, uOD: { value: 0 }, uLevel: { value: 0 }, uDim: { value: 1 }, uStyle: { value: 0 },
       uA: { value: this.colA }, uB: { value: this.colB }, uSpec: { value: this.specTex },
     };
     const mat = new THREE.ShaderMaterial({ uniforms: this.ledUniforms, vertexShader: ledVertex, fragmentShader: ledFragment });
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(24, 9.5), mat);
     wall.position.set(0, 6.2, -7.4);
     this.scene.add(wall);
+    this.pillars = [];
     const frame = new THREE.Mesh(new THREE.BoxGeometry(24.6, 10, 0.3), new THREE.MeshStandardMaterial({ color: 0x08070c, roughness: 0.5 }));
     frame.position.set(0, 6.2, -7.6);
     this.scene.add(frame);
@@ -218,6 +266,7 @@ export class Stage {
         const p = new THREE.Mesh(new THREE.BoxGeometry(0.18, 8, 0.18), this.pillarMat);
         p.position.set(sx * (9 + k * 0.9), 5.2, -6.2 + k * 0.5);
         this.scene.add(p);
+        this.pillars.push(p);
       }
     }
   }
@@ -231,7 +280,8 @@ export class Stage {
       for (let x = -15; x <= 15; x += 0.6) addBar(x, 11.3, z + 0.3, 0.05, 0.75, 0.05);
     }
     for (const x of [-15, 15]) for (const z of [-3.8, 2.2]) for (const dx of [0, 0.6]) for (const dz of [0, 0.6]) addBar(x + dx - 0.3, 5.8, z + dz, 0.08, 11.6, 0.08);
-    this.scene.add(new THREE.Mesh(mergeGeometries(bars), trussMat));
+    this.trussMesh = new THREE.Mesh(mergeGeometries(bars), trussMat);
+    this.scene.add(this.trussMesh);
 
     // moving heads + beams
     this.heads = [];
@@ -268,6 +318,7 @@ export class Stage {
     const skin = new THREE.MeshStandardMaterial({ color: 0x2a2026, roughness: 0.7 });
     const cloth = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.8 });
     const pants = new THREE.MeshStandardMaterial({ color: 0x0c0c12, roughness: 0.9 });
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0x0c0c12, roughness: 0.85 });
     for (const sx of [-1, 1]) {
       const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.8, 4, 8), pants);
       leg.position.set(sx * 0.17, 0.55, 0);
@@ -282,9 +333,28 @@ export class Stage {
     head.position.y = 0.95;
     const skull = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), skin);
     skull.position.y = 0.12;
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), pants);
-    hair.position.y = 0.15;
-    head.add(skull, hair);
+    // hair styles (one is shown at a time, see setLook)
+    const hair = {
+      short: new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), hairMat),
+      long: new THREE.Group(),
+      mohawk: new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.2, 0.38), hairMat),
+      bun: new THREE.Group(),
+      shaved: new THREE.Mesh(new THREE.SphereGeometry(0.205, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.45), hairMat),
+    };
+    hair.short.position.y = 0.15;
+    hair.shaved.position.y = 0.13;
+    hair.mohawk.position.set(0, 0.34, -0.02);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.225, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat);
+    cap.position.y = 0.15;
+    const back = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.34, 4, 10), hairMat);
+    back.position.set(0, -0.08, -0.1);
+    hair.long.add(cap, back);
+    const cap2 = cap.clone();
+    const knot = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), hairMat);
+    knot.position.set(0, 0.36, -0.1);
+    hair.bun.add(cap2, knot);
+    for (const [k, m] of Object.entries(hair)) { m.visible = k === 'short'; head.add(m); }
+    head.add(skull);
     torso.add(head);
     const arms = [];
     for (const sx of [-1, 1]) {
@@ -298,16 +368,19 @@ export class Stage {
       arms.push(shoulder);
     }
     g.add(torso);
-    return { g, torso, head, arms };
+    return { g, torso, head, arms, hair, mats: { skin, cloth, pants, hair: hairMat } };
   }
 
   _band() {
     this.band = {};
     const metal = new THREE.MeshStandardMaterial({ color: 0x9a9aa8, metalness: 1, roughness: 0.25 });
     const lacquer = (c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.4, roughness: 0.3 });
+    this.finish = {};
     const addGuitar = (fig, color, bass) => {
       const inst = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.36, 0.08), lacquer(color));
+      const finish = lacquer(color);
+      this.finish[bass ? 'bass' : 'guitar'] = finish;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.36, 0.08), finish);
       const neck = new THREE.Mesh(new THREE.BoxGeometry(bass ? 1.05 : 0.8, 0.06, 0.04), new THREE.MeshStandardMaterial({ color: 0x3a2412 }));
       neck.position.x = bass ? 0.75 : 0.62;
       inst.add(body, neck);
@@ -333,6 +406,7 @@ export class Stage {
     const kit = new THREE.Group();
     kit.position.set(0, 1.9, -4.6);
     const shell = lacquer(0xb86a1b);
+    this.finish.drums = shell;
     const kick = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.45, 24).rotateX(Math.PI / 2), shell);
     kick.position.set(0, 0.5, 0.2);
     const snare = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.15, 20), shell);
@@ -355,7 +429,8 @@ export class Stage {
     // keys
     const keys = mk('keys', -8.6, -2.6, 1.2, 0x1c0d3a, 0.45);
     const kb = new THREE.Group();
-    const board = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.45), new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.4 }));
+    this.finish.keys = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.4 });
+    const board = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.45), this.finish.keys);
     const whites = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.02, 0.2), new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.3 }));
     whites.position.set(0, 0.05, 0.1);
     const standL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.0, 0.05), metal); standL.position.set(-0.5, -0.5, 0);
@@ -391,6 +466,10 @@ export class Stage {
       const spread = 12 + z * 0.6;
       const x = (Math.random() * 2 - 1) * spread;
       this.crowdData.push({ x, z, phase: Math.random() * Math.PI * 2, amp: 0.4 + Math.random() * 0.8, rot: (Math.random() - 0.5) * 0.6, scale: 0.88 + Math.random() * 0.25, jumper: Math.random() < 0.5 });
+    }
+    // front rows first: a small venue shows only the first part of the crowd (see setVenue)
+    this.crowdData.sort((a, b) => a.z + Math.abs(a.x) * 0.35 - (b.z + Math.abs(b.x) * 0.35));
+    for (let i = 0; i < n; i++) {
       c.setHSL(0.02 + Math.random() * 0.08, 0.15, 0.04 + Math.random() * 0.07);
       this.crowd.setColorAt(i, c);
     }
@@ -441,6 +520,8 @@ export class Stage {
   }
 
   pyro(strength = 1) {
+    strength *= this.pyroScale ?? 1; // no flame cannons in a garage
+    if (strength < 0.05) return;
     for (const x of this.pyroX) {
       for (let k = 0; k < 70 * strength; k++) {
         this._spawn(this.fire, x + (Math.random() - 0.5) * 0.5, 1.3, 2.2 + (Math.random() - 0.5) * 0.5,
@@ -451,6 +532,7 @@ export class Stage {
   }
 
   sparks() {
+    if ((this.pyroScale ?? 1) < 0.4) return; // spark falls hang from a truss the small rooms don't have
     for (const x of this.pyroX) {
       for (let k = 0; k < 60; k++) {
         const a = Math.random() * Math.PI * 2, r = 1 + Math.random() * 3;
@@ -492,9 +574,54 @@ export class Stage {
   setShot(name) { this.shot = name; this.shotTimer = 0; }
 
   nextPalette() {
-    this.paletteIndex = (this.paletteIndex + 1) % PALETTES.length;
-    this.tgtA.set(PALETTES[this.paletteIndex][0]);
-    this.tgtB.set(PALETTES[this.paletteIndex][1]);
+    const gels = this.gels || PALETTES;
+    this.paletteIndex = (this.paletteIndex + 1) % gels.length;
+    this.tgtA.set(gels[this.paletteIndex][0]);
+    this.tgtB.set(gels[this.paletteIndex][1]);
+  }
+
+  /** Dress a band member (guitar / bass / drums / keys) as a player's character; null = the default look. */
+  setLook(inst, look) {
+    const f = this.band[inst];
+    if (!f) return;
+    const L = { ...DEFAULT_LOOKS[inst], ...(look || {}) };
+    f.mats.skin.color.set(L.skin);
+    f.mats.cloth.color.set(L.top);
+    f.mats.pants.color.set(L.pants);
+    f.mats.hair.color.set(L.hairColor);
+    for (const [k, m] of Object.entries(f.hair)) m.visible = k === (HAIR_STYLES.includes(L.hair) ? L.hair : 'short');
+    this.finish[inst]?.color.set(L.finish);
+  }
+
+  /** Everyone back in their default look. */
+  resetLooks() { for (const inst of Object.keys(this.band)) this.setLook(inst, null); }
+
+  /** Menus: frame one band member up close (the character editor), or null to go back to the slow orbit. */
+  preview(inst) { this.previewInst = this.band[inst] ? inst : null; }
+
+  /** Dress the stage as one of the tour's venues (VENUE_LOOKS). */
+  setVenue(id) {
+    const v = VENUE_LOOKS[id] ? VENUE_LOOKS[id] : VENUE_LOOKS.arena;
+    if (this.venueId === (VENUE_LOOKS[id] ? id : 'arena')) return;
+    this.venueId = VENUE_LOOKS[id] ? id : 'arena';
+    this.gels = v.gels;
+    this.paletteIndex = 0;
+    this.tgtA.set(v.gels[0][0]);
+    this.tgtB.set(v.gels[0][1]);
+    this.scene.background.set(v.bg);
+    this.scene.fog.color.set(v.fogColor);
+    this.scene.fog.density = v.fog;
+    this.ledUniforms.uStyle.value = v.wall;
+    this.wallBright = v.wallDim;
+    this.trussMesh.visible = v.truss;
+    for (const p of this.pillars) p.visible = v.pillars;
+    for (const s of this.stacks) s.mesh.visible = s.level < v.stacks;
+    // the lights nearest the middle stay when a room only has a few
+    [...this.heads].sort((a, b) => Math.abs(a.x) - Math.abs(b.x)).forEach((h, i) => { h.pivot.visible = i < v.heads; });
+    this.crowd.count = Math.max(1, Math.round(this.crowdData.length * v.crowd));
+    this.phones.pts.visible = v.phones;
+    this.lightScale = v.light;
+    this.pyroScale = v.pyro;
   }
 
   resize(w, h) { this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
@@ -524,7 +651,7 @@ export class Stage {
     const U = this.ledUniforms;
     U.uTime.value = t; U.uPulse.value = pulse; U.uBass.value = f.bass || 0;
     U.uOD.value += (od - U.uOD.value) * Math.min(1, dt * 4);
-    const dimTarget = f.mode === 'game' ? 0.45 : 0.7;
+    const dimTarget = (f.mode === 'game' ? 0.45 : 0.7) * (this.wallBright ?? 1);
     U.uDim.value += (dimTarget - U.uDim.value) * Math.min(1, dt * 2);
     const dim = U.uDim.value;
 
@@ -534,7 +661,7 @@ export class Stage {
     this.wallLight.intensity = 40 + pulse * 80;
 
     // moving heads
-    const beamI = (0.2 + intensity * 0.35 + pulse * 0.3) * dim * 0.9;
+    const beamI = (0.2 + intensity * 0.35 + pulse * 0.3) * dim * 0.9 * (this.lightScale ?? 1);
     this.heads.forEach((h, i) => {
       const pat = Math.floor(beat / 16) % 3;
       let pan, tilt;
@@ -549,10 +676,11 @@ export class Stage {
       h.beam.material.uniforms.uIntensity.value = beamI * strobe * (0.7 + 0.3 * Math.sin(beat * Math.PI + i));
       h.lensMat.color.copy(col).multiplyScalar((2 + pulse * 2.5) * dim);
     });
-    this.spots.forEach((s, i) => { s.color.copy(i % 2 ? this.colA : this.colB); s.intensity = 90 + pulse * 120 + intensity * 60; });
+    this.spots.forEach((s, i) => { s.color.copy(i % 2 ? this.colA : this.colB); s.intensity = (90 + pulse * 120 + intensity * 60) * (this.lightScale ?? 1); });
     const focus = this.focusPos[f.focus] || this.focusPos.guitar;
     this.keySpot.target.position.copy(focus);
     this.keySpot.intensity = f.mode === 'game' ? 220 + pulse * 100 : 0;
+    if (f.mode !== 'game' && this.previewInst) { this.keySpot.target.position.copy(this.focusPos[this.previewInst]); this.keySpot.intensity = 170; }
 
     // band animation
     const bp = beat * Math.PI * 2;
@@ -576,7 +704,7 @@ export class Stage {
 
     // crowd
     const jumpAmp = (0.1 + intensity * 0.45 + od * 0.35) * (f.mode === 'game' ? 1 : 0.4);
-    const n = this.crowdData.length;
+    const n = this.crowd.count;
     for (let i = 0; i < n; i++) {
       const d = this.crowdData[i];
       const ph = bp + d.phase * 0.25;
@@ -590,7 +718,8 @@ export class Stage {
     }
     this.crowd.instanceMatrix.needsUpdate = true;
     const calm = 1 - Math.min(1, intensity * 1.6);
-    for (let i = 0; i < this.phoneIdx.length; i++) {
+    for (let i = 0; i < this.phoneIdx.length && this.phones.pts.visible; i++) {
+      if (this.phoneIdx[i] >= n) { this.phones.size[i] = 0; continue; } // nobody standing there in this venue
       const d = this.crowdData[this.phoneIdx[i]];
       this.phones.pos[i * 3] = d.x + 0.2; this.phones.pos[i * 3 + 1] = 1.95 * d.scale; this.phones.pos[i * 3 + 2] = d.z;
       this.phones.size[i] = (0.06 + 0.03 * Math.sin(t * 2 + i)) * (0.25 + calm);
@@ -617,7 +746,13 @@ export class Stage {
   _camera(dt, f, pulse, beat) {
     const t = this.time;
     let pos, tgt;
-    if (f.mode !== 'game') {
+    if (f.mode !== 'game' && this.previewInst) {
+      // the character editor: the band member on the right half of the screen, turning slowly
+      const focus = this.focusPos[this.previewInst];
+      const a = Math.sin(t * 0.25) * 0.35;
+      pos = focus.clone().add(new THREE.Vector3(-0.9 + Math.sin(a) * 3.6, 0.3, Math.cos(a) * 4.2));
+      tgt = focus.clone().add(new THREE.Vector3(-0.72, -0.4, 0));
+    } else if (f.mode !== 'game') {
       pos = new THREE.Vector3(Math.sin(t * 0.06) * 13, 4.6 + Math.sin(t * 0.13) * 0.8, 13 + Math.cos(t * 0.06) * 4);
       tgt = new THREE.Vector3(0, 3.6, -3);
     } else {

@@ -22,6 +22,9 @@ Every `GET` returns JSON with CORS (`Access-Control-Allow-Origin: *`), so any we
 | `GET /v1/leaderboard?song=<key>&instrument=guitar&difficulty=expert&chart=ranked&limit=50` | One board: `{ song, instrument, difficulty, mode, chart, rankedChart, otherCharts, rows: [{ player, playerId, avatar, score, stars, accuracy, fc, maxStreak, date, chart, ranked }] }`. `chart=ranked` (default) is the ranked chart's board (`mode: "ranked"`), or before the part has one, runs from before ranked charts (`mode: "unranked"`); `chart=all` is everyone's best on any chart (`mode: "all"`); `chart=<chart id>` is one chart's board (`mode: "chart"`) |
 | `GET /v1/charts?song=<key>&instrument=guitar&player=<id>` | The charts players uploaded for a song part, ranked first: `{ rankedChart, voteMin, myVote, rows: [{ id, ranked, votes, runs, players, notes, duration, edited, method, version, uploader, date }] }` (`notes` = expert notes, `myVote` needs `player`) |
 | `GET /v1/chart?id=<chart id>` | One chart in full: `{ id, song, instrument, duration, edited, method, version, uploader, date, chart, fp }` (see **Ranked charts**) |
+| `GET /v1/library?q=&limit=50&offset=0` | The chart library: songs with uploaded charts, most played first: `{ rows: [{ key, title, artist, duration, charts, players, updated, parts }] }` (`parts` = instruments with a ranked chart) |
+| `GET /v1/challenge?player=<id>&limit=25` | This week's challenge: `{ week, season, starts, ends, song: { key, title, artist }, instrument, difficulty, chart, players, rows: [{ rank, player, playerId, avatar, score, runs, points }], me }`, or `{ week, season, starts, ends, none: true }` before any song has a ranked chart |
+| `GET /v1/season?player=<id>&limit=25` | This season's standings: `{ season, starts, ends, week, weeks: [{ week, song, instrument, difficulty, players, winner }], players, rows: [{ rank, player, playerId, avatar, points, weeks, wins }], me }` |
 | `GET /v1/rooms?limit=50` | Public online rooms, lobbies first, then fullest: `{ rows: [{ code, name, host, mode, song, artist, players, max, playing, version, created, updated }] }`. A room is listed while its host keeps announcing it (every 30 s; it drops off after 90 s) |
 | `GET /v1/recent?limit=20` | Newest personal bests, with `song: { key, title, artist }` and `ranked` |
 | `GET /v1/player?id=p_…` | A player's public profile: `{ id, name, avatar, since, updated, profile: { color, level, rank, xp, progress, favorite, stats, versus, instruments, achievements: [{ id, name, desc, icon, at }] }, world: { rank, total, charts, stars, fcs, records }, best: [...] }` (`records` = charts where they hold #1) |
@@ -81,6 +84,14 @@ A chart's id is the first 16 hex digits of the sha256 of its canonical JSON (int
 `POST /v1/charts` with the same `player` object plus `song: { title, artist, duration }`, `instrument`, `chart` (the format above), `fp` (the fingerprint) and `meta: { edited, method, version }` → `{ ok, chartId, songKey, known, ranked, rankedChart }`. The same chart uploaded again is `known`; the same notes under another song is refused (**409**). Up to 1.5 MB.
 
 `POST /v1/charts/vote` with `{ player, chartId }` → `{ ok, chartId, votes, voteMin, rankedVotes, rankedChart, promoted }`. **403** until the player has a run on that chart.
+
+## Weekly challenges and seasons
+
+Weeks start on Monday 00:00 UTC; week 0 started on 28 September 2026. A season is six weeks: season 1 is weeks 0–5.
+- **The pick:** the first request for a week picks its challenge from the ranked song parts most players play (never the same song twice in a row), then stores it (`challenges` table). The pick can't change mid-week.
+- **Difficulty:** it rotates by week: hard, expert, medium, expert, hard, expert.
+- **The board:** each player's best run submitted that week on the challenge's chart, instrument and difficulty. Runs on other charts don't count.
+- **Points:** a place is worth 100 / 80 / 65 / 55 / 50 points for the top five, then 2 fewer per place down to 10. A season's standings add up its weeks.
 
 ## Public rooms (the game does this)
 

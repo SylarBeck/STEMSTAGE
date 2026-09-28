@@ -15,6 +15,9 @@ export const DEFAULTS = {
   menuMusic: 'demo',     // off | demo | shuffle (random song from your setlist)
   menuMusicVolume: 0.35,
   quality: 'high',       // low | high | ultra
+  vocalPart: 0,          // singing: 0 = lead, 1 = harmony 2, 2 = harmony 3 (songs charted with the AI transcriber)
+  proMode: false,        // Pro: tighter timing, overstrums count, no assists / no-fail (+25% XP, PRO on results)
+  venue: 'auto',         // the stage: auto (the arena; tour gigs in their own venue) | garage | club | bar | theater | arena | stadium | festival
   bloom: true,
   cameraShake: true,
   fullscreen: true,      // start fullscreen (desktop app + browser)

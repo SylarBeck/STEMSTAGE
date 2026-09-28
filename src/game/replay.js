@@ -69,10 +69,13 @@ export function ghostAt(timeline, t) {
 }
 
 /** The rules that change judgement; a replay is played back under the rules it was recorded with. */
-export const currentRules = () => ({
-  ghostPenalty: !!settings.ghostPenalty, noFail: !!settings.noFail,
-  laneAssist: settings.laneAssist || 'off', autoSustain: !!settings.autoSustain, // accessibility assists
-});
+export const currentRules = () => (settings.proMode
+  // Pro: tight timing windows, overstrums break the streak, and no assists or no-fail
+  ? { pro: true, ghostPenalty: true, noFail: false, laneAssist: 'off', autoSustain: false }
+  : {
+    ghostPenalty: !!settings.ghostPenalty, noFail: !!settings.noFail,
+    laneAssist: settings.laneAssist || 'off', autoSustain: !!settings.autoSustain, // accessibility assists
+  });
 
 export function buildReplay(song, player, recorder, result) {
   const notes = song.charts?.[result.instrument]?.notes?.[result.difficulty] || [];

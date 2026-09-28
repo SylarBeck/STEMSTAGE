@@ -158,9 +158,9 @@ tr.mine td { background: rgba(88, 101, 242, 0.18) !important; }
 li.mine { background: rgba(88, 101, 242, 0.14); }
 
 /* ---------- forms ---------- */
-select, input[type=text] { font: 600 17px var(--body); color: var(--ink); background: rgba(8, 7, 6, 0.85); border: 1.5px solid var(--line-2); border-radius: 1px; padding: 11px 12px; min-height: 48px; min-width: 0; }
-input[type=text] { font-size: 18px; }
-select:focus, input[type=text]:focus { outline: none; border-color: var(--ink); }
+select, input[type=text], input[type=search] { font: 600 17px var(--body); color: var(--ink); background: rgba(8, 7, 6, 0.85); border: 1.5px solid var(--line-2); border-radius: 1px; padding: 11px 12px; min-height: 48px; min-width: 0; }
+input[type=text], input[type=search] { font-size: 18px; }
+select:focus, input[type=text]:focus, input[type=search]:focus { outline: none; border-color: var(--ink); }
 select option { background: #1a1714; }
 
 /* ---------- lightbox ---------- */

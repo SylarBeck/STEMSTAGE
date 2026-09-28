@@ -12,9 +12,10 @@ import { installOnline } from './online-ui.js';
 import { installControllers } from './controllers-ui.js';
 import { installSetlists } from './setlists-ui.js';
 import { installTour } from './tour-ui.js';
+import { installChartLibrary } from './chartlib-ui.js';
 import { installEditor } from './editor-ui.js';
 import { installStream } from './stream-ui.js';
-import { tourStars, TOUR_MAX, dailyDone } from '../profile/career.js';
+import { tourStars, TOUR_MAX, dailyDone, VENUES, unlocked } from '../profile/career.js';
 import { Osk } from './osk.js';
 import { controllerPicture, detectController, glyph } from './controller-art.js';
 import { buildChartPack, download } from '../export/exporters.js';
@@ -25,10 +26,11 @@ import { bindings } from '../input/bindings.js';
 import { PLAYER_COLORS } from '../game/player.js';
 import { fa, instIcon, stars as starsHtml, starsOnly, achIcon } from './icons.js';
 import { pickGhost, replaysFor, loadReplay, saveReplay } from '../game/replay.js';
-import { worldCharts, partChart, prepareRankedCharts, ensureFingerprint, useWorldChart, useOwnChart, allowRanked, voteChart } from '../net/charts.js';
+import { worldCharts, partChart, prepareRankedCharts, ensureFingerprint, useWorldChart, useOwnChart, allowRanked, voteChart, shareChart } from '../net/charts.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const VOCAL_PARTS = [[0, 'Lead'], [1, 'Harmony 2'], [2, 'Harmony 3']];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
@@ -43,7 +45,7 @@ const SORTS = [['recent', 'Recent'], ['title', 'Title'], ['artist', 'Artist'], [
 const SPEEDS = [0.5, 0.6, 0.7, 0.8, 0.9, 1];
 const SCREEN_LABEL = {
   menu: 'Main menu', library: 'Setlist', import: 'Import song', settings: 'Settings', band: 'Band', controller: 'Controllers', howto: 'How to play',
-  profiles: 'Profiles', career: 'Career', leaderboard: 'Leaderboards', setlists: 'Setlists', marathon: 'Marathon', tour: 'Tour', editor: 'Chart editor', stream: 'Stream', online: 'Online', practice: 'Practice', songinfo: 'Song info', results: 'Results',
+  profiles: 'Profiles', career: 'Career', leaderboard: 'Leaderboards', chartlib: 'Chart library', setlists: 'Setlists', marathon: 'Marathon', tour: 'Tour', editor: 'Chart editor', stream: 'Stream', online: 'Online', practice: 'Practice', songinfo: 'Song info', results: 'Results',
   calibrate: 'Calibration', pause: 'Paused',
 };
 const CHROME_OFF = new Set(['title', 'hud', 'calibrate']);
@@ -67,7 +69,8 @@ const DIFFS = ['easy', 'medium', 'hard', 'expert'];
 const SETTINGS_SCHEMA = [
   { group: 'Gameplay' },
   { key: 'noteSpeed', label: 'Note speed', desc: 'How fast the highway scrolls', type: 'range', min: 1, max: 10, step: 1 },
-  { key: 'noFail', label: 'No fail', desc: 'Keep playing when the crowd meter empties', type: 'toggle' },
+  { key: 'proMode', label: 'Pro mode', desc: 'Tighter timing (±80 ms to hit, ±25 ms for Perfect), overstrums and wrong frets break your streak, and no assists or no-fail. +25% XP and PRO on your results', type: 'toggle' },
+  { key: 'noFail', label: 'No fail', desc: 'Keep playing when the crowd meter empties (not in Pro mode)', type: 'toggle' },
   { key: 'ghostPenalty', label: 'Ghost-tap penalty', desc: 'Wrong-lane presses / overstrums near notes break your streak (not on drums)', type: 'toggle' },
   { key: 'strumMode', label: 'Strum mode', desc: 'Auto = each controller profile decides (on for guitars). On / Off override every profile', type: 'choice', options: ['auto', 'on', 'off'] },
   { key: 'ghost', label: 'Ghost race', desc: 'Race an earlier run in solo play: your own best, or the top run on this PC', type: 'choice', options: ['off', 'best', 'top'] },
@@ -87,6 +90,7 @@ const SETTINGS_SCHEMA = [
   { key: 'quality', label: 'Graphics quality', desc: 'Resolution, crowd size, bloom, film grain', type: 'choice', options: ['low', 'high', 'ultra'] },
   { key: 'bloom', label: 'Bloom', type: 'toggle' },
   { key: 'cameraShake', label: 'Camera shake', type: 'toggle' },
+  { key: 'venue', label: 'Venue', desc: 'The stage you play on. Auto: the arena, and every tour gig in its own venue. Venues open up as you earn tour stars (the arena is always open)', type: 'choice', options: ['auto', 'garage', 'club', 'bar', 'theater', 'arena', 'stadium', 'festival'], labels: { auto: 'Auto', garage: 'Garage', club: 'Club', bar: 'Dive bar', theater: 'Theater', arena: 'Arena', stadium: 'Stadium', festival: 'Festival' } },
   { group: 'Controllers' },
   { key: 'triggerIntensity', label: 'Adaptive trigger strength', desc: 'DualSense trigger effects. 0% turns them off everywhere', type: 'range', min: 0, max: 1.5, step: 0.1, fmt: 'pct' },
   { key: 'rumbleIntensity', label: 'Haptic strength', desc: 'DualSense haptics and gamepad rumble', type: 'range', min: 0, max: 1.5, step: 0.1, fmt: 'pct' },
@@ -191,6 +195,7 @@ export class UI {
     this.controllers = installControllers(this);
     this.setlists = installSetlists(this);
     this.tour = installTour(this);
+    installChartLibrary(this);
     this.editor = installEditor(this);
     this.stream = installStream(this);
     autoCheck(this);
@@ -256,6 +261,9 @@ export class UI {
     document.body.classList.toggle('chrome', !CHROME_OFF.has(name));
     document.body.classList.toggle('in-game', name === 'hud' || name === 'pause');
     document.body.dataset.screen = name;
+    // the menus show your venue; a song (and its results) keeps the one it was played in; the tour previews its own
+    if (!['hud', 'pause', 'results', 'marathon', 'tour'].includes(name) && !this.app.game?.running) { this.applyVenue(false); if (name !== 'career') this.applyLooks(); }
+    if (name !== 'career') this.app.stage.preview(null);
     $('#tb-crumb').textContent = SCREEN_LABEL[name] || '';
     if (name !== 'controller' && prev === 'controller') this.controllers.stopCapture();
     if (name !== 'library' && name !== 'practice' && name !== 'songinfo') this.stopPreview();
@@ -465,7 +473,7 @@ export class UI {
       const back = {
         library: this.mode === 'band' ? 'band' : this.mode === 'online-pick' ? 'online' : this.mode === 'setlist-add' ? 'setlists' : 'menu', import: 'menu', setlists: 'menu', tour: 'menu', stream: 'menu', settings: 'menu', controller: 'menu',
         howto: 'menu', band: 'menu', results: this.lastPlay?.online ? 'online' : 'library', menu: 'title', profiles: 'menu',
-        career: 'menu', leaderboard: 'menu', online: 'menu', practice: 'library', songinfo: 'library',
+        career: 'menu', leaderboard: 'menu', chartlib: 'menu', online: 'menu', practice: 'library', songinfo: 'library',
       };
       if (this.screen === 'library' && this.mode === 'online-pick') this.mode = 'solo';
       if (this.screen === 'pause') { this.action('resume'); return; }
@@ -788,6 +796,7 @@ export class UI {
         body = `<div class="hero-k">Career</div><div class="hero-prof">${avatarHtml(p, 72)}<div><h2>${esc(p.name)}</h2><p>Level ${lv.level} · ${esc(lv.rank)}</p></div></div><div class="xpbar"><div style="width:${Math.round(lv.progress * 100)}%"></div></div><p class="dim">${lv.into.toLocaleString()} / ${lv.span.toLocaleString()} XP to level ${lv.level + 1}</p>`;
         break;
       }
+      case 'chartlib': body = '<div class="hero-k">Chart library</div><h2>Every charted song</h2><p>Songs players have charted, with their ranked parts. Get one you don\u2019t have from YouTube and play its ranked chart.</p>'; break;
       case 'leaderboard': {
         const rows = profiles.globalBoard().slice(0, 3);
         body = `<div class="hero-k">Leaderboards</div><h2>Top players</h2>${rows.length ? rows.map((r, i) => `<div class="hero-row"><b>${i + 1}</b>${avatarHtml(r.profile, 28)}<span>${esc(r.profile.name)}</span><em>${r.totalScore.toLocaleString()}</em></div>`).join('') : '<p class="dim">No scores yet.</p>'}`;
@@ -961,7 +970,7 @@ export class UI {
         return `<div class="opt inst ${i.id === this.instrument ? 'sel' : ''} ${ok ? '' : 'disabled'}" data-val="${i.id}" title="${ok ? `${count} notes` : esc(ch?.reason || '')}"><span class="ico">${i.ico}</span><span>${i.label}</span>${ok ? ratingHtml(rating(ch.notes[this.difficulty])) : ''}</div>`;
       }).join('');
       const tier = s.charts[this.instrument]?.available ? rating(s.charts[this.instrument].notes[this.difficulty]) : 0;
-      $('#pick-tier').textContent = tier ? `— ${TIERS[tier]}` : '';
+      $('#pick-tier').textContent = `${tier ? `— ${TIERS[tier]}` : ''}${settings.proMode ? ' · PRO' : ''}`;
       $('#pick-tier').classList.toggle('max', tier >= 7);
       $('#pick-difficulty').innerHTML = DIFFS.map((df) => {
         const n = s.charts[this.instrument]?.notes?.[df]?.length ?? 0;
@@ -976,6 +985,12 @@ export class UI {
       vw.hidden = this.instrument !== 'vocals';
       $('#pick-vocal').innerHTML = [['mic', `${fa('microphone')} Sing`], ['buttons', `${fa('gamepad')} Buttons`]].map(([v, l]) => `<div class="opt ${settings.vocalMode === v ? 'sel' : ''}" data-val="${v}">${l}${v === 'mic' && !s.lyrics?.words?.length ? '<small>no lyrics yet</small>' : ''}</div>`).join('');
       $$('#pick-vocal .opt').forEach((o) => o.addEventListener('click', () => { settings.vocalMode = o.dataset.val; this.renderDetail(s); }));
+      // vocal harmonies (AI-charted songs): sing the lead or one of the harmony parts
+      const harm = s.charts?.vocals?.harmonies || [];
+      const pw = $('#pick-vpart-wrap');
+      pw.hidden = this.instrument !== 'vocals' || settings.vocalMode !== 'mic' || !harm.some((x) => x?.length);
+      $('#pick-vpart').innerHTML = VOCAL_PARTS.map(([v, l]) => `<div class="opt ${(settings.vocalPart || 0) === v ? 'sel' : ''} ${v && !harm[v - 1]?.length ? 'disabled' : ''}" data-val="${v}">${l}</div>`).join('');
+      $$('#pick-vpart .opt:not(.disabled)').forEach((o) => o.addEventListener('click', () => { settings.vocalPart = +o.dataset.val; this.renderDetail(s); }));
       $$('#pick-difficulty .opt').forEach((o) => o.addEventListener('click', () => { this.difficulty = o.dataset.val; settings.lastDifficulty = this.difficulty; this.renderDetail(s); }));
     }
     const lb = band || pickForRoom ? [] : profiles.leaderboard(s.id, this.instrument, this.difficulty, 3);
@@ -1019,6 +1034,13 @@ export class UI {
     if (this.pickerHooks.some((h) => h(which, d))) return;
     if (which === 'real-mode' && this.selected) { settings.realInstrument = !settings.realInstrument; this.renderDetail(this.selected); return; }
     if (which === 'vocal-mode' && this.selected) { settings.vocalMode = settings.vocalMode === 'mic' ? 'buttons' : 'mic'; this.renderDetail(this.selected); return; }
+    if (which === 'vocal-part' && this.selected) {
+      const harm = this.selected.charts?.vocals?.harmonies || [];
+      const ok = VOCAL_PARTS.map(([v]) => v).filter((v) => !v || harm[v - 1]?.length);
+      settings.vocalPart = ok[(ok.indexOf(settings.vocalPart || 0) + d + ok.length) % ok.length];
+      this.renderDetail(this.selected);
+      return;
+    }
     if (which === 'lib-sort') {
       const i = SORTS.findIndex(([v]) => v === this.sort);
       this.sort = SORTS[(i + d + SORTS.length) % SORTS.length][0];
@@ -1090,13 +1112,15 @@ export class UI {
     } else {
       if (!s.charts[this.instrument]?.available) { this.toast('That instrument has no chart for this song', 'err'); return; }
       const p = profiles.current;
-      cfgs = [{ name: p?.name || 'P1', color: p?.color, profileId: p?.id || null, device: 'any', instrument: this.instrument, difficulty: this.difficulty, strum: this.instrument !== 'drums' && this.strumFor('any'), ...this.deviceCfg('any'), mic: this.instrument === 'vocals' && settings.vocalMode === 'mic', real: this.realMode(this.instrument) }];
+      cfgs = [{ name: p?.name || 'P1', color: p?.color, profileId: p?.id || null, device: 'any', instrument: this.instrument, difficulty: this.difficulty, strum: this.instrument !== 'drums' && this.strumFor('any'), ...this.deviceCfg('any'), mic: this.instrument === 'vocals' && settings.vocalMode === 'mic', part: this.instrument === 'vocals' && settings.vocalMode === 'mic' ? settings.vocalPart || 0 : 0, real: this.realMode(this.instrument) }];
     }
     this.app.engine.unlock();
     this.toast(`Loading ${s.title}...`);
     const [song, audio] = await Promise.all([getSong(s.id), getAudio(s.id)]);
     if (!audio) { this.toast('Audio for this song is missing — re-import it', 'err'); return; }
     await this.prepareWorld(song, audio, cfgs.map((c) => c.instrument));
+    this.applyVenue(true);
+    this.applyLooks(cfgs);
     this.app.menuMusic(false);
     this.stopPreview();
     const ghost = opts.ghost !== undefined ? opts.ghost
@@ -1104,6 +1128,44 @@ export class UI {
     this.lastPlay = { mode: this.mode, ghost };
     this.show('hud');
     await this.app.game.start(song, audio, cfgs, { ghost });
+  }
+
+  // ---------------------------------------------------------------- venues
+  /** The venue the stage shows: a tour gig plays in its own venue; otherwise Settings → Venue, once the tour has opened it. */
+  venueId(forGame = false) {
+    const gig = forGame && /^tour-(.+)$/.exec(this.marathon?.list?.id || '')?.[1];
+    if (gig) return gig;
+    const want = settings.venue;
+    if (!want || want === 'auto' || want === 'arena') return 'arena';
+    const v = VENUES.find((x) => x.id === want);
+    return v && unlocked(profiles.current, v) ? want : 'arena';
+  }
+
+  applyVenue(forGame = false) { this.app.stage.setVenue(this.venueId(forGame)); }
+
+  /** Import a song the world has charts for: search YouTube for it; it keeps the world's title and artist. */
+  findOnYouTube(artist, title) {
+    this.worldWant = { artist, title };
+    this.show('import');
+    this.importTab = 'youtube';
+    this.renderImportTab();
+    $('#yt-q').value = artist ? `${artist} - ${title}` : title;
+    this.action('yt-search');
+  }
+
+  /**
+   * The band on stage: each player's character at their part (cfgs: [{ instrument, profileId?, look? }]);
+   * in the menus, the signed-in profile's at the part it picked.
+   */
+  applyLooks(cfgs = null) {
+    const stage = this.app.stage;
+    stage.resetLooks();
+    if (cfgs) {
+      for (const c of cfgs) { const look = (c.profileId && profiles.byId(c.profileId)?.look) || c.look; if (look) stage.setLook(c.instrument, look); }
+      return;
+    }
+    const p = profiles.current;
+    if (p?.look) stage.setLook(p.look.part || 'guitar', p.look);
   }
 
   // ---------------------------------------------------------------- ranked charts (see net/charts.js)
@@ -1166,6 +1228,7 @@ export class UI {
     const mineOn = !part.world && !list.rows.some((r) => r.id === cur.id && r.ranked);
     if (part.world || !part.pin) items.push({ label: 'Play my own chart', icon: 'user', desc: mineOn && !part.pin ? 'You play it now (the ranked one is lined up when you play, unless you pick this)' : 'The chart your import made (or your edits): its runs have their own board', run: () => this.ownWorldChart(s, inst) });
     if (part.pin || part.refused) items.push({ label: 'Play the ranked chart again', icon: 'rotate', desc: 'Swap the ranked chart back in the next time you play', run: () => this.rankedWorldChart(s, inst) });
+    if (!list.rows.some((r) => r.id === cur.id)) items.push({ label: 'Share my chart', icon: 'share-nodes', desc: profiles.current ? 'Put your chart in the chart library now (a chart you fixed in the editor, say), for others to play and vote for' : 'Sign in to share charts', disabled: !profiles.current, run: () => this.shareWorldChart(s, inst) });
     this.openSheet({ title: `World charts · ${inst}`, sub: `${s.title} · a chart needs ${list.voteMin} votes, and more than the ranked one has, to replace it`, items });
   }
 
@@ -1206,6 +1269,18 @@ export class UI {
     await allowRanked(song, inst);
     await this.reloadSongs();
     this.toast(`${inst}: the ranked chart goes on the next time you play`, 'ok');
+    this._refreshDetail(s.id);
+  }
+
+  async shareWorldChart(s, inst) {
+    const p = profiles.current;
+    if (!p) return;
+    this.toast('Uploading your chart…');
+    try {
+      const song = await getSong(s.id);
+      const res = await shareChart(song, inst, p, () => getAudio(s.id));
+      this.toast(res.downloaded ? 'You play a world chart on this part: nothing new to share' : res.known ? 'That chart is in the library already' : res.ranked ? `Shared: your ${inst} chart is the first one, so it\u2019s the ranked chart` : `Shared: players can play your ${inst} chart and vote for it`, 'ok', 'share-nodes');
+    } catch (e) { this.toast(`Couldn\u2019t share the chart: ${e.message}`, 'err'); }
     this._refreshDetail(s.id);
   }
 
@@ -1305,6 +1380,7 @@ export class UI {
     this.app.menuMusic(false);
     this.stopPreview();
     this.lastPlay = { mode: 'replay', replay };
+    this.applyVenue(true);
     if (profiles.current) profiles.award(profiles.current.id, 'replay_watch').then((f) => f.forEach((a) => this.toast(`${a.name} — ${a.desc}`, 'ok', 'trophy')));
     this.show('hud');
     const cfg = {
@@ -1357,6 +1433,7 @@ export class UI {
     this.app.menuMusic(false);
     this.stopPreview();
     this.lastPlay = { mode: 'practice', practice: true };
+    this.applyVenue(true);
     const speed = this.practice.speed;
     let lastToast = 0;
     const status = (msg) => { const now = performance.now(); if (now - lastToast > 1500) { lastToast = now; this.toast(msg); } };
@@ -1713,6 +1790,15 @@ export class UI {
       const song = youtube
         ? await importFromYouTube(ytItem, this.splitter, this.app.engine, report)
         : await importFile(file, this.splitter, this.app.engine, report);
+      // imported for a world chart (weekly challenge, chart library): keep the world's title and artist so the boards match
+      if (youtube && this.worldWant) {
+        const want = this.worldWant;
+        this.worldWant = null;
+        if (song.title !== want.title || song.artist !== want.artist) {
+          const saved = await getSong(song.id);
+          if (saved) { Object.assign(saved, { title: want.title, artist: want.artist }); Object.assign(song, { title: want.title, artist: want.artist }); await saveSongJson(saved).catch(() => {}); }
+        }
+      }
       const bits = [song.method === 'ai' ? 'AI split' : 'DSP split', `${song.bpm} BPM`, song.album && `album ${song.album}`].filter(Boolean);
       this.toast(`"${song.title}" by ${song.artist} is ready — ${bits.join(' · ')}`, 'ok');
       const fresh = await profiles.count(youtube ? 'youtube_import' : 'import');
@@ -1967,7 +2053,7 @@ export class UI {
       ? `PRACTICE · ${Math.round(r.practice.speed * 100)}% speed · ${solo.instrument} · ${solo.difficulty}`
       : r.mode === 'online' ? `${r.song.artist} · online ${r.matchMode === 'band' ? 'band' : r.matchMode === 'battle' ? 'battle' : 'versus'} · ${everyone.length} players`
         : band ? `${r.song.artist} · ${r.players.length}-player band${r.failed ? ' · FAILED' : ''}`
-          : `${r.song.artist} · ${solo.instrument} · ${solo.difficulty}${solo.strum ? ' · strum' : ''}${solo.real ? ` · real ${solo.instrument}` : ''}${solo.assist ? ' · assists on (not on leaderboards)' : ''}${r.failed ? ' · FAILED' : ''}`;
+          : `${r.song.artist} · ${solo.instrument}${solo.part ? ` (harmony ${solo.part + 1})` : ''} · ${solo.difficulty}${solo.pro ? ' · PRO' : ''}${solo.strum ? ' · strum' : ''}${solo.real ? ` · real ${solo.instrument}` : ''}${solo.assist ? ' · assists on (not on leaderboards)' : ''}${r.failed ? ' · FAILED' : ''}`;
     const cv = coverUrl(r.song);
     $('#res-cover').style.background = cv ? `url('${cv}') center/cover` : this.art(r.song);
     $('[data-action="retry"]').textContent = r.mode === 'online' ? 'Back to lobby' : r.mode === 'replay' ? 'Watch again' : r.practice ? 'Practice again' : 'Play again';

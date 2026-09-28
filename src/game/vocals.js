@@ -64,6 +64,7 @@ export class VocalPlayer {
     this.maxMult = 4;
     this.rules = cfg.rules || currentRules();
     this.replayer = cfg.replayer || null;
+    this.part = cfg.part || 0; // 0 = lead, 1 / 2 = harmony parts 2 and 3
     this.activeSus = new Set();
     this.strum = false;
     this.lefty = false;
@@ -71,7 +72,16 @@ export class VocalPlayer {
 
   async setup(song, startTime = 0) {
     const chart = song.charts.vocals;
-    const { segs, phrases } = buildVocalTrack(chart.notes[this.diff] || chart.notes.expert, chart.phrases);
+    const lead = chart.notes[this.diff] || chart.notes.expert;
+    const harm = chart.harmonies || [];
+    if (this.part && !harm[this.part - 1]?.length) {
+      this.hud.callout(`No harmony ${this.part + 1} in this song: sing the lead`, '#ece5d3');
+      this.part = 0;
+    }
+    const mine = this.part ? harm[this.part - 1] : lead;
+    const { segs, phrases } = buildVocalTrack(mine, chart.phrases);
+    // the other parts, drawn faintly on the track (the harmonies a band would sing with you)
+    this.ghosts = [lead, ...harm].filter((notes, k) => k !== this.part && notes?.length).map((notes) => buildVocalTrack(notes, chart.phrases).segs.filter((s) => s.end >= startTime));
     this.segs = segs.filter((s) => s.end >= startTime);
     this.phrases = phrases.filter((p) => p.end >= startTime);
     this.notes = this.segs.map((s) => ({ t: s.start, len: s.end - s.start })); // for the session's end time
@@ -201,7 +211,7 @@ export class VocalPlayer {
       index: this.index, name: this.cfg.name, color: this.cfg.color, device: this.cfg.device, profileId: this.cfg.profileId || null,
       instrument: 'vocals', difficulty: this.diff, score: Math.floor(this.score), stars: this.failed ? 0 : th.filter((x) => accuracy >= x).length,
       gold: !this.failed && accuracy >= 0.98 && this.stats.miss === 0, accuracy, hits, total, maxStreak: this.maxStreak, ...this.stats,
-      odActivations: this.odActivations, failed: this.failed, strum: false, mic: true,
+      odActivations: this.odActivations, failed: this.failed, strum: false, mic: true, part: this.part,
     };
   }
 }
@@ -246,6 +256,15 @@ class VocalTrack {
       g.fillRect(0, yOf(m), w, 1);
     }
     const bh = Math.max(8, h * 0.07);
+    // the other vocal parts: thin lines, so you hear where the harmony sits without singing it
+    g.fillStyle = 'rgba(236,229,211,0.16)';
+    for (const segs of p.ghosts || []) {
+      for (const s of segs) {
+        if (s.end < te - BEHIND || s.start > te + AHEAD) continue;
+        pill(g, xOf(s.start), yOf(s.m) - bh * 0.18, Math.max(3, xOf(s.end) - xOf(s.start)), bh * 0.36);
+        g.fill();
+      }
+    }
     for (const s of inView) {
       const x0 = xOf(s.start), x1 = xOf(s.end), y = yOf(s.m);
       g.fillStyle = s.od ? 'rgba(240,180,41,0.35)' : 'rgba(80,190,255,0.3)';

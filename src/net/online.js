@@ -61,14 +61,14 @@ export class OnlineClient {
    * address: an invite code, a room URL, or a LAN address ("127.0.0.1:5180" for the host itself).
    * A brand-new internet room can take a few seconds to become reachable, so keep retrying for a while.
    */
-  async connect(address, { name, color, profileId, hostKey = null }) {
+  async connect(address, { name, color, profileId, look = null, hostKey = null }) {
     const base = roomUrl(address);
     if (!base) throw new Error('Enter an invite code');
     const remote = base.startsWith('https://');
     const deadline = performance.now() + (remote ? 30000 : 4000);
     let lastErr;
     for (let attempt = 0; performance.now() < deadline; attempt++) {
-      try { return await this._open(base, { name, color, profileId, hostKey }); } catch (e) { lastErr = e; }
+      try { return await this._open(base, { name, color, profileId, look, hostKey }); } catch (e) { lastErr = e; }
       if (this.cancelled) break;
       this.emit('connecting', attempt + 1);
       await new Promise((r) => setTimeout(r, 1500));
@@ -76,7 +76,7 @@ export class OnlineClient {
     throw new Error(remote ? `No room found for "${inviteCode(base) || address}" — check the code, or ask the host if their room is still open` : (lastErr?.message || `Could not connect to ${address}`));
   }
 
-  _open(base, { name, color, profileId, hostKey }) {
+  _open(base, { name, color, profileId, look, hostKey }) {
     this.close();
     this.cancelled = false;
     this.base = base;
@@ -85,7 +85,7 @@ export class OnlineClient {
       const ws = new WebSocket(base.replace(/^http/, 'ws'));
       this.ws = ws;
       const timer = setTimeout(() => { ws.close(); reject(new Error(`No STEMSTAGE room answered at ${this.address}`)); }, 8000);
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', name, color, profileId, hostKey }));
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', name, color, profileId, look, hostKey }));
       ws.onerror = () => { clearTimeout(timer); reject(new Error(`Could not connect to ${this.address}`)); };
       ws.onclose = () => {
         clearTimeout(timer);

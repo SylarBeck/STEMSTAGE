@@ -4,7 +4,7 @@
 // any of their notes is played on audio (one voice), and note by note on MIDI.
 import { settings } from '../settings.js';
 import { Mic } from '../audio/pitch.js';
-import { Player, WINDOWS } from './player.js';
+import { Player } from './player.js';
 import { TabView, KeysView, assignTab, TUNINGS } from './real-view.js';
 
 let sharedInput = null;
@@ -68,8 +68,8 @@ export class RealPlayer extends Player {
     let best = null;
     for (let k = 0; k < this.notes.length; k++) {
       const n = this.notes[k];
-      if (n.t - t > WINDOWS.good) break;
-      if (n.judged || t - n.t > WINDOWS.good) continue;
+      if (n.t - t > this.win.good) break;
+      if (n.judged || t - n.t > this.win.good) continue;
       if (this.matches(n.m, midi) && (!best || Math.abs(n.t - t) < Math.abs(best.t - t))) best = n;
     }
     if (best) {

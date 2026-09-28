@@ -47,6 +47,8 @@
     .recent small { display: block; color: var(--dim); font-size: 15px; margin-top: 2px; }
     .recent .num { font-variant-numeric: tabular-nums; font-weight: 700; }
     .recent a.pl { color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 800; }
+    .wk-song b { display: block; font-family: var(--display); font-size: 30px; line-height: 1.05; text-transform: uppercase; }
+    .wk-song small { display: block; color: var(--dim); font-size: 16px; margin: 2px 0 12px; }
     .api { grid-column: 1 / -1; color: var(--dim); font-size: 16px; margin: 0; overflow-wrap: anywhere; }
   </style>
 </head>
@@ -54,7 +56,7 @@
   <nav class="nav">
     <div class="wrap">
       <a class="brand" href="../">STEMSTAGE</a>
-      <div class="links"><a href="../">Home</a><a class="here" href="./" aria-current="page">Leaderboard</a><a href="../#screens">Screenshots</a><a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a></div>
+      <div class="links"><a href="../">Home</a><a class="here" href="./" aria-current="page">Leaderboard</a><a href="../charts/">Charts</a><a href="../#screens">Screenshots</a><a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a></div>
       <div class="right">
         <a class="btn primary nav-dl" href="../#download"><i class="fa-solid fa-download"></i> Download</a>
         <button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav-panel"><i class="fa-solid fa-bars"></i><span>Menu</span></button>
@@ -63,6 +65,7 @@
     <div class="nav-panel" id="nav-panel">
       <a href="../">Home</a>
       <a class="here" href="./">Leaderboard</a>
+      <a href="../charts/">Chart library</a>
       <a href="../#screens">Screenshots</a>
       <hr />
       <a class="small" href="https://github.com/SylarBeck/STEMSTAGE/wiki/Leaderboard-API"><i class="fa-solid fa-code"></i> Leaderboard API</a>
@@ -75,7 +78,7 @@
     <div class="wrap">
       <h1 class="torn">World leaderboard</h1>
       <div class="scrawl">the best on every stage</div>
-      <p>Runs from every STEMSTAGE player who's signed in to a profile. Every import makes its own AI chart, so each song part has one <b>ranked chart</b>: the game downloads it and lines it up with your own recording, and everyone on a ranked board played the same notes. Players can vote a better chart in.</p>
+      <p>Runs from every STEMSTAGE player who's signed in to a profile. Every import makes its own AI chart, so each song part has one <b>ranked chart</b>: the game downloads it and lines it up with your own recording, and everyone on a ranked board played the same notes. Players can vote a better chart in. <a href="../charts/">Browse the chart library →</a></p>
     </div>
   </header>
 
@@ -93,6 +96,8 @@
       <div id="charts"></div>
     </section>
     <div class="side">
+      <section class="panel"><h2><i class="fa-solid fa-calendar-week"></i> Weekly challenge</h2><div id="weekly"><p class="muted">Loading…</p></div></section>
+      <section class="panel"><h2><i class="fa-solid fa-trophy"></i> <span id="season-title">Season</span></h2><table class="table" id="season"><tr><td class="muted">Loading…</td></tr></table><p class="board-note" id="season-note"></p></section>
       <section class="panel"><h2><i class="fa-solid fa-crown"></i> Top players</h2><table class="table" id="players"><tr><td class="muted">Loading…</td></tr></table></section>
       <section class="panel"><h2><i class="fa-solid fa-bolt"></i> Latest records</h2><ul class="recent" id="recent"><li class="muted">Loading…</li></ul></section>
     </div>
@@ -184,6 +189,21 @@
     const markMine = () => document.querySelectorAll('[data-player]').forEach((el) => el.classList.toggle('mine', mine.has(el.dataset.player)));
     document.addEventListener('stemstage:me', (e) => { mine = new Set((e.detail?.players || []).map((p) => p.playerId)); markMine(); });
     new MutationObserver(markMine).observe(document.querySelector('main'), { childList: true, subtree: true });
+
+    // the weekly challenge and the season it counts toward
+    const left = (t) => { const s = t - Date.now() / 1000; return s <= 0 ? 'ending now' : s > 129600 ? `${Math.round(s / 86400)} days left` : s > 5400 ? `${Math.round(s / 3600)} hours left` : `${Math.max(1, Math.round(s / 60))} min left`; };
+    get('challenge', { limit: 10 }).then((c) => {
+      if (c.none) { $('weekly').innerHTML = '<p class="muted">No challenge yet: it starts once a song has a ranked chart.</p>'; return; }
+      $('weekly').innerHTML = `<div class="wk-song"><b>${esc(c.song.title)}</b><small>${esc(c.song.artist)} · ${esc(c.instrument)} · ${esc(c.difficulty)} · ${left(c.ends)}</small></div>
+        <table class="table"><tr><th>#</th><th>Player</th><th class="num">Score</th></tr>${c.rows.map((r) => `<tr class="${r.rank === 1 ? 'top1' : ''}" data-player="${esc(r.playerId)}"><td class="pos">${r.rank}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td><td class="num">${r.score.toLocaleString()}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No runs yet this week.</td></tr>'}</table>
+        <p class="board-note">Play it in the game: Tour → Weekly challenge. Your best run this week on the ranked chart counts.</p>`;
+    }).catch(() => { $('weekly').innerHTML = '<p class="muted">The weekly challenge can\'t be loaded right now.</p>'; });
+    get('season', { limit: 10 }).then((s) => {
+      $('season-title').textContent = `Season ${s.season}`;
+      $('season-note').textContent = `${left(s.ends)} · points from the weekly challenges: 100 for first, down to 10 for taking part.`;
+      $('season').innerHTML = '<tr><th>#</th><th>Player</th><th class="num">Points</th><th class="num">Wins</th></tr>' + (s.rows.map((r) => `<tr class="${r.rank === 1 ? 'top1' : ''}" data-player="${esc(r.playerId)}"><td class="pos">${r.rank}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td><td class="num">${r.points}</td><td class="num">${r.wins}</td></tr>`).join('')
+        || '<tr><td colspan="4" class="muted">No points yet this season.</td></tr>');
+    }).catch(() => fail($('season'), 'The season'));
 
     get('players', { limit: 25 }).then((p) => {
       $('players').innerHTML = '<tr><th>#</th><th>Player</th><th class="num">Total</th><th class="num">★</th></tr>' + (p.rows.map((r, i) => `

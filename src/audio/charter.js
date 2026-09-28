@@ -5,7 +5,7 @@
 //  4. Pitch tracking (YIN for bass, harmonic salience + chroma for guitar/keys)
 //  5. Grid quantisation, lane mapping, sustains, 4 difficulty reductions, overdrive phrases
 import { FFT, hann, decimate2, percentile, yin, hzToMidi, midiToHz } from './dsp.js';
-import { attributeNotes, notesFromEvents } from './transcription.js';
+import { attributeNotes, notesFromEvents, harmonyParts } from './transcription.js';
 
 export const SR = 22050;
 const N = 1024;
@@ -655,6 +655,7 @@ export function buildCharts({ stems, duration, aiNotes = null }, onProgress = ()
   const raw = {};
   const transcriber = {};
   const dropped = {};
+  let vocalEvents = null; // the AI's vocal notes: harmonies come from the ones sung with the lead
   raw.drums = buildDrums(feats.drums);
   const melodic = ['bass', 'guitar', 'keys', 'vocals'];
   melodic.forEach((inst, k) => {
@@ -664,6 +665,7 @@ export function buildCharts({ stems, duration, aiNotes = null }, onProgress = ()
       // neural note events, minus notes that really belong to another stem
       const res = attributeNotes(inst, events, stems, SR);
       raw[inst] = notesFromEvents(inst, res.notes, grid, assignLanes, FPS);
+      if (inst === 'vocals') vocalEvents = res.notes;
       transcriber[inst] = 'basic-pitch';
       dropped[inst] = res.dropped;
     } else if (stems[inst]) {
@@ -729,6 +731,11 @@ export function buildCharts({ stems, duration, aiNotes = null }, onProgress = ()
       notes,
       phrases,
     };
+  }
+  // vocal harmonies (parts 2 and 3) need the AI transcriber: it hears several voices at once
+  if (vocalEvents && charts.vocals?.available) {
+    const [h2, h3] = harmonyParts(vocalEvents);
+    if (h2.length || h3.length) charts.vocals.harmonies = [h2, h3];
   }
   onProgress(1, 'Done');
   return { bpm: +bpm.toFixed(2), beats: beats.map((b) => +b.toFixed(4)), downbeat, sub, charts, analysis: { transcriber, dropped } };

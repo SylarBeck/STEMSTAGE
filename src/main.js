@@ -42,6 +42,7 @@ class App {
       if (key === 'menuMusicVolume' && this.menuGain) this.menuGain.gain.setTargetAtTime(settings.menuMusicVolume, this.engine.ctx.currentTime, 0.1);
       if (key === 'menuMusic' && !this.game.running) { this.menuMusic(false, true); setTimeout(() => this.menuMusic(true), 400); }
       if (key === 'fullscreen') setFullscreen(settings.fullscreen);
+      if (key === 'venue' && !this.game.running) this.ui.applyVenue(false);
     });
     // Windows' microphone prompt: the game just left fullscreen so it can be seen
     window.addEventListener('stemstage:mic-prompt', () => this.ui.toast('Allow microphone access in the Windows prompt (it may be at the top or bottom of the screen)', 'ok', 'microphone'));
