@@ -21,6 +21,7 @@ process can host the whole game.
 import json
 import mimetypes
 import os
+import re
 import sys
 import threading
 import time
@@ -41,6 +42,10 @@ import lyrics
 
 HOST = os.environ.get("STEMSTAGE_HOST", "127.0.0.1")
 PORT = int(os.environ.get("STEMSTAGE_PORT", "8765"))
+# web pages allowed to call the splitter: the game on this PC (any port) and the desktop app
+APP_ORIGIN = re.compile(r"^(https?://(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?|tauri://localhost|https?://tauri\.localhost)$", re.I)
+LOOPBACK_HOST = re.compile(r"^(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?$", re.I)
+MAX_AUDIO_BYTES = 20 * 60 * 48000 * 2 * 4  # 20 minutes of 48 kHz stereo float32
 MODEL_NAME = os.environ.get("STEMSTAGE_MODEL", "htdemucs_6s")
 SHIFTS = int(os.environ.get("STEMSTAGE_SHIFTS", "1"))
 DIST_DIR = (Path(__file__).resolve().parent.parent / "dist")
@@ -193,10 +198,32 @@ class Handler(BaseHTTPRequestHandler):
         log(self.address_string(), fmt % args)
 
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # the game (http://127.0.0.1:5173 or the desktop app) is the only web page that may use the splitter
+        origin = self.headers.get("Origin")
+        if origin and APP_ORIGIN.match(origin):
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Sample-Rate, X-Channels")
-        self.send_header("Access-Control-Allow-Private-Network", "true")
+
+    def _refused(self):
+        """Why a request can't use the splitter ('' = it can): a page from another site, or a DNS-rebinding
+        host name while the splitter only listens on this PC. Programs that aren't browsers send no Origin."""
+        origin = self.headers.get("Origin")
+        if origin is not None:
+            if not APP_ORIGIN.match(origin):
+                return "cross-site request"
+        elif self.headers.get("Sec-Fetch-Site") == "cross-site":
+            return "cross-site request"  # an <img>/<script>/link from another site
+        if HOST in ("127.0.0.1", "localhost", "::1") and not LOOPBACK_HOST.match(self.headers.get("Host", "")):
+            return "unexpected Host"
+        return ""
+
+    def _body(self, limit):
+        n = int(self.headers.get("Content-Length", "0"))
+        if n < 0 or n > limit:
+            raise ValueError(f"body too large ({n} bytes)")
+        return self.rfile.read(n)
 
     def _json(self, obj, code=200):
         body = json.dumps(obj).encode()
@@ -214,6 +241,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parts = [p for p in self.path.split("?")[0].split("/") if p]
+        why = self._refused()
+        if why and parts != ["health"]:
+            return self._json({"error": why}, 403)
         if parts == ["health"]:
             return self._json({
                 "ok": True,
@@ -272,6 +302,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         route = self.path.split("?")[0].rstrip("/")
+        why = self._refused()
+        if why:
+            return self._json({"error": why}, 403)
         if route == "/transcribe":
             return self._transcribe()
         if route == "/lyrics":
@@ -281,8 +314,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             sr = int(self.headers.get("X-Sample-Rate", "44100"))
             ch = int(self.headers.get("X-Channels", "2"))
-            n = int(self.headers.get("Content-Length", "0"))
-            raw = self.rfile.read(n)
+            if not (8000 <= sr <= 192000 and 1 <= ch <= 8):
+                raise ValueError("bad sample rate / channels")
+            raw = self._body(MAX_AUDIO_BYTES)
             audio = np.frombuffer(raw, dtype="<f4").reshape(ch, -1).copy()
         except Exception as exc:
             return self._json({"error": f"bad audio payload: {exc}"}, 400)
@@ -303,8 +337,9 @@ class Handler(BaseHTTPRequestHandler):
             query = dict(p.split("=", 1) for p in self.path.split("?", 1)[1].split("&") if "=" in p) if "?" in self.path else {}
             stem = query.get("stem", "other")
             sr = int(self.headers.get("X-Sample-Rate", "22050"))
-            n = int(self.headers.get("Content-Length", "0"))
-            mono = np.frombuffer(self.rfile.read(n), dtype="<f4").copy()
+            if not 8000 <= sr <= 192000:
+                raise ValueError("bad sample rate")
+            mono = np.frombuffer(self._body(MAX_AUDIO_BYTES), dtype="<f4").copy()
         except Exception as exc:
             return self._json({"error": f"bad payload: {exc}"}, 400)
         try:
@@ -323,8 +358,7 @@ class Handler(BaseHTTPRequestHandler):
         if not lyrics.available():
             return self._json({"error": "faster-whisper is not installed (npm run ai:setup)"}, 501)
         try:
-            n = int(self.headers.get("Content-Length", "0"))
-            mono = np.frombuffer(self.rfile.read(n), dtype="<f4").copy()
+            mono = np.frombuffer(self._body(MAX_AUDIO_BYTES), dtype="<f4").copy()
         except Exception as exc:
             return self._json({"error": f"bad payload: {exc}"}, 400)
         try:
@@ -339,6 +373,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         parts = [p for p in self.path.split("/") if p]
+        why = self._refused()
+        if why:
+            return self._json({"error": why}, 403)
         if len(parts) == 2 and parts[0] == "jobs":
             with _jobs_lock:
                 _jobs.pop(parts[1], None)

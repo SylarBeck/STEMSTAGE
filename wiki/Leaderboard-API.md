@@ -66,7 +66,7 @@ A chart's id is the first 16 hex digits of the sha256 of its canonical JSON (int
 
 ```json
 {
-  "player": { "id": "p_…", "secret": "…", "name": "Varconstint", "discord": { "id": "…", "avatar": "…" } },
+  "player": { "id": "p_…", "secret": "…", "name": "Varconstint" },
   "song": { "title": "Hotel California", "artist": "Eagles", "duration": 391 },
   "instrument": "guitar", "difficulty": "expert", "chartId": "4252cfb760b3a4ae",
   "score": 123456, "stars": 5, "accuracy": 0.97, "fc": false, "maxStreak": 321, "notes": 800, "version": "1.5.0"
@@ -78,12 +78,15 @@ A chart's id is the first 16 hex digits of the sha256 of its canonical JSON (int
 - A profile's `id` and `secret` are made on its first run and kept in `profiles.json`. The first run registers the secret, and later runs with the same id must match it (**403** otherwise), so nobody can post under your name.
 - `chartId` is the chart the run was played on (see **Ranked charts**). Without it, the run goes on the unranked board.
 - Only your best run per chart stays on the board. Every run is kept in history. Overall totals count your best run per song part, whichever chart it was on.
-- Impossible values are refused (**400**), and each address can send 40 runs per 10 minutes (**429**).
+- Impossible values are refused (**400**), and each address can send 40 runs per 10 minutes (**429**). On a chart the API has, a run can't have a longer streak than the chart has notes, or score more than every note hit at the top multiplier with overdrive on; a `chartId` from another song or instrument is refused too.
+- A request body is at most 64 KB (charts: 1.5 MB), or **413**.
 - The game sends runs of signed-in profiles only. It never sends practice, replays, assisted or failed runs, and Settings → World leaderboard turns it off.
 
 `POST /v1/charts` with the same `player` object plus `song: { title, artist, duration }`, `instrument`, `chart` (the format above), `fp` (the fingerprint) and `meta: { edited, method, version }` → `{ ok, chartId, songKey, known, ranked, rankedChart }`. The same chart uploaded again is `known`; the same notes under another song is refused (**409**). Up to 1.5 MB.
 
-`POST /v1/charts/vote` with `{ player, chartId }` → `{ ok, chartId, votes, voteMin, rankedVotes, rankedChart, promoted }`. **403** until the player has a run on that chart.
+`POST /v1/charts/vote` with `{ player, chartId }` → `{ ok, chartId, votes, voteMin, rankedVotes, rankedChart, promoted }`. **403** until the player has a run on that chart. Votes count once per address: several profiles voting from one connection are one vote.
+
+`POST /v1/link` with `{ player, token }` shows a Discord account next to the profile's runs: `token` is the OAuth token from the game's **Log in with Discord** (scope `identify`), which the API checks with Discord itself and doesn't keep → `{ ok, discord: { id, avatar } }`. `{ player, unlink: true }` takes it off. A Discord account the game only *says* it has is ignored, so nobody can show your name and avatar on their runs.
 
 ## Weekly challenges and seasons
 

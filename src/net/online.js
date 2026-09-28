@@ -1,6 +1,86 @@
 // Online multiplayer client: room connection (invite code over the internet, or a LAN address), clock sync
 // with the host, lobby state, song download from the host, and live score relay during a match.
 import { getSong, copySongFrom, refreshSongFrom } from '../storage/library.js';
+import { cleanLook } from '../profile/looks.js';
+
+// ---------------------------------------------------------------- what a room sends, made safe to show
+// A room is someone else's server (a public room can be anyone's), so everything it sends is checked here once:
+// names and titles stay text (every screen escapes them), colours are colours, instruments, difficulties and modes
+// come from the known lists, numbers are numbers. Screens can then use them without further checks.
+const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'], DIFFS = ['easy', 'medium', 'hard', 'expert'];
+const MODES = ['versus', 'battle', 'band'], PHASES = ['lobby', 'playing'], ATTACKS = ['mirror', 'fog', 'shake', 'drain'];
+const EVENTS = ['od', 'fail', 'attack', 'left'];
+const str = (v, n) => (typeof v === 'string' ? v : v == null ? '' : String(v)).slice(0, n);
+const num = (v, lo = -1e12, hi = 1e12) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : 0);
+const hex = (v, fallback = '#df3a2c') => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : fallback);
+const oneOf = (list, v, fallback = list[0]) => (list.includes(v) ? v : fallback);
+const idOf = (v) => (typeof v === 'string' && /^[\w-]{1,80}$/.test(v) ? v : '');
+
+/** A player's numbers (live scoreboard, results): numbers and true/false only, instrument / difficulty from the lists. */
+function stats(o) {
+  const out = {};
+  if (!o || typeof o !== 'object') return out;
+  for (const [k, v] of Object.entries(o).slice(0, 80)) {
+    if (!/^[a-zA-Z]{1,24}$/.test(k) || ['id', 'name', 'color', 'profileId', 'look', 't'].includes(k)) continue;
+    if (k === 'instrument') out[k] = oneOf(INSTS, v);
+    else if (k === 'difficulty') out[k] = oneOf(DIFFS, v, 'medium');
+    else if (typeof v === 'boolean') out[k] = v;
+    else if (typeof v === 'number' && Number.isFinite(v)) out[k] = num(v);
+  }
+  return out;
+}
+const person = (p) => ({ id: idOf(p?.id), name: str(p?.name, 24) || 'Player', color: hex(p?.color), profileId: idOf(p?.profileId) || null });
+const songInfo = (s) => (s && typeof s === 'object' && idOf(s.id) ? {
+  id: idOf(s.id), title: str(s.title, 120), artist: str(s.artist, 120), duration: num(s.duration, 0, 7200),
+  instruments: (Array.isArray(s.instruments) ? s.instruments : []).filter((i) => INSTS.includes(i)), rev: str(s.rev, 32),
+} : null);
+const resultRow = (r) => ({ ...stats(r), ...person(r) });
+function historyEntry(h) {
+  return {
+    matchId: str(h?.matchId, 40), mode: oneOf(MODES, h?.mode), date: num(h?.date, 0), song: songInfo(h?.song),
+    winnerId: idOf(h?.winnerId) || null, draw: !!h?.draw, bandScore: num(h?.bandScore, 0),
+    results: (Array.isArray(h?.results) ? h.results : []).slice(0, 16).map(resultRow),
+  };
+}
+export function cleanRoom(room) {
+  if (!room || typeof room !== 'object') return null;
+  return {
+    code: str(room.code, 12).replace(/[^A-Z0-9]/gi, ''), phase: oneOf(PHASES, room.phase), song: songInfo(room.song), startAt: num(room.startAt, 0),
+    mode: oneOf(MODES, room.mode), max: num(room.max, 1, 16) || 8,
+    history: (Array.isArray(room.history) ? room.history : []).slice(0, 20).map(historyEntry),
+    rematch: (Array.isArray(room.rematch) ? room.rematch : []).map(idOf).filter(Boolean),
+    players: (Array.isArray(room.players) ? room.players : []).slice(0, 16).map((p) => ({
+      ...person(p), host: !!p?.host, instrument: oneOf(INSTS, p?.instrument), difficulty: oneOf(DIFFS, p?.difficulty, 'medium'),
+      ready: !!p?.ready, hasSong: !!p?.hasSong, loading: num(p?.loading, 0, 1), connected: p?.connected !== false,
+    })),
+  };
+}
+/** One message from the room, cleaned (null = drop it). */
+export function cleanMessage(msg) {
+  if (!msg || typeof msg !== 'object') return null;
+  switch (msg.t) {
+    case 'welcome': return { t: 'welcome', id: idOf(msg.id), host: !!msg.host, room: cleanRoom(msg.room), serverTime: num(msg.serverTime) };
+    case 'pong': return { t: 'pong', c: num(msg.c), s: num(msg.s) };
+    case 'room': return msg.room ? { t: 'room', room: cleanRoom(msg.room) } : null;
+    case 'start': return {
+      t: 'start', matchId: str(msg.matchId, 40), startAt: num(msg.startAt, 0), song: songInfo(msg.song), mode: oneOf(MODES, msg.mode),
+      lineup: (Array.isArray(msg.lineup) ? msg.lineup : []).slice(0, 16).map((q) => ({ ...person(q), instrument: oneOf(INSTS, q?.instrument), difficulty: oneOf(DIFFS, q?.difficulty, 'medium'), look: cleanLook(q?.look) })),
+    };
+    case 'live': return { ...stats(msg), t: 'live', id: idOf(msg.id) };
+    case 'event': {
+      if (!EVENTS.includes(msg.kind)) return null;
+      const target = msg.target && ATTACKS.includes(msg.target.a) ? { to: idOf(msg.target.to), a: msg.target.a } : undefined;
+      return { t: 'event', id: idOf(msg.id), kind: msg.kind, target };
+    }
+    case 'results': return {
+      t: 'results', matchId: str(msg.matchId, 40), mode: oneOf(MODES, msg.mode), winnerId: idOf(msg.winnerId) || null, draw: !!msg.draw, update: !!msg.update,
+      results: (Array.isArray(msg.results) ? msg.results : []).slice(0, 16).map(resultRow),
+    };
+    case 'chat': return { t: 'chat', from: str(msg.from, 24), color: hex(msg.color), text: str(msg.text, 200) };
+    case 'closed': return { t: 'closed', reason: str(msg.reason, 200) };
+    default: return null;
+  }
+}
 
 /**
  * A song's chart revision: friends keep a copy of the host's song, so when the host changes its notes (edits the
@@ -95,8 +175,10 @@ export class OnlineClient {
       };
       ws.onmessage = (e) => {
         let msg;
-        try { msg = JSON.parse(e.data); } catch { return; }
+        try { msg = cleanMessage(JSON.parse(e.data)); } catch { return; }
+        if (!msg) return;
         if (msg.t === 'welcome') {
+          if (!msg.room || !msg.id) return;
           clearTimeout(timer);
           this.id = msg.id; this.host = msg.host; this.room = msg.room;
           this.bestRtt = Infinity;

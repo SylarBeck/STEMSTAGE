@@ -3,6 +3,7 @@
 // to season points over six weeks.
 import { API, songKey } from './leaderboard.js';
 import { profiles } from '../profile/profiles.js';
+import { cleanApi } from './api-clean.js';
 
 const cache = new Map(); // path → { at, data }
 async function get(path, fresh) {
@@ -13,8 +14,9 @@ async function get(path, fresh) {
   const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `challenge ${r.status}`);
-  cache.set(url, { at: Date.now(), data: j });
-  return j;
+  const data = cleanApi(j);
+  cache.set(url, { at: Date.now(), data });
+  return data;
 }
 
 /** This week's challenge: { week, season, starts, ends, song, instrument, difficulty, chart, rows, me } or { none: true } */

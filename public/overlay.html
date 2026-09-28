@@ -52,6 +52,8 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const fa = (n) => `<i class="fa-solid fa-${n}"></i>`;
+    const num = (v) => (Number.isFinite(+v) ? +v : 0);
+    const color = (v) => (/^#[0-9a-f]{6}$/i.test(v || '') ? v : '#e2432f');
     const ICON = { guitar: fa('guitar'), bass: fa('guitar'), drums: fa('drum'), keys: fa('music'), vocals: fa('microphone') };
     const stars = (n) => Array.from({ length: 5 }, (_, i) => `<i class="fa-${i < n ? 'solid' : 'regular'} fa-star"></i>`).join('');
     function render(s) {
@@ -62,19 +64,19 @@
         $('artist').textContent = s.song.artist;
         $('cv').style.backgroundImage = s.song.cover ? `url('${s.song.cover}')` : '';
         $('prog').style.width = `${Math.round((s.progress || 0) * 100)}%`;
-        $('players').innerHTML = s.players.map((p) => `<div class="pl ${p.failed ? 'failed' : ''}"><i style="background:${p.color || '#e2432f'}"></i><span>${esc(p.name)} ${ICON[p.instrument] || ''} <small>${esc(p.difficulty)}</small></span><b>${Number(p.score).toLocaleString()}</b><em class="${p.od ? 'od' : ''}">${p.mult}× · ${p.streak}</em></div>`).join('');
+        $('players').innerHTML = s.players.map((p) => `<div class="pl ${p.failed ? 'failed' : ''}"><i style="background:${color(p.color)}"></i><span>${esc(p.name)} ${ICON[p.instrument] || ''} <small>${esc(p.difficulty)}</small></span><b>${Number(p.score).toLocaleString()}</b><em class="${p.od ? 'od' : ''}">${num(p.mult)}× · ${num(p.streak)}</em></div>`).join('');
       }
       const v = s.vote;
       $('vote').hidden = !v;
       if (v) {
-        const total = Math.max(1, v.tallies.reduce((a, b) => a + b, 0));
-        $('vote').innerHTML = `<div class="k">Vote the next song · ${v.left}s</div>${v.options.map((o, i) => `<div class="opt"><div class="fill" style="width:${Math.round((v.tallies[i] / total) * 100)}%"></div><span class="n">${i + 1}</span><span class="t">${esc(o.title)}</span><span class="c">${v.tallies[i]}</span></div>`).join('')}<div class="hint">Type <b>!vote 1</b>–<b>${v.options.length}</b> in chat</div>`;
+        const total = Math.max(1, v.tallies.reduce((a, b) => a + num(b), 0));
+        $('vote').innerHTML = `<div class="k">Vote the next song · ${num(v.left)}s</div>${v.options.map((o, i) => `<div class="opt"><div class="fill" style="width:${Math.round((num(v.tallies[i]) / total) * 100)}%"></div><span class="n">${i + 1}</span><span class="t">${esc(o.title)}</span><span class="c">${num(v.tallies[i])}</span></div>`).join('')}<div class="hint">Type <b>!vote 1</b>–<b>${v.options.length}</b> in chat</div>`;
       }
       const r = s.mode === 'results' && s.result;
       $('result').hidden = !r;
       if (r) {
         const best = [...r.players].sort((a, b) => b.score - a.score)[0];
-        $('result').innerHTML = `<div class="k">Results · ${esc(r.song.title)}</div><div class="score">${Number(best.score).toLocaleString()}</div><div class="stars">${stars(best.stars)}</div><div class="hint">${esc(best.name)} · ${Math.round(best.accuracy * 100)}% accuracy</div>`;
+        $('result').innerHTML = `<div class="k">Results · ${esc(r.song.title)}</div><div class="score">${Number(best.score).toLocaleString()}</div><div class="stars">${stars(num(best.stars))}</div><div class="hint">${esc(best.name)} · ${Math.round(num(best.accuracy) * 100)}% accuracy</div>`;
       }
       const reqs = s.requests || [];
       $('reqs').hidden = !reqs.length && !s.channel;

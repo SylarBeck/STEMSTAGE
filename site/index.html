@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <!-- only this site's scripts, the leaderboard API and the fonts / icons it loads (a page can't be made to load or send anything else) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self' https://api.stemstage.varconstint.com https://api.github.com http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>STEMSTAGE — the rhythm game that plays any song</title>
   <meta name="description" content="Drop in any song: AI splits it into stems and charts guitar, bass, drums, keys and vocals. Play with a controller, Rock Band gear, a DualSense — or your real guitar, bass and keyboard. Free for Windows and Linux." />

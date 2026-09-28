@@ -75,7 +75,7 @@ export function createStream() {
       const name = url.pathname.split('/').filter(Boolean)[0];
       if (name === 'events' && req.method === 'GET') {
         const role = url.searchParams.get('role') === 'game' ? 'game' : 'overlay';
-        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'Access-Control-Allow-Origin': '*' });
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' }); // the overlay is served from here too
         res.write(`event: hello\ndata: ${JSON.stringify(role === 'game' ? statusInfo() : last)}\n\n`);
         clients[role].add(res);
         const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* closed */ } }, 20000);

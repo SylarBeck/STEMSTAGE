@@ -139,7 +139,25 @@ export const songsFolder = () => folderRoot;
 
 // ---------------------------------------------------------------- extra song files (cover art, preview) + metadata edits
 const songPath = (id) => `${API}/${encodeURIComponent(id)}`;
-export const coverUrl = (song) => (song?.cover && mode === 'folder' ? `${songPath(song.id)}/files/${song.cover}?v=${song.coverRev || 0}` : null);
+const COVERS = ['cover.jpg', 'cover.png', 'cover.webp'];
+const SAFE_STEM = /^[a-z0-9_-]{1,32}$/;
+export const coverUrl = (song) => (COVERS.includes(song?.cover) && mode === 'folder' ? `${songPath(song.id)}/files/${song.cover}?v=${Math.floor(+song.coverRev || 0)}` : null);
+
+/**
+ * A song.json from another player's room, made safe to store: it keeps the id we asked for (so it can't overwrite
+ * another song), and only file names the song folder uses (a name like "../../api/data/profiles" would otherwise
+ * reach other local API routes when it's put in a URL).
+ */
+function fromHost(song, id) {
+  if (!song || typeof song !== 'object' || Array.isArray(song)) throw new Error('the host sent a broken song.json');
+  return {
+    ...song, id,
+    stemNames: (Array.isArray(song.stemNames) ? song.stemNames : []).filter((n) => typeof n === 'string' && SAFE_STEM.test(n)),
+    cover: COVERS.includes(song.cover) ? song.cover : null,
+    coverRev: Number.isFinite(+song.coverRev) ? Math.floor(+song.coverRev) : 0,
+    preview: !!song.preview,
+  };
+}
 export const previewUrl = (song) => (song?.preview && mode === 'folder' ? `${songPath(song.id)}/files/preview.wav` : null);
 
 /** Rewrite song.json (e.g. after editing metadata). */
@@ -185,7 +203,7 @@ async function decodeCompressed(buf, length, rate) {
 export async function copySongFrom(baseUrl, id, onProgress) {
   if ((await detect()) !== 'folder') throw new Error('Online play needs the songs folder (start the game with play.bat)');
   const src = `${baseUrl.replace(/\/$/, '')}/songs/${encodeURIComponent(id)}`;
-  const song = await (await fetch(`${src}/song.json`)).json();
+  const song = fromHost(await (await fetch(`${src}/song.json`)).json(), id);
   const q = `?name=${encodeURIComponent(folderHint(song))}`;
   const names = song.stemNames || [];
   const extras = [song.cover, song.preview ? 'preview.wav' : null].filter(Boolean);
@@ -222,7 +240,7 @@ export async function refreshSongFrom(baseUrl, id) {
   const src = `${baseUrl.replace(/\/$/, '')}/songs/${encodeURIComponent(id)}`;
   const r = await fetch(`${src}/song.json`);
   if (!r.ok) throw new Error(`song.json ${r.status}`);
-  const song = await r.json();
+  const song = fromHost(await r.json(), id);
   const old = await getSong(id);
   if (song.cover && (song.cover !== old?.cover || song.coverRev !== old?.coverRev)) {
     try {
