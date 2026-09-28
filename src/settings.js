@@ -15,6 +15,7 @@ export const DEFAULTS = {
   menuMusic: 'demo',     // off | demo | shuffle (random song from your setlist)
   menuMusicVolume: 0.35,
   quality: 'high',       // low | high | ultra
+  venue: 'auto',         // the stage: auto (the arena; tour gigs in their own venue) | garage | club | bar | theater | arena | stadium | festival
   bloom: true,
   cameraShake: true,
   fullscreen: true,      // start fullscreen (desktop app + browser)

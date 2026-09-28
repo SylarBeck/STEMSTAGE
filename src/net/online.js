@@ -61,7 +61,7 @@ export class OnlineClient {
    * address: an invite code, a room URL, or a LAN address ("127.0.0.1:5180" for the host itself).
    * A brand-new internet room can take a few seconds to become reachable, so keep retrying for a while.
    */
-  async connect(address, { name, color, profileId, hostKey = null }) {
+  async connect(address, { name, color, profileId, look = null, hostKey = null }) {
     const base = roomUrl(address);
     if (!base) throw new Error('Enter an invite code');
     const remote = base.startsWith('https://');
@@ -85,7 +85,7 @@ export class OnlineClient {
       const ws = new WebSocket(base.replace(/^http/, 'ws'));
       this.ws = ws;
       const timer = setTimeout(() => { ws.close(); reject(new Error(`No STEMSTAGE room answered at ${this.address}`)); }, 8000);
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', name, color, profileId, hostKey }));
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', name, color, profileId, look, hostKey }));
       ws.onerror = () => { clearTimeout(timer); reject(new Error(`Could not connect to ${this.address}`)); };
       ws.onclose = () => {
         clearTimeout(timer);

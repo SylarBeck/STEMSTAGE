@@ -42,6 +42,8 @@ export function installTour(ui) {
     }
     const stars = tourStars(p);
     st.venue = Math.min(st.venue, VENUES.length - 1);
+    // the stage behind the tour screen is the venue you're looking at (the arena for one that's still locked)
+    ui.app.stage.setVenue(unlocked(p, VENUES[st.venue]) ? VENUES[st.venue].id : 'arena');
     el.innerHTML = `
       <div class="tour-col" data-nav-group="venues">
         ${dailyCard(p)}

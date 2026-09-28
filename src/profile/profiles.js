@@ -196,6 +196,14 @@ class Profiles {
     if (mine.reduce((s, x) => s + (x.stars || 0), 0) >= 100) this._unlock(p, 'stars_100', fresh);
   }
 
+  /** A profile's character (see looks.js): null takes it back to the default band member. */
+  setLook(id, look) {
+    const p = this.byId(id);
+    if (!p) return;
+    if (look) p.look = look; else delete p.look;
+    this.saveSoon();
+  }
+
   /** Save profiles, debounced (force: now). */
   saveSoon(force = false) {
     clearTimeout(this._saveTimer);

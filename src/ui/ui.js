@@ -14,7 +14,7 @@ import { installSetlists } from './setlists-ui.js';
 import { installTour } from './tour-ui.js';
 import { installEditor } from './editor-ui.js';
 import { installStream } from './stream-ui.js';
-import { tourStars, TOUR_MAX, dailyDone } from '../profile/career.js';
+import { tourStars, TOUR_MAX, dailyDone, VENUES, unlocked } from '../profile/career.js';
 import { Osk } from './osk.js';
 import { controllerPicture, detectController, glyph } from './controller-art.js';
 import { buildChartPack, download } from '../export/exporters.js';
@@ -87,6 +87,7 @@ const SETTINGS_SCHEMA = [
   { key: 'quality', label: 'Graphics quality', desc: 'Resolution, crowd size, bloom, film grain', type: 'choice', options: ['low', 'high', 'ultra'] },
   { key: 'bloom', label: 'Bloom', type: 'toggle' },
   { key: 'cameraShake', label: 'Camera shake', type: 'toggle' },
+  { key: 'venue', label: 'Venue', desc: 'The stage you play on. Auto: the arena, and every tour gig in its own venue. Venues open up as you earn tour stars (the arena is always open)', type: 'choice', options: ['auto', 'garage', 'club', 'bar', 'theater', 'arena', 'stadium', 'festival'], labels: { auto: 'Auto', garage: 'Garage', club: 'Club', bar: 'Dive bar', theater: 'Theater', arena: 'Arena', stadium: 'Stadium', festival: 'Festival' } },
   { group: 'Controllers' },
   { key: 'triggerIntensity', label: 'Adaptive trigger strength', desc: 'DualSense trigger effects. 0% turns them off everywhere', type: 'range', min: 0, max: 1.5, step: 0.1, fmt: 'pct' },
   { key: 'rumbleIntensity', label: 'Haptic strength', desc: 'DualSense haptics and gamepad rumble', type: 'range', min: 0, max: 1.5, step: 0.1, fmt: 'pct' },
@@ -256,6 +257,9 @@ export class UI {
     document.body.classList.toggle('chrome', !CHROME_OFF.has(name));
     document.body.classList.toggle('in-game', name === 'hud' || name === 'pause');
     document.body.dataset.screen = name;
+    // the menus show your venue; a song (and its results) keeps the one it was played in; the tour previews its own
+    if (!['hud', 'pause', 'results', 'marathon', 'tour'].includes(name) && !this.app.game?.running) { this.applyVenue(false); if (name !== 'career') this.applyLooks(); }
+    if (name !== 'career') this.app.stage.preview(null);
     $('#tb-crumb').textContent = SCREEN_LABEL[name] || '';
     if (name !== 'controller' && prev === 'controller') this.controllers.stopCapture();
     if (name !== 'library' && name !== 'practice' && name !== 'songinfo') this.stopPreview();
@@ -1097,6 +1101,8 @@ export class UI {
     const [song, audio] = await Promise.all([getSong(s.id), getAudio(s.id)]);
     if (!audio) { this.toast('Audio for this song is missing — re-import it', 'err'); return; }
     await this.prepareWorld(song, audio, cfgs.map((c) => c.instrument));
+    this.applyVenue(true);
+    this.applyLooks(cfgs);
     this.app.menuMusic(false);
     this.stopPreview();
     const ghost = opts.ghost !== undefined ? opts.ghost
@@ -1104,6 +1110,34 @@ export class UI {
     this.lastPlay = { mode: this.mode, ghost };
     this.show('hud');
     await this.app.game.start(song, audio, cfgs, { ghost });
+  }
+
+  // ---------------------------------------------------------------- venues
+  /** The venue the stage shows: a tour gig plays in its own venue; otherwise Settings → Venue, once the tour has opened it. */
+  venueId(forGame = false) {
+    const gig = forGame && /^tour-(.+)$/.exec(this.marathon?.list?.id || '')?.[1];
+    if (gig) return gig;
+    const want = settings.venue;
+    if (!want || want === 'auto' || want === 'arena') return 'arena';
+    const v = VENUES.find((x) => x.id === want);
+    return v && unlocked(profiles.current, v) ? want : 'arena';
+  }
+
+  applyVenue(forGame = false) { this.app.stage.setVenue(this.venueId(forGame)); }
+
+  /**
+   * The band on stage: each player's character at their part (cfgs: [{ instrument, profileId?, look? }]);
+   * in the menus, the signed-in profile's at the part it picked.
+   */
+  applyLooks(cfgs = null) {
+    const stage = this.app.stage;
+    stage.resetLooks();
+    if (cfgs) {
+      for (const c of cfgs) { const look = (c.profileId && profiles.byId(c.profileId)?.look) || c.look; if (look) stage.setLook(c.instrument, look); }
+      return;
+    }
+    const p = profiles.current;
+    if (p?.look) stage.setLook(p.look.part || 'guitar', p.look);
   }
 
   // ---------------------------------------------------------------- ranked charts (see net/charts.js)
@@ -1305,6 +1339,7 @@ export class UI {
     this.app.menuMusic(false);
     this.stopPreview();
     this.lastPlay = { mode: 'replay', replay };
+    this.applyVenue(true);
     if (profiles.current) profiles.award(profiles.current.id, 'replay_watch').then((f) => f.forEach((a) => this.toast(`${a.name} — ${a.desc}`, 'ok', 'trophy')));
     this.show('hud');
     const cfg = {
@@ -1357,6 +1392,7 @@ export class UI {
     this.app.menuMusic(false);
     this.stopPreview();
     this.lastPlay = { mode: 'practice', practice: true };
+    this.applyVenue(true);
     const speed = this.practice.speed;
     let lastToast = 0;
     const status = (msg) => { const now = performance.now(); if (now - lastToast > 1500) { lastToast = now; this.toast(msg); } };

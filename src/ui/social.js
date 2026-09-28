@@ -8,6 +8,7 @@ const initials = (n) => String(n || '?').trim().split(/\s+/).map((w) => w[0]).jo
 import { instIcon, fa, starsOnly, achIcon } from './icons.js';
 import { discord, discordAvatar, STATUS_LABEL } from '../net/discord.js';
 import { submitRuns, worldBoard, worldPlayers, shareProfile } from '../net/leaderboard.js';
+import { PRESETS, PARTS, SKINS, HAIR_STYLES, HAIR_LABEL, HAIR_COLORS, OUTFITS, FINISHES, cleanLook, fromPreset } from '../profile/looks.js';
 const ICON = { guitar: instIcon('guitar'), bass: instIcon('bass'), drums: instIcon('drums'), keys: instIcon('keys'), vocals: instIcon('vocals') };
 const DIFFS = ['easy', 'medium', 'hard', 'expert'];
 const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'];
@@ -27,7 +28,18 @@ const dcIcon = '<i class="fa-brands fa-discord" aria-hidden="true"></i>';
 
 export function installSocial(ui) {
   const state = { formColor: PROFILE_COLORS[0], pinFor: null, lbTab: 'overall', lbSong: 0, lbInst: 'guitar', lbDiff: 'expert', lbBoard: 'ranked', careerId: null, afterSignIn: 'menu', careerTab: 'overview' };
-  const CAREER_TABS = [['overview', 'Overview'], ['history', 'History'], ['achievements', 'Achievements']];
+  const CAREER_TABS = [['overview', 'Overview'], ['character', 'Character'], ['history', 'History'], ['achievements', 'Achievements']];
+  // the character editor's rows: [picker id, label, look field, choices, how a choice shows]
+  const swatch = (c) => `<i class="sw" style="--c:${c}"></i>`;
+  const CHAR_ROWS = [
+    ['char-part', 'On stage at', 'part', PARTS, (v) => `${ICON[v]} ${v}`],
+    ['char-skin', 'Skin', 'skin', SKINS, swatch],
+    ['char-hair', 'Hair', 'hair', HAIR_STYLES, (v) => HAIR_LABEL[v]],
+    ['char-hairc', 'Hair colour', 'hairColor', HAIR_COLORS, swatch],
+    ['char-top', 'Top', 'top', OUTFITS, swatch],
+    ['char-pants', 'Trousers', 'pants', OUTFITS, swatch],
+    ['char-finish', 'Instrument', 'finish', FINISHES, swatch],
+  ];
 
   // ---------------------------------------------------------------- profiles screen
   function renderProfiles() {
@@ -162,6 +174,7 @@ export function installSocial(ui) {
           ${c.versus.rivals.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.w}</td><td>${r.l}</td><td>${r.d}</td></tr>`).join('')}</table></div>` : ''}
       </div>
       </div>
+      <div class="career-page" data-page="character" ${state.careerTab === 'character' ? '' : 'hidden'}>${state.careerTab === 'character' ? characterPage(p, mine) : ''}</div>
       <div class="career-page" data-page="history" ${state.careerTab === 'history' ? '' : 'hidden'}>
       <div class="card"><h3>Recent</h3><table class="tbl"><tr><th>When</th><th>Song</th><th>Part</th><th>Mode</th><th>Score</th><th>Accuracy</th><th>Streak</th></tr>
         ${recent.map((x) => `<tr><td>${ago(x.date)}</td><td>${esc(x.songTitle)} <small>${esc(x.songArtist || '')}</small></td><td>${ICON[x.instrument]} ${x.instrument} · ${x.difficulty}</td><td>${x.mode}</td><td>${x.score.toLocaleString()}${x.failed ? ' <small>(failed)</small>' : ''}</td><td>${Math.round(x.accuracy * 100)}%</td><td>${x.maxStreak}</td></tr>`).join('') || '<tr><td colspan="7" class="small-note">Play a song to start your career.</td></tr>'}
@@ -173,6 +186,12 @@ export function installSocial(ui) {
       </div></div></div>`;
     $$('[data-action]', root).forEach((b) => b.addEventListener('click', () => ui.action(b.dataset.action)));
     $$('[data-ct]', root).forEach((o) => o.addEventListener('click', () => { state.careerTab = o.dataset.ct; renderCareer(); }));
+    // the character editor frames that band member on the stage behind it
+    const look = p.look || fromPreset(PRESETS[0].id);
+    ui.app.stage.preview(state.careerTab === 'character' ? look.part : null);
+    if (state.careerTab === 'character') { ui.app.stage.resetLooks(); ui.app.stage.setLook(look.part, look); }
+    $$('[data-preset]', root).forEach((o) => o.addEventListener('click', () => setLook(p, fromPreset(o.dataset.preset, (p.look || look).part))));
+    $$('[data-char]', root).forEach((o) => o.addEventListener('click', () => setLook(p, { ...(p.look || look), preset: null, [o.dataset.char]: o.dataset.v })));
     ui.focus = 0;
     ui.applyFocus(false);
     if (p.discord) showPresence(p);
@@ -304,6 +323,40 @@ export function installSocial(ui) {
     });
   }
 
+  // ---------------------------------------------------------------- character
+  function characterPage(p, mine) {
+    const look = p.look || fromPreset(PRESETS[0].id);
+    return `<div class="card char-card"><h3>${mine ? 'Your character' : `${esc(p.name)}\u2019s character`}</h3>
+      <p class="small-note">Your band member when you play (and in the menus, at the part you pick). Friends see it in online rooms too.</p>
+      <div class="picker" data-nav data-picker="char-preset"><label>Look</label><div class="picker-options">${PRESETS.map((x) => `<div class="opt ${look.preset === x.id ? 'sel' : ''}" data-preset="${x.id}">${esc(x.name)}</div>`).join('')}</div></div>
+      ${(() => {
+    const row = ([id, label, field, list, show]) => `<div class="picker char-row" data-nav data-picker="${id}"><label>${label}</label><div class="picker-options">${list.map((v) => `<div class="opt ${look[field] === v ? 'sel' : ''}" data-char="${field}" data-v="${v}" title="${esc(v)}">${show(v)}</div>`).join('')}</div></div>`;
+    return row(CHAR_ROWS[0]) + `<div class="char-grid">${CHAR_ROWS.slice(1).map(row).join('')}</div>`;
+  })()}
+      ${p.look ? '<div class="btn-row"><button class="nav-btn" data-nav data-action="char-reset">Back to the default band member</button></div>' : ''}</div>`;
+  }
+
+  function setLook(p, look) {
+    if (profiles.current?.id !== p.id) { ui.toast('Sign in as this profile to change its character', 'err'); return; }
+    profiles.setLook(p.id, cleanLook(look));
+    renderCareer();
+  }
+
+  function charPicker(which, d) {
+    const p = profiles.current;
+    if (!p) return;
+    const look = p.look || fromPreset(PRESETS[0].id);
+    if (which === 'char-preset') {
+      const i = PRESETS.findIndex((x) => x.id === look.preset);
+      setLook(p, fromPreset(PRESETS[(i + d + PRESETS.length) % PRESETS.length].id, look.part));
+      return;
+    }
+    const row = CHAR_ROWS.find(([id]) => id === which);
+    if (!row) return;
+    const [, , field, list] = row;
+    setLook(p, { ...look, preset: null, [field]: list[(list.indexOf(look[field]) + d + list.length) % list.length] });
+  }
+
   function lbPicker(which, d) {
     if (which === 'lb-tab') { const tabs = ['overall', 'songs', 'world']; state.lbTab = tabs[(tabs.indexOf(state.lbTab) + (d || 1) + tabs.length) % tabs.length]; }
     if (which === 'lb-song') state.lbSong = (state.lbSong + d + ui.songs.length) % Math.max(1, ui.songs.length);
@@ -375,6 +428,14 @@ export function installSocial(ui) {
       } catch (e) { ui.toast(`Couldn't publish your profile: ${e.message}`, 'err'); }
     },
     'pf-signout': () => { profiles.signOut(); ui.refreshStatus(); ui.show('profiles'); },
+    'char-reset': () => {
+      const p = profiles.current;
+      if (!p) return;
+      profiles.setLook(p.id, null);
+      ui.app.stage.resetLooks();
+      renderCareer();
+      ui.toast('Back to the default band member');
+    },
     'pf-pin': async () => {
       const p = profiles.current;
       if (!p) return;
@@ -403,6 +464,7 @@ export function installSocial(ui) {
       return true;
     }
     if (which.startsWith('lb-')) { lbPicker(which, d); return true; }
+    if (which.startsWith('char-')) { charPicker(which, d); return true; }
     if (which === 'pf-color') {
       state.formColor = PROFILE_COLORS[(PROFILE_COLORS.indexOf(state.formColor) + d + PROFILE_COLORS.length) % PROFILE_COLORS.length];
       $$('#pf-colors .swatch').forEach((x) => x.classList.toggle('sel', x.dataset.c === state.formColor));
