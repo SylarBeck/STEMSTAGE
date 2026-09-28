@@ -22,6 +22,8 @@ const DIST = path.resolve(process.env.STEMSTAGE_DIST || path.join(root, 'dist'))
 const SONGS = process.env.STEMSTAGE_SONGS || path.join(root, 'songs');
 const DATA = process.env.STEMSTAGE_DATA || path.join(root, 'data');
 const PORT = +(process.env.PORT || 5173);
+// reported by /api/health so the desktop launcher can tell its own server from a leftover one
+const VERSION = (() => { try { return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version; } catch { return null; } })();
 const HOST = process.env.HOST || '127.0.0.1';
 
 const MIME = {
@@ -75,7 +77,7 @@ const server = http.createServer(async (req, res) => {
   if (url === '/api/health') {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*'); // the desktop splash screen polls this
-    return res.end(JSON.stringify({ ok: true, app: 'stemstage', songs: SONGS }));
+    return res.end(JSON.stringify({ ok: true, app: 'stemstage', version: VERSION, pid: process.pid, dist: DIST, songs: SONGS }));
   }
   for (const [prefix, handler] of services) {
     if (url === prefix || url.startsWith(`${prefix}/`) || url.startsWith(`${prefix}?`)) {

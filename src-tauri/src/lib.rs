@@ -209,11 +209,70 @@ fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// The game server's /api/health answer on GAME_PORT, if something answers there.
+fn game_health() -> Option<serde_json::Value> {
+    use std::io::{Read, Write};
+    let mut s = TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], GAME_PORT)), Duration::from_millis(500)).ok()?;
+    let _ = s.set_read_timeout(Some(Duration::from_secs(2)));
+    s.write_all(b"GET /api/health HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n").ok()?;
+    let mut text = String::new();
+    let _ = s.read_to_string(&mut text);
+    serde_json::from_str(text.split("\r\n\r\n").nth(1)?).ok()
+}
+
+/// Who listens on GAME_PORT (Windows: from netstat), for servers too old to report their pid.
+fn port_owner() -> Option<u32> {
+    if !cfg!(windows) {
+        return None;
+    }
+    let mut c = Command::new("netstat");
+    c.args(["-ano", "-p", "TCP"]);
+    no_console(&mut c);
+    let out = String::from_utf8_lossy(&c.output().ok()?.stdout).to_string();
+    out.lines().find_map(|l| {
+        let f: Vec<&str> = l.split_whitespace().collect();
+        (f.len() >= 5 && f[1].ends_with(&format!(":{GAME_PORT}")) && f[3] == "LISTENING").then(|| f[4].parse().ok()).flatten()
+    })
+}
+
+/// A game server left running by another STEMSTAGE (an older install, a crashed session, a test build) would
+/// serve its own copy of the game in this window. Stop it so this app starts its own. Kept: a developer's Vite
+/// server (`dev: true`) and a server that already serves this app's game folder.
+fn replace_stale_server(res: &Path) {
+    let Some(h) = game_health() else { return };
+    let mine = res.join("dist").to_string_lossy().to_string();
+    let same = h["dist"].as_str().map(|d| if cfg!(windows) { d.eq_ignore_ascii_case(&mine) } else { d == mine });
+    if h["app"] != "stemstage" || h["dev"] == true || same == Some(true) {
+        return;
+    }
+    let Some(pid) = h["pid"].as_u64().map(|p| p as u32).or_else(port_owner) else { return };
+    if pid == std::process::id() {
+        return;
+    }
+    #[cfg(windows)]
+    {
+        let mut c = Command::new("taskkill");
+        c.args(["/PID", &pid.to_string(), "/T", "/F"]).stdout(Stdio::null()).stderr(Stdio::null());
+        no_console(&mut c);
+        let _ = c.status();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = Command::new("kill").arg(pid.to_string()).status();
+    }
+    for _ in 0..30 {
+        if !listening(GAME_PORT) { break; }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
 fn launch(app: &tauri::AppHandle) {
     register_protocols();
+
     let l = app.state::<Launcher>();
     // resource_dir() is a verbatim path (\\?\C:\...) on Windows; Node can't resolve its entry script from one
     let res = app.path().resource_dir().map(|p| plain_path(p).join("app")).unwrap_or_default();
+    replace_stale_server(&res);
     let home = app
         .path()
         .document_dir()
