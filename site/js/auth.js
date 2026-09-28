@@ -8,7 +8,12 @@
 //   - a 'stemstage:me' event on document with the same object as detail
 (() => {
   const CLIENT_ID = '1553872601603117127';
-  const SITE = location.origin;
+  // Discord only accepts the exact redirect registered for the app: always the https site (a page opened over
+  // http:// or through sylarbeck.github.io would otherwise send a different address). Local previews keep theirs.
+  const HOME = 'https://stemstage.varconstint.com';
+  const local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  if (!local && location.origin !== HOME) { location.replace(HOME + location.pathname + location.search + location.hash); return; }
+  const SITE = local ? location.origin : HOME;
   const params = new URLSearchParams(location.search);
   const localApi = params.get('api');
   const API = /^http:\/\/(127\.0\.0\.1|localhost):\d+\/v1$/.test(localApi || '') ? localApi : 'https://api.stemstage.varconstint.com/v1';

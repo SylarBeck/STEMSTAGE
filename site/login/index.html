@@ -25,7 +25,7 @@
     const fail = (why) => { document.getElementById('msg').innerHTML = `${why} <a href="${back}">Go back</a>`; };
     // prompt=none fails with "interaction_required" for first-time users: ask Discord again, with the consent screen
     if (q.get('error') === 'interaction_required' || h.get('error') === 'interaction_required') {
-      const retry = new URLSearchParams({ client_id: '1553872601603117127', response_type: 'token', scope: 'identify', state: pending?.state || '', redirect_uri: `${location.origin}/login/` });
+      const retry = new URLSearchParams({ client_id: '1553872601603117127', response_type: 'token', scope: 'identify', state: pending?.state || '', redirect_uri: /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? `${location.origin}/login/` : 'https://stemstage.varconstint.com/login/' });
       try { sessionStorage.setItem(`${KEY}.state`, JSON.stringify(pending)); } catch { /* storage blocked */ }
       location.replace(`https://discord.com/oauth2/authorize?${retry}`);
     } else if (q.get('error') || h.get('error')) {
