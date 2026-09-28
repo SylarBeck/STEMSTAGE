@@ -76,7 +76,7 @@ const FxShader = {
         uv -= normalize(d + 1e-5) / vec2(uAspect, 1.0) * ring * 0.035 * (1.0 - uShock);
       }
       vec2 c = uv - 0.5;
-      float ab = uAberr + uOD * 0.0025;
+      float ab = uAberr + uOD * 0.001;
       vec2 off = c * ab * (0.6 + dot(c, c) * 3.0);
       vec3 col = vec3(texture2D(tDiffuse, uv + off).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - off).b);
       col = mix(col, col * vec3(1.12, 1.0, 0.84) + vec3(0.015, 0.008, 0.0), uOD * 0.55);

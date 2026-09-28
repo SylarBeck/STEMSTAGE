@@ -1,5 +1,5 @@
 // Brand kit: app icon, wordmark, horizontal logo and the GitHub banner / social preview.
-// Writes SVG sources + PNGs to brand/, the favicon to public/icon.png and the desktop splash logo.
+// Writes SVG sources + PNGs to brand/ and the favicon to public/icon.png.
 // Run: npm run brand   (then `npx tauri icon brand/icon-1024.png` regenerates the app icons)
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

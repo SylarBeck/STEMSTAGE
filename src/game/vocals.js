@@ -6,7 +6,7 @@ import { Mic } from '../audio/pitch.js';
 import { currentRules } from './replay.js';
 
 const TOL = { easy: 3.5, medium: 2.5, hard: 1.8, expert: 1.2 }; // semitones
-const RATINGS = [[0.7, 'AWESOME', '#7fffd4'], [0.5, 'STRONG', '#29e0ff'], [0.3, 'GOOD', '#ffe14d'], [0.15, 'OK', '#ffa24d'], [0, 'MESSY', '#ff3b3b']];
+const RATINGS = [[0.7, 'AWESOME', '#f6c945'], [0.5, 'STRONG', '#ece5d3'], [0.3, 'GOOD', '#c9bea6'], [0.15, 'OK', '#e0935a'], [0, 'MESSY', '#e5402f']];
 const GRACE = 0.15; // consonants and breaths: a short drop-out after singing on pitch still counts
 const MIC_LAG = 0.09; // analysis window + input latency
 let sharedMic = null;
@@ -89,7 +89,7 @@ export class VocalPlayer {
     this.track = new VocalTrack(this);
     if (!this.replayer) {
       sharedMic ||= new Mic(this.s.engine.ctx);
-      try { await sharedMic.start(settings.micDevice || ''); } catch (e) { this.hud.callout(e?.name === 'NotAllowedError' ? 'Microphone blocked — see Settings → Singing → Test' : 'No microphone — check Settings → Singing', '#ff3b3b'); console.warn(e); }
+      try { await sharedMic.start(settings.micDevice || ''); } catch (e) { this.hud.callout(e?.name === 'NotAllowedError' ? 'Microphone blocked — see Settings → Singing → Test' : 'No microphone — check Settings → Singing', '#e5402f'); console.warn(e); }
     }
   }
 
@@ -112,7 +112,7 @@ export class VocalPlayer {
     this.engine.sfxOverdrive();
     this.engine.cheer(0.8);
     this.s.onOverdrive(this);
-    this.hud.callout('OVERDRIVE!', '#ffcf3a');
+    this.hud.callout('OVERDRIVE!', '#f6c945');
   }
 
   fail() {
@@ -128,7 +128,7 @@ export class VocalPlayer {
     this.failed = false;
     this.rock = 0.35;
     this.hud.setFailed(false);
-    this.hud.callout('SAVED!', '#3dff8a');
+    this.hud.callout('SAVED!', '#8dc044');
   }
 
   _ratePhrase(ph) {
@@ -147,7 +147,7 @@ export class VocalPlayer {
       const before = this.od;
       this.od = Math.min(1, this.od + 0.25);
       this.engine.sfxPhrase();
-      if (!this.odActive && before < 0.5 && this.od >= 0.5) this.hud.callout('OVERDRIVE READY', '#7fe8ff');
+      if (!this.odActive && before < 0.5 && this.od >= 0.5) this.hud.callout('OVERDRIVE READY', '#ffe39a');
     }
     if (frac < 0.15) this.engine.sfxMiss(false);
     if (this.rock <= 0 && !this.rules.noFail) this.fail();
@@ -248,18 +248,18 @@ class VocalTrack {
     const bh = Math.max(8, h * 0.07);
     for (const s of inView) {
       const x0 = xOf(s.start), x1 = xOf(s.end), y = yOf(s.m);
-      g.fillStyle = s.od ? 'rgba(255,207,58,0.35)' : 'rgba(80,190,255,0.3)';
+      g.fillStyle = s.od ? 'rgba(240,180,41,0.35)' : 'rgba(80,190,255,0.3)';
       pill(g, x0, y - bh / 2, Math.max(4, x1 - x0), bh);
       g.fill();
       const f = Math.min(1, s.sung / Math.max(0.01, s.end - s.start));
-      if (f > 0) { g.fillStyle = s.od ? '#ffd24a' : '#3dff8a'; pill(g, x0, y - bh / 2, Math.max(4, (x1 - x0) * f), bh); g.fill(); }
+      if (f > 0) { g.fillStyle = s.od ? '#ffd24a' : '#8dc044'; pill(g, x0, y - bh / 2, Math.max(4, (x1 - x0) * f), bh); g.fill(); }
       g.strokeStyle = s.od ? 'rgba(255,220,120,0.9)' : 'rgba(150,215,255,0.8)';
       g.lineWidth = 1.5 * dpr;
       pill(g, x0, y - bh / 2, Math.max(4, x1 - x0), bh);
       g.stroke();
     }
     // now line
-    g.fillStyle = 'rgba(255,45,122,0.85)';
+    g.fillStyle = 'rgba(223,58,44,0.85)';
     g.fillRect(nowX - 1.5 * dpr, 0, 3 * dpr, h);
     // your pitch (folded to the octave of the nearest target) + trail
     const near = inView.reduce((b, s) => (Math.abs(s.start - te) < Math.abs((b?.start ?? 1e9) - te) ? s : b), null);

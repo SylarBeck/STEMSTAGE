@@ -5,9 +5,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const FIVE_COLORS = [0x2bff5a, 0xff2b4a, 0xffe62b, 0x2b8cff, 0xff8a1a];
-export const DRUM_COLORS = [0xff8a1a, 0xff2b4a, 0xffe62b, 0x2b8cff, 0x2bff5a];
-export const MULT_COLORS = [0xffffff, 0xffffff, 0xff9a2b, 0x3dff8a, 0xc06bff, 0xff2d7a, 0x29e0ff]; // by multiplier 0..6
+export const FIVE_COLORS = [0x2ed24f, 0xf2332b, 0xffd21f, 0x2f84f0, 0xff8a1a];
+export const DRUM_COLORS = [0xff8a1a, 0xf2332b, 0xffd21f, 0x2f84f0, 0x2ed24f];
+export const MULT_COLORS = [0xffffff, 0xffffff, 0xffa21a, 0x3cc254, 0x2f84f0, 0xa35cff, 0xf2332b]; // by multiplier 0..6
 const HWY_LEN = 62;
 const WIDTH = 5;
 const BORDER = 0.26;
@@ -346,14 +346,14 @@ export class Highway {
     this._buildFlames();
     this._buildFire();
     this._buildRings();
-    this.configure({ instrument: 'guitar', lefty: false, speed: 20, accent: 0xff2d7a });
+    this.configure({ instrument: 'guitar', lefty: false, speed: 20, accent: 0xe0432f });
   }
 
   _buildSurface() {
     this.surfaceUniforms = {
       uLanes: { value: 5 }, uColors: { value: FIVE_COLORS.map((c) => new THREE.Color(c)) }, uPress: { value: [0, 0, 0, 0, 0] }, uFlash: { value: [0, 0, 0, 0, 0] },
       uScroll: { value: 0 }, uTime: { value: 0 }, uOD: { value: 0 }, uDanger: { value: 0 }, uLen: { value: HWY_LEN },
-      uAccent: { value: new THREE.Color(0xff2d7a) }, uPulse: { value: 0 }, uSweep: { value: 0 }, uFailed: { value: 0 },
+      uAccent: { value: new THREE.Color(0xe0432f) }, uPulse: { value: 0 }, uSweep: { value: 0 }, uFailed: { value: 0 },
       uStreak: { value: 0 }, uMultCol: { value: new THREE.Color(1, 1, 1) }, uWidth: { value: WIDTH },
     };
     const mat = new THREE.ShaderMaterial({ uniforms: this.surfaceUniforms, vertexShader: worldVertex, fragmentShader: surfaceFragment, transparent: true, depthWrite: false });
@@ -366,7 +366,7 @@ export class Highway {
     const railGeo = new THREE.BoxGeometry(0.13, 0.11, HWY_LEN + 2, 1, 1, 1).translate(0, 0.045, -HWY_LEN / 2 + 1);
     for (const side of [-1, 1]) {
       const mat2 = new THREE.ShaderMaterial({
-        uniforms: { uRail: { value: new THREE.Color(0xff2d7a) }, uGlow: { value: 0 }, uTime: { value: 0 }, uLen: { value: HWY_LEN }, uScroll: { value: 0 }, uSide: { value: side } },
+        uniforms: { uRail: { value: new THREE.Color(0xe0432f) }, uGlow: { value: 0 }, uTime: { value: 0 }, uLen: { value: HWY_LEN }, uScroll: { value: 0 }, uSide: { value: side } },
         vertexShader: worldVertex, fragmentShader: railFragment, transparent: true, depthWrite: false,
       });
       const rail = new THREE.Mesh(railGeo, mat2);
@@ -375,7 +375,7 @@ export class Highway {
       this.scene.add(rail);
       this.rails.push(rail);
     }
-    this.railCol = new THREE.Color(0xff2d7a);
+    this.railCol = new THREE.Color(0xe0432f);
     this._railTarget = new THREE.Color();
     const strike = new THREE.Mesh(new THREE.BoxGeometry(WIDTH + 0.1, 0.018, 0.045), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.4, 2.8) }));
     strike.position.set(0, 0.012, 0);
@@ -746,7 +746,7 @@ export class Highway {
     const mult = st.mult || 1, maxMult = st.maxMult || 4;
     const streakLit = mult >= maxMult ? 10 : (st.streak || 0) % 10;
     U.uStreak.value += (streakLit - U.uStreak.value) * Math.min(1, dt * 20);
-    U.uMultCol.value.set(st.od ? 0xffcf3a : MULT_COLORS[Math.min(6, mult)]);
+    U.uMultCol.value.set(st.od ? 0xf6c945 : MULT_COLORS[Math.min(6, mult)]);
     // rails: accent, electric blue when overdrive is ready, gold in overdrive, pulsing red in danger
     if (st.od) this._railTarget.setRGB(1.0, 0.72, 0.2);
     else if (st.danger) this._railTarget.setRGB(1.0, 0.08, 0.1).multiplyScalar(0.6 + 0.4 * Math.abs(Math.sin(this.time * 6)));

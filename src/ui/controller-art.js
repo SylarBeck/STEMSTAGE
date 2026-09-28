@@ -13,8 +13,8 @@ const uid = (p) => `${p}${++seq}`;
 
 const PS_COLORS = { tri: '#3fe0b0', cir: '#ff5f7a', crs: '#7aa8ff', sqr: '#f08be6' };
 const XB_COLORS = { a: '#63d35f', b: '#ff5252', x: '#3b8fff', y: '#f6c343' };
-export const LANE_COLORS = ['#2bff5a', '#ff2b4a', '#ffe62b', '#2b8cff', '#ff8a1a'];
-const DRUM_LANE_COLORS = ['#ff8a1a', '#ff2b4a', '#ffe62b', '#2b8cff', '#2bff5a'];
+export const LANE_COLORS = ['#2ed24f', '#f2332b', '#ffd21f', '#2f84f0', '#ff8a1a'];
+const DRUM_LANE_COLORS = ['#ff8a1a', '#f2332b', '#ffd21f', '#2f84f0', '#2ed24f'];
 
 // ---------------------------------------------------------------- detection
 const vp = (id = '') => {
@@ -503,12 +503,12 @@ export function glyph(action, family = 'keyboard') {
   if (action === 'lr' || action === 'ud' || action === 'dpad') {
     if (family === 'keyboard' || family === 'midi') return `<span class="gl-key">${KEY_GLYPH[action]}</span>`;
     const hl = action === 'lr' ? 'M4 12h16' : action === 'ud' ? 'M12 4v16' : '';
-    return `<svg class="gl-svg" viewBox="0 0 24 24"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="#1c1d24" stroke="rgba(255,255,255,0.45)" stroke-width="1.2"/>${hl ? `<path d="${hl}" stroke="#29e0ff" stroke-width="2.4" stroke-linecap="round"/>` : ''}</svg>`;
+    return `<svg class="gl-svg" viewBox="0 0 24 24"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="#1c1d24" stroke="rgba(255,255,255,0.45)" stroke-width="1.2"/>${hl ? `<path d="${hl}" stroke="#ece5d3" stroke-width="2.4" stroke-linecap="round"/>` : ''}</svg>`;
   }
   if (family === 'keyboard' || family === 'midi') return `<span class="gl-key">${KEY_GLYPH[action] || action}</span>`;
   const b = GLYPH_BTN[action];
   if (family === 'guitar' || family === 'drums') {
-    const cols = family === 'guitar' ? { 0: LANE_COLORS[0], 1: LANE_COLORS[1], 3: LANE_COLORS[2], 2: LANE_COLORS[3], 4: LANE_COLORS[4] } : { 0: '#2bff5a', 1: '#ff2b4a', 3: '#ffe62b', 2: '#2b8cff', 4: '#ff8a1a' };
+    const cols = family === 'guitar' ? { 0: LANE_COLORS[0], 1: LANE_COLORS[1], 3: LANE_COLORS[2], 2: LANE_COLORS[3], 4: LANE_COLORS[4] } : { 0: '#2ed24f', 1: '#f2332b', 3: '#ffd21f', 2: '#2f84f0', 4: '#ff8a1a' };
     if (cols[b]) return `<svg class="gl-svg" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="4" fill="${cols[b]}" stroke="rgba(0,0,0,0.4)"/></svg>`;
     if (b === 9) return pill('START');
     if (b === 8) return pill(family === 'guitar' ? '★' : 'BACK');

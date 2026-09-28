@@ -122,7 +122,7 @@ export function installOnline(ui) {
     const local = song && ui.songs.find((s) => s.id === song.id);
     const cv = local && coverUrl(local);
     $('#ol-song').innerHTML = song
-      ? `<div class="cv" style="background:${cv ? `url('${cv}') center/cover` : 'linear-gradient(135deg,#ff2d7a,#29e0ff)'}"></div><div><b>${esc(song.title)}</b><div class="small-note">${esc(song.artist)}${song.duration ? ` · ${Math.floor(song.duration / 60)}:${String(Math.floor(song.duration % 60)).padStart(2, '0')}` : ''}</div></div>`
+      ? `<div class="cv" style="background:${cv ? `url('${cv}') center/cover` : ui.art(local || song)}"></div><div><b>${esc(song.title)}</b><div class="small-note">${esc(song.artist)}${song.duration ? ` · ${Math.floor(song.duration / 60)}:${String(Math.floor(song.duration % 60)).padStart(2, '0')}` : ''}</div></div>`
       : `<div class="small-note">${online.host ? 'Choose a song for the match.' : 'Waiting for the host to choose a song...'}</div>`;
     $('#ol-players').innerHTML = room.players.map((p) => {
       const status = !song ? '' : p.hasSong ? (p.ready || p.host ? '<span class="rd ok">READY</span>' : '<span class="rd">NOT READY</span>') : `<span class="rd">DOWNLOADING ${Math.round((p.loading || 0) * 100)}%</span>`;

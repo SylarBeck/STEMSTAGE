@@ -4,7 +4,7 @@
 import { loadProfiles, saveProfiles, loadPlays, addPlays } from '../storage/library.js';
 
 const CURRENT_KEY = 'stemstage.profile.current';
-export const PROFILE_COLORS = ['#ff2d7a', '#29e0ff', '#ffcf3a', '#3dff8a', '#b36bff', '#ff8a1a', '#2b8cff', '#ff5a5a'];
+export const PROFILE_COLORS = ['#e2432f', '#3f86e0', '#f0b429', '#6cbf46', '#9a6ad8', '#f2861c', '#2fb3a8', '#d9d0bc'];
 const DIFF_XP = { easy: 0.6, medium: 0.8, hard: 1.0, expert: 1.3 };
 
 export const RANKS = [

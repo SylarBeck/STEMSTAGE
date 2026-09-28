@@ -129,7 +129,7 @@ class CanvasView {
   remove() { this.el.remove(); }
 }
 
-const noteColor = (n) => (n.missed ? '#ff3b4a' : hex(FIVE_COLORS[n.lane] ?? 0xffffff));
+const noteColor = (n) => (n.missed ? '#e5402f' : hex(FIVE_COLORS[n.lane] ?? 0xffffff));
 
 function roundRect(g, x, y, w, h, r) {
   g.beginPath();
@@ -165,7 +165,7 @@ export class TabView extends CanvasView {
       g.beginPath(); g.moveTo(x, top - 6); g.lineTo(x, bottom + 6); g.stroke();
     }
     // strings + names
-    g.font = '600 12px Rajdhani, sans-serif';
+    g.font = "600 13px 'Barlow Condensed', sans-serif";
     g.textAlign = 'center'; g.textBaseline = 'middle';
     for (let s = 0; s < S; s++) {
       const y = yOf(s);
@@ -209,7 +209,7 @@ export class TabView extends CanvasView {
       }
       k = j;
     }
-    g.font = '700 15px Orbitron, Rajdhani, sans-serif';
+    g.font = "16px Anton, 'Barlow Condensed', sans-serif";
     for (const n of vis) {
       const x = xOf(n.t), y = yOf(n.str);
       const label = String(n.fret);
@@ -219,9 +219,9 @@ export class TabView extends CanvasView {
       if (g.globalAlpha <= 0) continue;
       const c = noteColor(n);
       roundRect(g, x - bw / 2, y - 10, bw, 20, 6);
-      g.fillStyle = n.hit ? '#3dff8a' : '#0b0816'; g.fill();
-      g.lineWidth = 2; g.strokeStyle = n.hit ? '#3dff8a' : c; g.stroke();
-      g.fillStyle = n.hit ? '#0b0816' : '#fff';
+      g.fillStyle = n.hit ? '#8dc044' : '#0d0b09'; g.fill();
+      g.lineWidth = 2; g.strokeStyle = n.hit ? '#8dc044' : c; g.stroke();
+      g.fillStyle = n.hit ? '#0d0b09' : '#fff';
       g.fillText(label, x, y + 1);
     }
     g.globalAlpha = 1;
@@ -236,11 +236,11 @@ export class TabView extends CanvasView {
         pos.sort((a, b) => Math.abs(a.s - ref.s) * 3 + Math.abs(a.f - ref.f) - (Math.abs(b.s - ref.s) * 3 + Math.abs(b.f - ref.f)));
         const ok = next && player.matches(next.m, player.pitch);
         const p = pos[0], y = yOf(p.s);
-        g.fillStyle = ok ? 'rgba(61,255,138,0.25)' : 'rgba(255,207,58,0.2)';
+        g.fillStyle = ok ? 'rgba(141,192,68,0.25)' : 'rgba(240,180,41,0.2)';
         g.beginPath(); g.arc(x0, y, 15, 0, Math.PI * 2); g.fill();
-        g.lineWidth = 2; g.strokeStyle = ok ? '#3dff8a' : '#ffcf3a'; g.stroke();
-        g.fillStyle = ok ? '#3dff8a' : '#ffcf3a';
-        g.font = '700 13px Orbitron, Rajdhani, sans-serif';
+        g.lineWidth = 2; g.strokeStyle = ok ? '#8dc044' : '#f0b429'; g.stroke();
+        g.fillStyle = ok ? '#8dc044' : '#f0b429';
+        g.font = "14px Anton, 'Barlow Condensed', sans-serif";
         g.fillText(String(p.f), x0, y + 1);
       }
     }
@@ -303,19 +303,19 @@ export class KeysView extends CanvasView {
     }
 
     // the keyboard
-    g.fillStyle = '#05030a'; g.fillRect(0, kbTop - 2, w, kbH + 2);
+    g.fillStyle = '#070605'; g.fillRect(0, kbTop - 2, w, kbH + 2);
     const drawKey = (m) => {
       const k = this.key(m, w);
       const on = held.has(m), want = due.get(m);
       const ok = on && player.notes.some((n) => !n.missed && Math.abs(n.t - t) < 0.25 && player.matches(n.m, m));
-      let fill = k.black ? '#15121f' : '#f2f0f7';
+      let fill = k.black ? '#171411' : '#ece5d3';
       if (want) fill = want;
-      if (on) fill = ok ? '#3dff8a' : '#ffcf3a';
+      if (on) fill = ok ? '#8dc044' : '#f0b429';
       roundRect(g, k.x + 1, kbTop, k.w - 2, k.black ? kbH * 0.62 : kbH, 3);
       g.fillStyle = fill; g.fill();
       if (!k.black && m % 12 === 0) {
-        g.fillStyle = on || want ? '#0b0816' : 'rgba(0,0,0,0.45)';
-        g.font = '600 10px Rajdhani, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+        g.fillStyle = on || want ? '#0d0b09' : 'rgba(0,0,0,0.45)';
+        g.font = "600 11px 'Barlow Condensed', sans-serif"; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
         g.fillText(`C${Math.floor(m / 12) - 1}`, k.x + k.w / 2, h - 4);
       }
     };
