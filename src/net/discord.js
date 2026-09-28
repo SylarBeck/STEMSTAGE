@@ -10,6 +10,8 @@ export const DISCORD_APP_ID = import.meta.env?.VITE_DISCORD_CLIENT_ID || '155387
 const appId = () => settings.discordClientId || DISCORD_APP_ID;
 const OAUTH_KEY = 'stemstage.discord.oauth';
 export const CALLBACK_PATH = '/discord/callback';
+/** The web invite for a room: works for everyone, and opens STEMSTAGE straight into the room when it's installed. */
+export const inviteLink = (code) => `https://stemstage.varconstint.com/join/?code=${encodeURIComponent(code)}`;
 
 const api = async (path, body) => {
   const r = await fetch(`/api/discord/${path}`, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -124,12 +126,18 @@ class Discord {
     });
   }
 
-  /** In an online room: party size, and the invite code as Discord's join secret, so friends get a Join button. */
+  /**
+   * In an online room. Discord allows either link buttons or a join secret, not both:
+   *   'link' (default)  a "Join room" button with the web invite: anyone can use it, game installed or not
+   *   'discord'         Discord's own Join / Ask to Join (only lights up for people who have STEMSTAGE installed)
+   */
   room({ code, players, host, song }) {
+    const discordJoin = settings.discordInvites === 'discord';
     this.activity({
       details: song ? `Online · ${song.title}${song.artist ? ` — ${song.artist}` : ''}` : 'In an online room',
       state: host ? 'Hosting · join in!' : 'In the lobby',
-      party: { id: `room-${code}`, size: Math.max(1, players), max: 8 }, secret: code,
+      party: { id: `room-${code}`, size: Math.max(1, players), max: 8 },
+      ...(discordJoin ? { secret: code } : { buttons: [{ label: 'Join room', url: inviteLink(code) }, { label: 'Get STEMSTAGE', url: 'https://stemstage.varconstint.com/' }] }),
     });
   }
 

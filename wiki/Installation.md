@@ -1,22 +1,20 @@
 # Installation
 
-STEMSTAGE is a desktop app for **Windows 10/11** and **Linux** (x86-64). Every release is on the [Releases page](https://github.com/SylarBeck/STEMSTAGE/releases/latest).
+STEMSTAGE is a desktop app for **Windows 10/11** and **Linux** (x86-64), and it's **one click**: the app ships with its own Node.js, and the setup installs the controller bridge and (if you want it) the AI splitter for you. Every release is on the [Releases page](https://github.com/SylarBeck/STEMSTAGE/releases/latest).
 
-## 1. Node.js (required)
+## Windows
 
-The app runs a small local game server with Node.js. Install **Node.js 20 or newer**:
+1. Download `STEMSTAGE_x.y.z_x64-setup.exe` and run it. It installs for your user, so no admin rights are needed.
+2. The setup wizard then:
+   - installs Python and the **DualSense controller bridge** (about 60 MB, under a minute), and
+   - asks whether to install the **AI splitter** too (Demucs stems, Whisper lyrics, note transcription). It's a **3–5 GB download**, from a few minutes up to half an hour. With an NVIDIA GPU it gets the CUDA build.
 
-- Windows: the LTS installer from <https://nodejs.org>
-- Ubuntu / Debian: `sudo apt install nodejs` (22.04 ships Node 12; use [NodeSource](https://github.com/nodesource/distributions) or `nvm` to get 20+)
-- Fedora: `sudo dnf install nodejs`
+   Progress shows in the wizard's details list.
+3. Start **STEMSTAGE** from the Start menu. It updates itself when a new release comes out (Settings → Updates).
 
-## 2. The app
+Said no to the AI splitter, or setup was offline? **Settings → AI splitter → Install AI splitter** installs it in the background while you play. Anything else missing is installed by the app on its next start.
 
-### Windows
-Download `STEMSTAGE_x.y.z_x64-setup.exe` and run it. It installs for your user, so no admin rights are needed. Start **STEMSTAGE** from the Start menu. The app updates itself when a new release comes out (Settings → Updates).
-
-### Linux
-Pick one:
+## Linux
 
 | Package | For | Install |
 |---|---|---|
@@ -24,20 +22,7 @@ Pick one:
 | `STEMSTAGE_x.y.z_amd64.deb` | Ubuntu, Debian, Mint, Pop!_OS | `sudo apt install ./STEMSTAGE_*.deb` |
 | `STEMSTAGE-x.y.z-1.x86_64.rpm` | Fedora, openSUSE | `sudo dnf install ./STEMSTAGE-*.rpm` |
 
-The Linux app uses WebKitGTK and GStreamer for audio. The .deb and .rpm pull them in, and the AppImage bundles them.
-
-## 3. AI splitter and DualSense bridge (recommended)
-
-Without these, STEMSTAGE splits songs with a built-in DSP splitter (rougher) and DualSense controllers work as plain gamepads. With them you get Demucs stems, neural note transcription, Whisper lyrics and full DualSense support (adaptive triggers, haptics, lightbar).
-
-You need a copy of the source (`git clone https://github.com/SylarBeck/STEMSTAGE`, or the source zip from the release) for the setup script. It uses [uv](https://docs.astral.sh/uv/) to build a Python 3.11 environment:
-
-| | Command | Environment goes to |
-|---|---|---|
-| Windows | `powershell -ExecutionPolicy Bypass -File server\setup-ai.ps1` (or `npm run ai:setup`) | `%LOCALAPPDATA%\stemstage\venv` |
-| Linux | `bash server/setup-ai.sh` | `~/.local/share/stemstage/venv` |
-
-It installs the CUDA build of PyTorch when an NVIDIA GPU is present, otherwise the CPU build. It's about 3–5 GB including the model weights. After that the desktop app starts the splitter and the bridge by itself.
+Linux has no setup wizard, so the **first start** installs the controller bridge and the AI splitter in the background (3–5 GB), while the game is already playable with the built-in splitter. Progress is logged to `~/.local/share/stemstage/logs/setup.log`. The splash screen and Settings → AI splitter show when it's ready.
 
 ### Linux: DualSense permissions
 pydualsense talks to the controller over `hidraw`. Install hidapi and give your user access (once):
@@ -48,12 +33,20 @@ echo 'KERNEL=="hidraw*", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="0ce6|0df2",
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-## Where things are stored
+## What gets installed where
 
 | | Windows | Linux |
 |---|---|---|
+| The app (with Node.js and uv) | `%LOCALAPPDATA%\Programs\STEMSTAGE` | AppImage file / `/usr/bin` |
+| Python + controller bridge + AI splitter | `%LOCALAPPDATA%\stemstage\venv` | `~/.local/share/stemstage/venv` |
 | Songs (a folder of WAV stems + `song.json` each) | `Documents\STEMSTAGE\songs` | `~/Documents/STEMSTAGE/songs` |
 | Profiles, scores, replays | `Documents\STEMSTAGE\data` | `~/Documents/STEMSTAGE/data` |
-| Logs | `%LOCALAPPDATA%\stemstage\logs` | `~/.local/share/stemstage/logs` |
+| Logs (incl. `setup.log`) | `%LOCALAPPDATA%\stemstage\logs` | `~/.local/share/stemstage/logs` |
+
+Uninstalling removes the app and keeps your songs, profiles and the Python environment. Delete the `stemstage` folder above to free the AI splitter's space.
+
+## Playing in a browser instead (developers)
+
+From a source checkout: `npm install`, `npm run dev`, and open <http://127.0.0.1:5173>. Node.js 20+ is needed for this, plus `npm run ai:setup` (Windows) or `bash server/setup-ai.sh` (Linux) for the Python parts. See [Development Setup](Development-Setup).
 
 Next: [Getting Started](Getting-Started)

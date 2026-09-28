@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Join my STEMSTAGE room</title>
+  <meta name="description" content="You're invited to an online STEMSTAGE room. Open it in STEMSTAGE, or get the game free for Windows and Linux." />
+  <meta property="og:title" content="🎸 Join my STEMSTAGE room" />
+  <meta property="og:description" content="You're invited to play online. Any song, any instrument, split by AI. Free for Windows and Linux." />
+  <meta property="og:image" content="https://stemstage.varconstint.com/img/hero.webp" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#ff2d7a" />
+  <link rel="icon" href="../img/favicon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <style>
+    :root { --bg: #05030a; --panel: rgba(18, 12, 34, 0.82); --line: rgba(255, 255, 255, 0.1); --ink: #f4f1fb; --dim: #a79fbe; --accent: #ff2d7a; --accent-2: #29e0ff; --gold: #ffcf3a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg) url(../img/hero.webp) center top / cover no-repeat; color: var(--ink); font-family: 'Rajdhani', system-ui, sans-serif; font-size: 18px; }
+    body::before { content: ''; position: fixed; inset: 0; background: linear-gradient(180deg, rgba(5, 3, 10, 0.55), var(--bg) 70%); }
+    main { position: relative; width: min(520px, 100%); padding: 32px; border-radius: 22px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(14px); text-align: center; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); }
+    main img.logo { width: 72px; height: 72px; border-radius: 16px; }
+    h1 { font-family: 'Orbitron', sans-serif; font-size: 24px; letter-spacing: 0.06em; margin: 16px 0 6px; text-transform: uppercase; }
+    p { color: var(--dim); margin: 0 0 22px; }
+    .code { font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: clamp(16px, 4.6vw, 22px); letter-spacing: 0.08em; padding: 14px 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px dashed rgba(255, 255, 255, 0.2); word-break: break-word; }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; margin-top: 12px; padding: 15px 20px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.05); color: var(--ink); font: 800 14px 'Orbitron', sans-serif; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; cursor: pointer; }
+    .btn.primary { border: 0; color: #120414; background: linear-gradient(90deg, var(--accent), #ff6fa6); box-shadow: 0 10px 36px rgba(255, 45, 122, 0.45); }
+    .btn:hover { filter: brightness(1.08); }
+    .steps { text-align: left; margin: 22px 0 0; padding: 18px 20px; border-radius: 14px; background: rgba(0, 0, 0, 0.25); color: var(--dim); font-size: 17px; }
+    .steps b { color: var(--ink); }
+    .steps ol { margin: 8px 0 0; padding-left: 20px; }
+    .bad { color: var(--gold); }
+    small { display: block; margin-top: 16px; color: var(--dim); font-size: 14px; }
+    small a { color: var(--accent-2); }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="logo" src="../img/icon.png" alt="" />
+    <h1>You're invited</h1>
+    <p id="lead">A friend is playing STEMSTAGE online and saved you a spot.</p>
+    <div class="code" id="code">…</div>
+    <a class="btn primary" id="open" href="#"><i class="fa-solid fa-guitar"></i> Open in STEMSTAGE</a>
+    <button class="btn" id="copy" type="button"><i class="fa-regular fa-copy"></i> Copy the code</button>
+    <a class="btn" id="get" href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><i class="fa-solid fa-download"></i> Get STEMSTAGE <span id="get-os">free</span></a>
+    <div class="steps">
+      <b>New to STEMSTAGE?</b>
+      <ol>
+        <li>Install it: one download, and the installer sets up everything.</li>
+        <li>Come back to this page and press <b>Open in STEMSTAGE</b>, or open <b>Online → Join</b> and type the code above.</li>
+      </ol>
+    </div>
+    <small>The room stays open while your friend is hosting. <a href="https://stemstage.varconstint.com/">What's STEMSTAGE?</a></small>
+  </main>
+  <script>
+    // ?code=WORD-WORD-WORD… (the room's invite code). Only letters and dashes are accepted.
+    const raw = new URLSearchParams(location.search).get('code') || location.hash.slice(1);
+    const code = /^[A-Za-z]+(-[A-Za-z]+){1,9}$/.test(raw || '') ? raw.toUpperCase() : null;
+    const $ = (id) => document.getElementById(id);
+    if (!code) {
+      $('code').textContent = 'No room code in this link';
+      $('code').classList.add('bad');
+      $('lead').textContent = 'This invite link is missing its room code. Ask your friend to send it again.';
+      $('open').style.display = $('copy').style.display = 'none';
+    } else {
+      $('code').textContent = code;
+      const deep = `stemstage://join/${code}`;
+      $('open').href = deep;
+      // try the game straight away (nothing happens if it isn't installed)
+      setTimeout(() => { location.href = deep; }, 400);
+      $('copy').onclick = async () => {
+        try { await navigator.clipboard.writeText(code); $('copy').innerHTML = '<i class="fa-solid fa-check"></i> Copied'; } catch { prompt('Copy the code:', code); }
+      };
+    }
+    // the installer for this visitor's OS
+    const ua = navigator.userAgent;
+    const os = /Windows/i.test(ua) ? 'windows' : /Linux|X11/i.test(ua) && !/Android/i.test(ua) ? 'linux' : null;
+    if (os) $('get-os').textContent = os === 'windows' ? 'for Windows' : 'for Linux';
+    fetch('https://api.github.com/repos/SylarBeck/STEMSTAGE/releases/latest').then((r) => r.json()).then((rel) => {
+      const a = (rel.assets || []).find((x) => (os === 'windows' ? /setup\.exe$/ : /\.AppImage$/).test(x.name));
+      if (a && os) $('get').href = a.browser_download_url;
+    }).catch(() => {});
+  </script>
+</body>
+</html>

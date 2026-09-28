@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-install-ai"
+description = "Enables the install_ai command without any pre-configured scope."
+commands.allow = ["install_ai"]
+
+[[permission]]
+identifier = "deny-install-ai"
+description = "Denies the install_ai command without any pre-configured scope."
+commands.deny = ["install_ai"]

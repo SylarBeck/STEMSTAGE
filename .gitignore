@@ -24,3 +24,9 @@ Thumbs.db
 *.key.pub
 .env*
 tools/.tmp/
+
+# runtimes bundled with the desktop app (tools/fetch-runtime.mjs downloads them)
+src-tauri/bin/
+
+# wrangler local state (cloud/)
+cloud/.wrangler/

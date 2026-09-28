@@ -171,7 +171,10 @@ function toActivity(a) {
   if (a.party) act.party = { id: String(a.party.id || 'band'), size: [a.party.size, a.party.max] };
   // a join secret gives the status Discord's Join / Ask to Join buttons (Discord doesn't allow link buttons with it)
   if (a.secret && act.party) act.secrets = { join: String(a.secret).slice(0, 128) };
-  else act.buttons = [{ label: 'Get STEMSTAGE', url: 'https://stemstage.varconstint.com/' }];
+  else {
+    const given = (Array.isArray(a.buttons) ? a.buttons : []).filter((b) => b && /^https:\/\//.test(b.url || '') && b.label).slice(0, 2);
+    act.buttons = given.length ? given.map((b) => ({ label: String(b.label).slice(0, 32), url: String(b.url).slice(0, 512) })) : [{ label: 'Get STEMSTAGE', url: 'https://stemstage.varconstint.com/' }];
+  }
   for (const k of Object.keys(act)) if (act[k] === undefined) delete act[k];
   return act;
 }

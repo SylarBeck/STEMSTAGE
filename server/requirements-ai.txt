@@ -1,0 +1,8 @@
+# The AI splitter (large; PyTorch is installed separately with the right CUDA/CPU build)
+demucs==4.0.1
+faster-whisper>=1.0
+onnxruntime
+librosa
+resampy
+pretty_midi
+mir_eval

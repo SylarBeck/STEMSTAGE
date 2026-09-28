@@ -6,7 +6,7 @@ Nothing to set up for players: log in with Discord and your status follows what 
 |---|---|---|
 | **Log in with Discord** | Links your STEMSTAGE profile to your Discord account: your Discord avatar and name show on your profile | A Discord account |
 | **Automatic status** | While you play, your Discord status shows the song, artist, part, difficulty and time left, then your result | The Discord app running on this PC |
-| **Join from Discord** | While you're in an online room, friends press **Join** on your Discord status and land straight in your room: no code to type | The Discord app, on both PCs |
+| **Invites** | While you're in an online room, your status gets a **Join room** button, and **Invite friends** gives you a link to paste in any chat. Both work for everyone, with or without STEMSTAGE | Nothing |
 | **Live status on your profile** | Your career page shows your Discord status (online / idle / do not disturb), custom status, and what you're playing or listening to | Joining the [Lanyard](https://github.com/Phineas/lanyard) Discord server once (optional) |
 
 ## Log in with Discord
@@ -28,9 +28,20 @@ When the Discord desktop app is running on the same PC, STEMSTAGE updates your s
 
 Turn it off with **Settings → Discord → Show what I play on Discord**. *Test Discord status* checks that the Discord app answers. The browser version of Discord can't show game status, and Discord's own setting *Activity Privacy → Share your detected activities* has to be on.
 
-## Join from Discord
+## Invites
 
-When you **host an online room** (or join one), your Discord status shows the room, its size ("2 of 8") and Discord's **Join** button, or **Ask to Join** for friends who aren't allowed to join directly.
+In an online room (hosting or joined), press **Invite friends** in the lobby:
+
+- **Copy invite link:** `https://stemstage.varconstint.com/join/?code=…`. Paste it in a Discord chat (or anywhere) and it shows as a card **anyone can click**. The page opens STEMSTAGE straight into your room, or offers the download to friends who don't have it yet, then the code.
+- **Copy invite code:** the words friends type in Online → Join.
+
+Your Discord status also shows the room, its size ("2 of 8") and a **Join room** button with the same link.
+
+### Discord's own Join button (optional)
+
+Discord's built-in Game Invitations (the card with a Join button, sent from a chat's **+ → Invite to STEMSTAGE**) only work for friends who **have STEMSTAGE installed**. For everyone else Discord shows the button greyed out, and no app can change that. Discord also doesn't allow the Join room link button at the same time. So it's a setting: **Settings → Discord → Discord invites**: *Join link* (default, works for everyone) or *Discord Join*.
+
+With *Discord Join*, your status shows Discord's **Join** button, or **Ask to Join** for friends who aren't allowed to join directly.
 
 - A friend presses **Join** → their STEMSTAGE opens the Online screen and connects to your room. If STEMSTAGE isn't running, Discord starts it first (the desktop app registers itself with Discord for this the first time it runs).
 - **Ask to Join** requests are accepted automatically, since the room is open to anyone with the invite code anyway, and you see "*name* is joining through Discord".

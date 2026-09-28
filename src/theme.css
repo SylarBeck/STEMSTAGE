@@ -873,3 +873,11 @@ html[data-hud="huge"] #hud .hud-left, html[data-hud="huge"] #hud .hud-right, htm
 .dc-activity { flex-basis: 100%; color: var(--dim); font-size: 13px; }
 .dc-activity:empty { display: none; }
 .nav-btn.discord .fa-discord { color: #5865f2; }
+
+/* main menu: Exit */
+.menu-item.exit .mi-ico .fa-power-off { color: #ff5a6e; }
+
+/* ---------- world leaderboard ---------- */
+.world-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; }
+@media (max-width: 1100px) { .world-grid { grid-template-columns: 1fr; } }
+.wl-av { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; vertical-align: middle; margin-right: 6px; object-fit: cover; background: rgba(255,255,255,0.1); font-size: 11px; font-weight: 800; }

@@ -1,5 +1,14 @@
 # Troubleshooting
 
+## Lag, stutter or missed notes
+
+Since 1.5.0 STEMSTAGE runs at **High priority** on Windows: the game, its renderer and the controller bridge. The AI splitter runs at Below normal, so splitting in the background never takes time from a song. Controllers are read every ~2.5 ms on a high-priority task, so short taps aren't lost when the PC is busy. If it still stutters:
+
+- Settings → Video → **Graphics quality** *low* (smaller crowd, no film grain) and **Bloom** off.
+- Close other heavy apps. Don't import or split a song while playing.
+- Plug laptops in: on battery Windows slows the GPU down.
+- Hitting late or early is usually audio latency, not lag: **Settings → Audio → Calibrate audio offset** (Bluetooth headphones add 100–250 ms).
+
 ## Microphone
 
 **The desktop app can't use the microphone (singing or a real guitar/bass).**

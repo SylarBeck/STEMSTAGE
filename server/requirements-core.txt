@@ -1,0 +1,5 @@
+# Always installed (small): DualSense controller bridge + YouTube import
+numpy
+pydualsense>=0.7.5
+websockets>=13
+yt-dlp

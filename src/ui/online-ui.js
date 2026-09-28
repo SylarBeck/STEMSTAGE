@@ -3,7 +3,8 @@
 import { online, hostInfo, startHosting, stopHosting, inviteCode } from '../net/online.js';
 import { profiles, PROFILE_COLORS } from '../profile/profiles.js';
 import { getSong, getAudio, coverUrl } from '../storage/library.js';
-import { discord } from '../net/discord.js';
+import { discord, inviteLink } from '../net/discord.js';
+import { settings } from '../settings.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -86,18 +87,24 @@ export function installOnline(ui) {
     if (room && code && !app.game.running) discord.room({ code, players: room.players.length, host: online.host, song: room.song });
   }
 
-  /** A friend pressed Join on our Discord status: go to their room. */
-  function joinFromDiscord(code) {
-    if (app.game.running) { ui.toast('Finish or quit this song, then press Join in Discord again', 'err'); return; }
-    if (online.connected) online.close();
+  /** An invite from outside the game (Discord's Join button, a stemstage://join/ link, ?join=): go to that room. */
+  function joinFromInvite(code, via = 'an invite') {
+    if (!/^[A-Za-z]+(-[A-Za-z]+){1,9}$/.test(code || '')) return;
+    if (app.game.running) { ui.toast(`Finish or quit this song, then open ${via} again`, 'err'); return; }
+    if (online.connected) { if (inviteCode(online.baseUrl) === code.toUpperCase()) { ui.show('online'); return; } online.close(); }
     ui.show('online');
     $('#ol-addr').value = code;
     localStorage.setItem('stemstage.online.last', code);
-    ui.toast('Joining your friend’s room from Discord…');
+    ui.toast(`Joining your friend’s room from ${via}…`);
     connect(code);
   }
+  window.__stemstageJoin = (code) => joinFromInvite(code, 'the invite link'); // called by the desktop app
+  {
+    const q = new URLSearchParams(location.search).get('join');
+    if (q) { history.replaceState(null, '', '/'); setTimeout(() => joinFromInvite(q, 'the invite link'), 1200); }
+  }
   discord.onEvent((ev) => {
-    if (ev.type === 'join' && ev.secret) joinFromDiscord(ev.secret);
+    if (ev.type === 'join' && ev.secret) joinFromInvite(ev.secret, 'Discord');
     else if (ev.type === 'join-request') ui.toast(`${ev.user.globalName || ev.user.username} is joining through Discord`, 'ok');
   });
 
@@ -237,6 +244,7 @@ export function installOnline(ui) {
       localStorage.setItem('stemstage.online.last', addr);
       connect(addr);
     },
+    'ol-invite': () => invitePopup(),
     'ol-leave': () => { if (online.host) { ui.actionHooks['ol-stop'](); return; } online.close(); discord.menus(); render(); },
     'ol-ready': () => setMine({ ready: !me()?.ready }),
     'ol-choose': () => { ui.mode = 'online-pick'; ui.show('library'); },
@@ -264,6 +272,24 @@ export function installOnline(ui) {
     } catch (e) { ui.toast(e.message, 'err'); }
   }
   online.on('connecting', (n) => { const s = $('#ol-join-status'); if (s && n > 1) s.textContent = 'Looking for the room… (a new room can take a few seconds)'; });
+
+  /** Invite friends: the web link (works for anyone, even without the game), the code, and Discord's own invite. */
+  async function invitePopup() {
+    const code = online.host ? st.code : inviteCode(online.baseUrl);
+    if (!code) {
+      ui.toast(online.connected ? 'This is a local-network room: friends on your Wi-Fi join with the address shown under Host' : 'Host or join a room first', 'err');
+      return;
+    }
+    const link = inviteLink(code);
+    await ui.openSheet({
+      title: 'Invite friends', sub: link,
+      items: [
+        { label: 'Copy invite link', icon: 'link', desc: 'Paste it in a Discord chat (or anywhere): it shows as a card anyone can click, and installs STEMSTAGE for friends who don\u2019t have it', run: async () => ui.toast((await copyText(link)) ? 'Invite link copied, paste it in Discord' : link, 'ok') },
+        { label: 'Copy invite code', icon: 'copy', desc: `${code}: friends type it in Online → Join`, run: async () => ui.toast((await copyText(code)) ? `Invite code ${code} copied` : code, 'ok') },
+        { label: 'Discord invite', icon: 'user-plus', desc: settings.discordInvites === 'discord' ? 'In a Discord chat press + → Invite to STEMSTAGE (friends need STEMSTAGE installed for the Join button)' : 'Your Discord status has a Join room button. Or switch Settings → Discord invites to "Discord Join" for Discord\u2019s own invite cards', run: () => {} },
+      ],
+    });
+  }
 
   /** Called from the setlist when the host picks a song for the room. */
   function selectForRoom(song) {

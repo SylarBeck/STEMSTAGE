@@ -121,6 +121,13 @@ class Profiles {
     await saveProfiles(this.list);
   }
 
+  /** The profile's world-leaderboard identity { id, secret }: made once by make(), kept in profiles.json. */
+  async cloudIdentity(id, make) {
+    const p = this.byId(id);
+    if (!p.cloud) { p.cloud = make(); await saveProfiles(this.list); }
+    return p.cloud;
+  }
+
   /** Link (data: { id, username, globalName, avatar }) or unlink (null) a Discord account. */
   async setDiscord(id, data) {
     const p = this.byId(id);

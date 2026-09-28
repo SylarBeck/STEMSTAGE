@@ -5,7 +5,7 @@
   "identifier": "com.stemstage.game",
   "build": {
     "frontendDist": "../desktop/splash",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "node tools/fetch-runtime.mjs && npm run build"
   },
   "app": {
     "withGlobalTauri": true,
@@ -23,7 +23,7 @@
         "fullscreen": true,
         "backgroundColor": "#05030a",
         "dragDropEnabled": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --ignore-gpu-blocklist --enable-gpu-rasterization"
       }
     ],
     "security": {
@@ -50,7 +50,8 @@
       "../dist/": "app/dist/",
       "../server/": "app/server/",
       "../node_modules/ws/": "app/node_modules/ws/",
-      "../package.json": "app/package.json"
+      "../package.json": "app/package.json",
+      "bin/": "bin/"
     },
     "windows": {
       "nsis": {

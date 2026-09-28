@@ -43,6 +43,8 @@ export const DEFAULTS = {
   autoSustain: false,    // sustains hold themselves
   hudSize: 'normal',     // normal | large | huge (score, meters and judgements)
   discordPresence: true, // Rich Presence: show the song you're playing in your Discord status
+  worldLeaderboard: true, // send your runs (signed-in profiles) to the world leaderboard
+  discordInvites: 'link', // online rooms on Discord: 'link' (Join room link, works for everyone) | 'discord' (Discord's Join button)
   discordClientId: '',   // override STEMSTAGE's Discord application ID (forks / testing); '' = the one built in
   lastInstrument: 'guitar',
   lastDifficulty: 'medium',

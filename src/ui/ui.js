@@ -108,8 +108,11 @@ const SETTINGS_SCHEMA = [
   { key: 'lyrics', label: 'Lyrics', desc: 'Show lyrics under the vocal track (Song options → Get lyrics)', type: 'toggle' },
   { action: 'chooseMic', label: 'Microphone', desc: 'Pick the input you sing into' },
   { action: 'testMic', label: 'Test microphone', desc: 'Sing and see the note you hit' },
+  { group: 'World leaderboard' },
+  { key: 'worldLeaderboard', label: 'Send my runs to the world leaderboard', desc: 'Signed-in profiles: your score, stars and accuracy (with your profile name and Discord avatar) go to stemstage.varconstint.com/leaderboard. Practice, replays and assisted runs are never sent', type: 'toggle' },
   { group: 'Discord' },
   { key: 'discordPresence', label: 'Show what I play on Discord', desc: 'Your Discord status shows the song, part and time left, automatically (needs the Discord app running on this PC)', type: 'toggle' },
+  { key: 'discordInvites', label: 'Discord invites', desc: 'Link: your status gets a "Join room" button anyone can use (installs STEMSTAGE if needed). Discord: Discord\u2019s own Join button, which only works for friends who have STEMSTAGE', type: 'choice', options: ['link', 'discord'], labels: { link: 'Join link', discord: 'Discord Join' } },
   { action: 'testDiscord', label: 'Test Discord status', desc: 'Check that the Discord app answers. Link your account on the Career page (Log in with Discord)' },
   { group: 'Updates' },
   { key: 'autoUpdate', label: 'Check for updates at start-up', desc: 'Desktop app: offers new versions from GitHub Releases (signed)', type: 'toggle' },
@@ -117,6 +120,7 @@ const SETTINGS_SCHEMA = [
   { action: 'checkUpdate', label: 'Check for updates now', desc: 'See if a newer STEMSTAGE is available' },
   { group: 'AI splitter' },
   { key: 'aiServer', label: 'Server URL', desc: 'Where the Demucs splitter runs (npm run ai)', type: 'text' },
+  { action: 'installAi', label: 'Install AI splitter', desc: 'Download and set up Demucs, Whisper lyrics and note transcription (3-5 GB, runs in the background)' },
   { action: 'testServer', label: 'Test AI connection', desc: 'Check the splitter and show which model/GPU it uses' },
   { group: 'Library' },
   { action: 'clearCache', label: 'Songs folder', desc: 'Every song is a folder of WAV stems + song.json in Documents\\STEMSTAGE\\songs' },
@@ -624,6 +628,16 @@ export class UI {
     if (item?.run) item.run();
   }
 
+  /** Main menu → Exit: ask first, then close the app (the desktop app also stops its services). */
+  async exitProgram() {
+    if (!(await this.confirmDialog('Exit STEMSTAGE?', 'Are you sure you want to quit? Your songs, scores and profiles are saved.', 'Exit'))) return;
+    const invoke = window.__TAURI__?.core?.invoke;
+    try { this.app.game.running && this.app.game.stop(); } catch { /* quitting anyway */ }
+    if (invoke) { try { await invoke('exit_app'); return; } catch (e) { console.warn(e); } }
+    window.close(); // browser version: only works for windows the game opened itself
+    setTimeout(() => this.toast('Close this browser tab to exit STEMSTAGE', 'ok'), 300);
+  }
+
   async confirmDialog(title, text, yes = 'OK') {
     const r = await this.openSheet({ title, sub: text, items: [{ label: yes, danger: true, id: 'yes' }, { label: 'Cancel', id: 'no' }] });
     return r?.id === 'yes';
@@ -637,6 +651,7 @@ export class UI {
       case 'band': this.show('band'); break;
       case 'library': case 'import': case 'settings': case 'controller': case 'howto': this.show(name); break;
       case 'controls': this.show('controller'); break;
+      case 'exit-app': this.exitProgram(); break;
       case 'play': this.play(); break;
       case 'song-options': this.songOptions(); break;
       case 'retry':
@@ -776,6 +791,7 @@ export class UI {
       }
       case 'controller': body = `<div class="hero-k">Controllers</div><h2>${devs.length ? `${devs.length} connected` : 'Keyboard ready'}</h2><p>Profiles, bindings and live tests.</p><div class="hero-devs">${devArt(devs)}</div>`; break;
       case 'settings': body = `<div class="hero-k">Settings</div><h2>Tune the show</h2><p>Note speed ${settings.noteSpeed} · ${settings.quality} graphics · audio offset ${settings.audioOffset > 0 ? '+' : ''}${settings.audioOffset} ms</p>`; break;
+      case 'exit': body = `<div class="hero-k">Exit</div><h2>Done for today?</h2><p>Closes STEMSTAGE and everything it started (game server, controller bridge, AI splitter). Your songs, scores and profiles are saved.</p>`; break;
       case 'howto': body = `<div class="hero-k">How to play</div><h2>Tip</h2><p>${esc(MENU_TIPS[Math.floor(Date.now() / 8000) % MENU_TIPS.length])}</p>`; break;
       default: body = '';
     }
@@ -1695,6 +1711,22 @@ export class UI {
       });
     }
     if (a === 'testMic') this.testMic();
+    if (a === 'installAi') {
+      const invoke = window.__TAURI__?.core?.invoke;
+      if (!invoke) { this.toast('In the browser version, run npm run ai:setup (Linux: server/setup-ai.sh)', 'err'); return; }
+      try {
+        await invoke('install_ai');
+        this.toast('Installing the AI splitter in the background (large download). It starts by itself when it\u2019s ready', 'ok');
+        clearInterval(this._aiPoll);
+        this._aiPoll = setInterval(async () => {
+          const st = await invoke('launcher_status').catch(() => null);
+          if (!st || /installing/.test(st.ai)) return;
+          clearInterval(this._aiPoll);
+          if (/error/.test(st.ai)) this.toast(`AI splitter setup failed: ${st.ai.replace(/^error: /, '')}`, 'err');
+          else { this.toast('AI splitter installed', 'ok'); this.refreshStatus?.(); }
+        }, 5000);
+      } catch (e) { this.toast(String(e?.message || e), 'err'); }
+    }
     if (a === 'testDiscord') {
       try {
         const u = await discord.currentUser();

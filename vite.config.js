@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { readFileSync } from 'node:fs';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -52,8 +53,11 @@ const stemstageServer = () => ({
   configurePreviewServer: mount,
 });
 
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+
 export default defineConfig({
   plugins: [stemstageServer()],
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   server: { port: 5173, host: '127.0.0.1', fs: { allow: [root, real] }, watch: { ignored: ['**/songs/**', '**/data/**'] } },
   preview: { port: 4173, host: '127.0.0.1' },
   worker: { format: 'es' },

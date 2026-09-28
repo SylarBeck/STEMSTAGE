@@ -66,9 +66,27 @@ export class Input {
     window.addEventListener('keydown', (e) => this._key(e, true));
     window.addEventListener('keyup', (e) => this._key(e, false));
     window.addEventListener('blur', () => { this.keysDown.clear(); this.releaseAll(); });
-    setInterval(() => this.poll(), 4);
+    this._startPolling();
     dualsense.onState = () => this.poll(); // bridged DualSense: react the moment its state arrives
     this._autoMidi();
+  }
+
+  /**
+   * Read the gamepads every ~4 ms. A plain setInterval can wait behind rendering for 100+ ms at a time, and the
+   * Gamepad API only shows the current state, so a quick tap in such a gap was lost. The poll runs as a
+   * "user-blocking" task (ahead of rendering work) where the browser supports it, and once every frame as well.
+   */
+  _startPolling() {
+    const sched = globalThis.scheduler;
+    if (sched?.postTask) {
+      const loop = () => {
+        try { this.poll(); } catch (e) { console.warn(e); }
+        sched.postTask(loop, { priority: 'user-blocking', delay: 4 }).catch(() => setTimeout(loop, 4));
+      };
+      sched.postTask(loop, { priority: 'user-blocking', delay: 4 });
+    } else setInterval(() => this.poll(), 4);
+    const frame = () => { try { this.poll(); } catch { /* next frame */ } requestAnimationFrame(frame); };
+    requestAnimationFrame(frame);
   }
 
   // ---------------------------------------------------------------- public API

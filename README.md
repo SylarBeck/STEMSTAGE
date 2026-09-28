@@ -45,7 +45,9 @@
 - **Chart editor** — fix the AI's charts by hand with a controller, keyboard or mouse: live playback, note placement while it plays, sustains, overdrive phrases, undo, and one-press rebuilding of the easier difficulties.
 - **Stream mode** — Twitch chat votes for the next song (`!vote`), requests songs (`!sr`) and hypes the crowd (`!hype`); an OBS overlay shows the song, score, vote and requests.
 - **Real instrument mode** — play the guitar, bass or keys part on a real instrument: plug a guitar/bass into your audio interface (pitch tracking, octave-free, latency learned as you play) or use a MIDI keyboard. Guitar and bass read a scrolling **tablature** (string + fret, fingered like a player would), keys a **piano keyboard** with falling notes; both show what you're playing live.
-- **Discord** — log in with Discord to link your profile (avatar, name, live status via Lanyard); your Discord status shows what you're playing automatically (Rich Presence), and friends can press **Join** on it to get into your online room.
+- **Discord** — log in with Discord to link your profile (avatar, name, live status via Lanyard); your Discord status shows what you're playing automatically (Rich Presence), with a **Join room** button in online rooms. **Invite friends** gives you a link that works for anyone, and installs STEMSTAGE for friends who don't have it.
+- **World leaderboard** — every signed-in run goes to the [world leaderboard](https://stemstage.varconstint.com/leaderboard/) (in the game: Leaderboards → World), a public API with JSON/JSONP and a Discord webhook for new records ([docs](https://github.com/SylarBeck/STEMSTAGE/wiki/Leaderboard-API)).
+- **One-click install** — the installer brings its own Node.js and sets up the DualSense bridge and (optionally) the AI splitter; nothing else to install.
 - **Accessibility** — colour-blind lane palettes (red-green, blue-yellow, high contrast), calm visuals (no strobes, shockwaves or camera cuts), lane assist (3 wide lanes, or any button — playable one-handed), auto sustain and a bigger HUD. Assisted runs earn XP but stay off leaderboards.
 - **Auto-updates** — the desktop app updates itself from signed GitHub Releases.
 - **Import from anywhere** — audio files or YouTube search (yt-dlp), with automatic metadata and cover art (MusicBrainz, iTunes).
@@ -70,13 +72,13 @@
 | | |
 |---|---|
 | OS | Windows 10 / 11, or Linux x86-64 (AppImage / .deb / .rpm) |
-| Node.js | 20 or newer — runs the game server |
+| Node.js | Included in the app. 20 or newer only for running from source |
 | GPU | Any WebGL 2 GPU. An NVIDIA GPU makes AI splitting ~10× faster (CPU works too) |
 | For building the app | [Rust](https://rustup.rs) + Visual Studio Build Tools (C++), WebView2 (preinstalled on Windows 11). Linux: WebKitGTK 4.1 dev packages (see the [wiki](https://github.com/SylarBeck/STEMSTAGE/wiki/Development-Setup)) |
 
 ### Install
 
-**Players:** download `STEMSTAGE_x.y.z_x64-setup.exe` (Windows) or the `.AppImage` / `.deb` / `.rpm` (Linux) from [Releases](https://github.com/SylarBeck/STEMSTAGE/releases/latest) and run it (the Windows installer installs for your user, no admin needed). On Linux, run `bash server/setup-ai.sh` from a source checkout for the AI splitter and DualSense bridge; see the [wiki](https://github.com/SylarBeck/STEMSTAGE/wiki/Installation). Install [Node.js](https://nodejs.org) 20+ if you don't have it, and run `npm run ai:setup` from a source checkout once if you want the AI splitter (see below). The app updates itself when a new release is published.
+**Players:** download `STEMSTAGE_x.y.z_x64-setup.exe` (Windows) or the `.AppImage` / `.deb` / `.rpm` (Linux) from [Releases](https://github.com/SylarBeck/STEMSTAGE/releases/latest) and run it. That's all: the app ships its own Node.js, and the setup wizard installs the DualSense controller bridge and offers the AI splitter (a 3–5 GB download). On Linux the first start does this in the background. The app updates itself when a new release is published. Details: [wiki → Installation](https://github.com/SylarBeck/STEMSTAGE/wiki/Installation).
 
 **From source:**
 

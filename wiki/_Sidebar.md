@@ -7,6 +7,7 @@
 - [Real Instruments](Real-Instruments)
 - [Singing and Lyrics](Singing-and-Lyrics)
 - [Discord](Discord)
+- [World leaderboard](https://stemstage.varconstint.com/leaderboard/)
 - [Band and Online](Band-and-Online)
 - [Troubleshooting](Troubleshooting)
 
@@ -15,6 +16,7 @@
 - [Architecture](Architecture)
 - [Controller Bridge Protocol](Controller-Bridge-Protocol)
 - [Lyrics Cross-Check](Lyrics-Cross-Check)
+- [Leaderboard API](Leaderboard-API)
 - [Release Process](Release-Process)
 - [Contributing](Contributing)
 

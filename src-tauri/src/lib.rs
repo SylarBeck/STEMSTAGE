@@ -41,6 +41,7 @@ struct Status {
 struct Launcher {
     children: Mutex<Vec<(String, Child)>>,
     status: Mutex<Status>,
+    env: Mutex<Option<PyEnv>>,
 }
 
 fn listening(port: u16) -> bool {
@@ -99,24 +100,29 @@ fn plain_path(p: PathBuf) -> PathBuf {
 /// STEMSTAGE's Discord application (the same ID as DISCORD_APP_ID in src/net/discord.js).
 const DISCORD_APP_ID: &str = "1553872601603117127";
 
-/// Register the `discord-<app id>://` protocol so Discord can start STEMSTAGE when a friend presses Join on
-/// someone's status and the game isn't running (the join itself is delivered once the game connects to Discord).
-fn register_discord_launch() {
+/// Register the link protocols that start STEMSTAGE:
+///   stemstage://join/<CODE>   invite links (the website's /join page opens one)
+///   discord-<app id>://       Discord starts the game when a friend presses Join and it isn't running (the join
+///                             itself arrives once the game connects to Discord)
+fn register_protocols() {
     let Ok(exe) = std::env::current_exe().map(plain_path) else { return };
+    let schemes = [("stemstage".to_string(), "URL:STEMSTAGE".to_string()), (format!("discord-{DISCORD_APP_ID}"), format!("URL:Run game {DISCORD_APP_ID} protocol"))];
     #[cfg(windows)]
     {
         let exe = exe.display().to_string();
-        let key = format!(r"HKCU\Software\Classes\discord-{DISCORD_APP_ID}");
         let reg = |args: &[&str]| {
             let mut c = Command::new("reg");
             c.args(args).stdout(Stdio::null()).stderr(Stdio::null());
             no_console(&mut c);
             let _ = c.status();
         };
-        reg(&["add", &key, "/ve", "/d", &format!("URL:Run game {DISCORD_APP_ID} protocol"), "/f"]);
-        reg(&["add", &key, "/v", "URL Protocol", "/d", "", "/f"]);
-        reg(&["add", &format!(r"{key}\DefaultIcon"), "/ve", "/d", &exe, "/f"]);
-        reg(&["add", &format!(r"{key}\shell\open\command"), "/ve", "/d", &format!("\"{exe}\""), "/f"]);
+        for (scheme, label) in &schemes {
+            let key = format!(r"HKCU\Software\Classes\{scheme}");
+            reg(&["add", &key, "/ve", "/d", label, "/f"]);
+            reg(&["add", &key, "/v", "URL Protocol", "/d", "", "/f"]);
+            reg(&["add", &format!(r"{key}\DefaultIcon"), "/ve", "/d", &exe, "/f"]);
+            reg(&["add", &format!(r"{key}\shell\open\command"), "/ve", "/d", &format!("\"{exe}\" \"%1\""), "/f"]);
+        }
     }
     #[cfg(target_os = "linux")]
     {
@@ -124,19 +130,87 @@ fn register_discord_launch() {
         let exe = std::env::var("APPIMAGE").map(PathBuf::from).unwrap_or(exe);
         let Some(apps) = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share"))).map(|d| d.join("applications")) else { return };
         let _ = fs::create_dir_all(&apps);
-        let name = format!("discord-{DISCORD_APP_ID}.desktop");
-        let entry = format!(
-            "[Desktop Entry]\nName=STEMSTAGE\nExec=\"{}\" %u\nType=Application\nNoDisplay=true\nCategories=Game;\nMimeType=x-scheme-handler/discord-{DISCORD_APP_ID};\n",
-            exe.display()
-        );
-        if fs::write(apps.join(&name), entry).is_ok() {
-            let _ = Command::new("xdg-mime").args(["default", &name, &format!("x-scheme-handler/discord-{DISCORD_APP_ID}")]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        for (scheme, _) in &schemes {
+            let name = format!("{scheme}-handler.desktop");
+            let entry = format!(
+                "[Desktop Entry]\nName=STEMSTAGE\nExec=\"{}\" %u\nType=Application\nNoDisplay=true\nCategories=Game;\nMimeType=x-scheme-handler/{scheme};\n",
+                exe.display()
+            );
+            if fs::write(apps.join(&name), entry).is_ok() {
+                let _ = Command::new("xdg-mime").args(["default", &name, &format!("x-scheme-handler/{scheme}")]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+            }
         }
     }
 }
 
+/// The room code in a `stemstage://join/<CODE>` argument, if any.
+fn join_code<I: IntoIterator<Item = String>>(args: I) -> Option<String> {
+    args.into_iter().find_map(|a| {
+        let code = a.strip_prefix("stemstage://join/")?.trim_end_matches('/').to_uppercase();
+        let ok = code.split('-').count() >= 2 && code.split('-').all(|w| !w.is_empty() && w.chars().all(|c| c.is_ascii_alphabetic()));
+        ok.then_some(code)
+    })
+}
+
+/// Give the game every bit of CPU it asks for: this process and everything it started (the WebView2 renderer
+/// and GPU processes, the game server, the controller bridge) run at High priority, so a busy PC doesn't delay
+/// frames or controller input. The AI splitter goes the other way (Below normal): splitting or transcribing in
+/// the background must never take time from a song being played. Called a few times as processes appear.
+#[cfg(windows)]
+fn boost_priority(app: &tauri::AppHandle) {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
+    use windows::Win32::System::Threading::{OpenProcess, SetPriorityClass, BELOW_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS, PROCESS_SET_INFORMATION};
+    let me = std::process::id();
+    let ai_root = app.state::<Launcher>().children.lock().unwrap().iter().find(|(n, _)| n == "ai-splitter").map(|(_, c)| c.id());
+    let mut parents: Vec<(u32, u32)> = Vec::new();
+    unsafe {
+        let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return };
+        let mut e = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        if Process32FirstW(snap, &mut e).is_ok() {
+            loop {
+                parents.push((e.th32ProcessID, e.th32ParentProcessID));
+                if Process32NextW(snap, &mut e).is_err() { break; }
+            }
+        }
+        let _ = CloseHandle(snap);
+    }
+    // everything descended from a process
+    let descendants = |root: u32| {
+        let mut tree = vec![root];
+        let mut i = 0;
+        while i < tree.len() {
+            let p = tree[i];
+            for &(pid, parent) in &parents {
+                if parent == p && pid != p && !tree.contains(&pid) { tree.push(pid); }
+            }
+            i += 1;
+        }
+        tree
+    };
+    let ai = ai_root.map(descendants).unwrap_or_default();
+    for pid in descendants(me) {
+        let class = if ai.contains(&pid) { BELOW_NORMAL_PRIORITY_CLASS } else { HIGH_PRIORITY_CLASS };
+        unsafe {
+            if let Ok(h) = OpenProcess(PROCESS_SET_INFORMATION, false, pid) {
+                let _ = SetPriorityClass(h, class);
+                let _ = CloseHandle(h);
+            }
+        }
+    }
+}
+#[cfg(not(windows))]
+fn boost_priority(_: &tauri::AppHandle) {}
+
+/// Exit Program (after the game asked "are you sure?"): stop the services and quit.
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    stop_all(&app.state::<Launcher>());
+    app.exit(0);
+}
+
 fn launch(app: &tauri::AppHandle) {
-    register_discord_launch();
+    register_protocols();
     let l = app.state::<Launcher>();
     // resource_dir() is a verbatim path (\\?\C:\...) on Windows; Node can't resolve its entry script from one
     let res = app.path().resource_dir().map(|p| plain_path(p).join("app")).unwrap_or_default();
@@ -154,17 +228,22 @@ fn launch(app: &tauri::AppHandle) {
     let _ = fs::create_dir_all(&songs);
 
     let mut st = Status {
-        url: format!("http://127.0.0.1:{GAME_PORT}/"),
+        // opened from an invite link: the game joins that room once it has loaded
+        url: match join_code(std::env::args()) {
+            Some(code) => format!("http://127.0.0.1:{GAME_PORT}/?join={code}"),
+            None => format!("http://127.0.0.1:{GAME_PORT}/"),
+        },
         songs: songs.display().to_string(),
         logs: logs.display().to_string(),
         ..Default::default()
     };
 
-    // 1. game server (Node.js)
+    // 1. game server, on the Node.js the app ships with (bin/node) — or one on PATH for builds without it
     if listening(GAME_PORT) {
         st.game = "running".into();
     } else {
-        let mut cmd = Command::new("node");
+        let bundled = res.parent().map(|r| r.join("bin").join(if cfg!(windows) { "node.exe" } else { "node" })).filter(|p| p.exists());
+        let mut cmd = Command::new(bundled.unwrap_or_else(|| PathBuf::from("node")));
         cmd.arg(res.join("server").join("app.js"))
             .current_dir(&res)
             .env("PORT", GAME_PORT.to_string())
@@ -176,25 +255,108 @@ fn launch(app: &tauri::AppHandle) {
         };
     }
 
-    // 2. Python services (AI splitter + DualSense bridge)
-    let py = if cfg!(windows) { local.join("venv").join("Scripts").join("python.exe") } else { local.join("venv").join("bin").join("python") };
-    let service = |name: &str, script: &str, port: u16| -> String {
+    // 2. Python services (DualSense bridge + AI splitter): the installer sets them up; whatever is missing (setup
+    // was offline, or Linux, which has no setup wizard) is installed here in the background while the game runs
+    let env = PyEnv { res: res.clone(), local: local.clone(), logs: logs.clone() };
+    st.bridge = if env.has_core() { "starting".into() } else { "installing (first start)…".into() };
+    st.ai = if env.has_ai() { "starting".into() } else if env.ai_declined() { "not installed (Settings → AI splitter → Install)".into() } else { "installing (first start, large download)…".into() };
+    *l.status.lock().unwrap() = st;
+    *l.env.lock().unwrap() = Some(env.clone());
+    python_services(app, &env, !env.ai_declined());
+}
+
+/// Where the game's Python environment lives and how to (re)build it.
+#[derive(Clone)]
+struct PyEnv {
+    res: PathBuf,   // <resources>/app (server scripts)
+    local: PathBuf, // %LOCALAPPDATA%\stemstage | ~/.local/share/stemstage
+    logs: PathBuf,
+}
+
+impl PyEnv {
+    fn venv(&self) -> PathBuf { self.local.join("venv") }
+    fn python(&self) -> PathBuf {
+        if cfg!(windows) { self.venv().join("Scripts").join("python.exe") } else { self.venv().join("bin").join("python") }
+    }
+    /// A package in the venv (installs from before the markers existed have no markers).
+    fn has_pkg(&self, name: &str) -> bool {
+        if cfg!(windows) {
+            self.venv().join("Lib").join("site-packages").join(name).exists()
+        } else {
+            fs::read_dir(self.venv().join("lib")).map(|d| d.flatten().any(|e| e.path().join("site-packages").join(name).exists())).unwrap_or(false)
+        }
+    }
+    fn has_core(&self) -> bool { self.python().exists() && (self.venv().join("stemstage-core.ok").exists() || self.has_pkg("pydualsense")) }
+    fn has_ai(&self) -> bool { self.python().exists() && (self.venv().join("stemstage-ai.ok").exists() || self.has_pkg("demucs")) }
+    fn ai_declined(&self) -> bool { self.local.join("ai-declined").exists() }
+
+    /// Run the setup script ("core" or "ai") with the bundled uv and wait; output goes to logs/setup.log.
+    fn setup(&self, mode: &str) -> Result<(), String> {
+        let bin = self.res.parent().map(|r| r.join("bin")).unwrap_or_default();
+        let uv = bin.join(if cfg!(windows) { "uv.exe" } else { "uv" });
+        let log = fs::OpenOptions::new().create(true).append(true).open(self.logs.join("setup.log")).map_err(|e| e.to_string())?;
+        let err = log.try_clone().map_err(|e| e.to_string())?;
+        let mut cmd = if cfg!(windows) {
+            let mut c = Command::new("powershell");
+            c.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]).arg(self.res.join("server").join("setup-ai.ps1")).args(["-Mode", mode, "-Uv"]).arg(&uv);
+            c
+        } else {
+            let mut c = Command::new("bash");
+            c.arg(self.res.join("server").join("setup-ai.sh")).arg(mode).arg(&uv);
+            c
+        };
+        no_console(&mut cmd);
+        let ok = cmd.stdin(Stdio::null()).stdout(Stdio::from(log)).stderr(Stdio::from(err)).status().map_err(|e| e.to_string())?;
+        if ok.success() { Ok(()) } else { Err(format!("setup {mode} failed ({ok}) · log: {}", self.logs.join("setup.log").display())) }
+    }
+}
+
+fn set_status(app: &tauri::AppHandle, f: impl FnOnce(&mut Status)) { f(&mut app.state::<Launcher>().status.lock().unwrap()); }
+
+/// Start the bridge and the AI splitter, installing what's missing first (install_ai: the AI too).
+fn python_services(app: &tauri::AppHandle, env: &PyEnv, install_ai: bool) {
+    let l = app.state::<Launcher>();
+    let start = |name: &str, script: &str, port: u16| -> String {
         if listening(port) {
             return "running".into();
         }
-        if !py.exists() {
-            return if cfg!(windows) { "not installed (run server\\setup-ai.ps1)" } else { "not installed (run server/setup-ai.sh)" }.into();
-        }
-        let mut cmd = Command::new(&py);
-        cmd.arg(res.join("server").join(script)).current_dir(res.join("server"));
-        match spawn(&l, name, cmd, &logs) {
+        let mut cmd = Command::new(env.python());
+        cmd.arg(env.res.join("server").join(script)).current_dir(env.res.join("server"));
+        match spawn(&l, name, cmd, &env.logs) {
             Ok(()) => "starting".into(),
             Err(e) => format!("error: {e}"),
         }
     };
-    st.ai = service("ai-splitter", "stem_server.py", AI_PORT);
-    st.bridge = service("controller-bridge", "controller_bridge.py", BRIDGE_PORT);
-    *l.status.lock().unwrap() = st;
+    if !env.has_core() {
+        if let Err(e) = env.setup("core") {
+            set_status(app, |s| s.bridge = format!("error: {e}"));
+            return;
+        }
+    }
+    let bridge = start("controller-bridge", "controller_bridge.py", BRIDGE_PORT);
+    set_status(app, |s| s.bridge = bridge);
+    if !env.has_ai() && install_ai {
+        set_status(app, |s| s.ai = "installing (large download)…".into());
+        if let Err(e) = env.setup("ai") {
+            set_status(app, |s| s.ai = format!("error: {e}"));
+            return;
+        }
+    }
+    let ai = if env.has_ai() { start("ai-splitter", "stem_server.py", AI_PORT) } else { "not installed (Settings → AI splitter → Install)".into() };
+    set_status(app, |s| s.ai = ai);
+}
+
+/// Settings → AI splitter → Install: set it up in the background (the game polls launcher_status).
+#[tauri::command]
+fn install_ai(app: tauri::AppHandle) -> Result<(), String> {
+    let env = app.state::<Launcher>().env.lock().unwrap().clone().ok_or("the launcher isn't ready yet")?;
+    if env.has_ai() {
+        return Err("the AI splitter is already installed".into());
+    }
+    let _ = fs::remove_file(env.local.join("ai-declined"));
+    set_status(&app, |s| s.ai = "installing (large download)…".into());
+    std::thread::spawn(move || python_services(&app, &env, true));
+    Ok(())
 }
 
 /// Splash screen: what the launcher did (and where the logs are if something failed).
@@ -328,13 +490,36 @@ fn create_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        // must come first: a second STEMSTAGE (an invite link, Discord's Join) passes its arguments here and quits
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+                if let Some(code) = join_code(argv) {
+                    let _ = w.eval(format!("window.__stemstageJoin && window.__stemstageJoin('{code}')"));
+                }
+            }
+        }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Launcher::default())
-        .invoke_handler(tauri::generate_handler![launcher_status, check_update, install_update])
+        .invoke_handler(tauri::generate_handler![launcher_status, check_update, install_update, install_ai, exit_app])
         .setup(|app| {
             create_main_window(app.handle())?;
             let handle = app.handle().clone();
             std::thread::spawn(move || launch(&handle));
+            // High priority for the game and everything it starts (webview processes and services come up over time)
+            let h2 = app.handle().clone();
+            std::thread::spawn(move || {
+                for secs in [1, 4, 10, 25, 60] {
+                    std::thread::sleep(Duration::from_secs(secs));
+                    boost_priority(&h2);
+                }
+                // services can restart or be installed later (Settings → Install AI splitter)
+                loop {
+                    std::thread::sleep(Duration::from_secs(120));
+                    boost_priority(&h2);
+                }
+            });
             Ok(())
         })
         .build(tauri::generate_context!())

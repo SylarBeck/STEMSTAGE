@@ -1,0 +1,12 @@
+# STEMSTAGE leaderboard API (Cloudflare Workers + D1). Deploy: npx wrangler deploy --config cloud/wrangler.toml
+name = "stemstage-api"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+routes = [{ pattern = "api.stemstage.varconstint.com", custom_domain = true }]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "stemstage"
+database_id = "REPLACE_WITH_DATABASE_ID"
