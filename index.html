@@ -28,9 +28,9 @@
     <!-- TITLE -->
     <section class="screen" id="screen-title">
       <div class="title-center">
-        <div class="logo" data-text="STEMSTAGE">STEMSTAGE</div>
-        <div class="tagline">ANY SONG &middot; ANY INSTRUMENT &middot; SPLIT BY AI</div>
-        <div class="press-start">PRESS ANY BUTTON</div>
+        <div class="logo">STEMSTAGE</div>
+        <div class="tagline">any song &middot; any instrument &middot; split by AI</div>
+        <div class="press-start">Press any button</div>
         <div class="browser-warn" id="browser-warn" hidden></div>
       </div>
       <div class="title-devices" id="title-devices"></div>
@@ -40,23 +40,23 @@
     <!-- MAIN MENU -->
     <section class="screen" id="screen-menu">
       <div class="menu-col" data-nav-group="menu">
-        <div class="logo small" data-text="STEMSTAGE">STEMSTAGE</div>
+        <div class="logo small">STEMSTAGE</div>
         <nav class="menu-main">
-          <button class="menu-item big" data-nav data-action="solo" data-hero="play"><i class="mi-ico"><i class="fa-solid fa-play"></i></i><span class="mi-txt"><b>Play</b><em>Pick a song and an instrument</em></span></button>
-          <button class="menu-item big" data-nav data-action="tour" data-hero="tour"><i class="mi-ico"><i class="fa-solid fa-route"></i></i><span class="mi-txt"><b>Tour</b><em>Gigs, stars and daily challenges</em></span></button>
-          <button class="menu-item big" data-nav data-action="band" data-hero="band"><i class="mi-ico"><i class="fa-solid fa-people-group"></i></i><span class="mi-txt"><b>Band</b><em>Local multiplayer · up to 4 players</em></span></button>
-          <button class="menu-item big" data-nav data-action="online" data-hero="online"><i class="mi-ico"><i class="fa-solid fa-earth-americas"></i></i><span class="mi-txt"><b>Online</b><em>Play with friends anywhere</em></span></button>
-          <button class="menu-item big" data-nav data-action="import" data-hero="import"><i class="mi-ico"><i class="fa-solid fa-plus"></i></i><span class="mi-txt"><b>Import Song</b><em>Any audio file or YouTube search</em></span></button>
+          <button class="menu-item big" data-nav data-action="solo" data-hero="play"><b>Play</b><em>Pick a song and an instrument</em></button>
+          <button class="menu-item big" data-nav data-action="tour" data-hero="tour"><b>Tour</b><em>Gigs, stars and daily challenges</em></button>
+          <button class="menu-item big" data-nav data-action="band" data-hero="band"><b>Band</b><em>Local multiplayer · up to 4 players</em></button>
+          <button class="menu-item big" data-nav data-action="online" data-hero="online"><b>Online</b><em>Play with friends anywhere</em></button>
+          <button class="menu-item big" data-nav data-action="import" data-hero="import"><b>Import Song</b><em>Any audio file or YouTube search</em></button>
         </nav>
         <nav class="menu-sub">
-          <button class="menu-item" data-nav data-action="setlists" data-hero="setlists"><i class="mi-ico"><i class="fa-solid fa-list-ol"></i></i><b>Setlists</b></button>
-          <button class="menu-item" data-nav data-action="career" data-hero="career"><i class="mi-ico"><i class="fa-solid fa-user"></i></i><b>Career</b></button>
-          <button class="menu-item" data-nav data-action="leaderboard" data-hero="leaderboard"><i class="mi-ico"><i class="fa-solid fa-ranking-star"></i></i><b>Leaderboards</b></button>
-          <button class="menu-item" data-nav data-action="stream" data-hero="stream"><i class="mi-ico"><i class="fa-solid fa-tower-broadcast"></i></i><b>Stream</b></button>
-          <button class="menu-item" data-nav data-action="controller" data-hero="controller"><i class="mi-ico"><i class="fa-solid fa-gamepad"></i></i><b>Controllers</b></button>
-          <button class="menu-item" data-nav data-action="settings" data-hero="settings"><i class="mi-ico"><i class="fa-solid fa-gear"></i></i><b>Settings</b></button>
-          <button class="menu-item" data-nav data-action="howto" data-hero="howto"><i class="mi-ico"><i class="fa-solid fa-circle-question"></i></i><b>How to play</b></button>
-          <button class="menu-item exit" data-nav data-action="exit-app" data-hero="exit"><i class="mi-ico"><i class="fa-solid fa-power-off"></i></i><b>Exit</b></button>
+          <button class="menu-item" data-nav data-action="setlists" data-hero="setlists"><b>Setlists</b></button>
+          <button class="menu-item" data-nav data-action="career" data-hero="career"><b>Career</b></button>
+          <button class="menu-item" data-nav data-action="leaderboard" data-hero="leaderboard"><b>Leaderboards</b></button>
+          <button class="menu-item" data-nav data-action="stream" data-hero="stream"><b>Stream</b></button>
+          <button class="menu-item" data-nav data-action="controller" data-hero="controller"><b>Controllers</b></button>
+          <button class="menu-item" data-nav data-action="settings" data-hero="settings"><b>Settings</b></button>
+          <button class="menu-item" data-nav data-action="howto" data-hero="howto"><b>How to play</b></button>
+          <button class="menu-item exit" data-nav data-action="exit-app" data-hero="exit"><b>Exit</b></button>
         </nav>
       </div>
       <aside class="menu-hero" id="menu-hero"></aside>
@@ -84,7 +84,7 @@
             </div>
           </div>
           <div class="picker" data-nav data-picker="instrument">
-            <label>Instrument <span class="lbl-hint" data-glyph="prevnext"></span></label>
+            <label>Instrument <span class="tier" id="pick-tier"></span><span class="lbl-hint" data-glyph="prevnext"></span></label>
             <div class="picker-options" id="pick-instrument"></div>
           </div>
           <div class="picker" data-nav data-picker="difficulty">

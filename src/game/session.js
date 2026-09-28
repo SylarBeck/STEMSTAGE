@@ -135,10 +135,10 @@ export class Session {
       c.on('event', (m) => {
         const who = this.online.lineup.find((r) => r.id === m.id);
         if (m.kind === 'od') {
-          if (who) this.hud.callout(`${who.name}: OVERDRIVE!`, '#ffcf3a');
+          if (who) this.hud.callout(`${who.name}: OVERDRIVE!`, '#f6c945');
           for (const p of this.players) if (p.failed) p.revive(); // their overdrive saves us too
-        } else if (m.kind === 'fail' && who) this.hud.callout(`${who.name} failed — overdrive to save them!`, '#ff3b3b');
-        else if (m.kind === 'left' && who) { this.hud.callout(`${who.name} left`, '#9a98b8'); this.remote.set(m.id, { ...(this.remote.get(m.id) || {}), left: true }); }
+        } else if (m.kind === 'fail' && who) this.hud.callout(`${who.name} failed — overdrive to save them!`, '#e5402f');
+        else if (m.kind === 'left' && who) { this.hud.callout(`${who.name} left`, '#a59d8b'); this.remote.set(m.id, { ...(this.remote.get(m.id) || {}), left: true }); }
       }),
     ];
   }
@@ -234,15 +234,15 @@ export class Session {
     this.stage.pyro(settings.calmVisuals ? 0.35 : 1.2);
     if (!settings.calmVisuals) { this.stage.sparks(); this.fx.shock = 0; }
     this.engine.cheer(1);
-    this.hud.callout(`${name} hyped the crowd!`, '#ff8a1a');
+    this.hud.callout(`${name} hyped the crowd!`, '#f2861c');
   }
 
   onPlayerFailed(player) {
     this.engine.sfxFail();
-    player.hud.callout(this.solo ? 'YOU FAILED' : 'FAILED!', '#ff3b3b');
+    player.hud.callout(this.solo ? 'YOU FAILED' : 'FAILED!', '#e5402f');
     this.online?.client.event('fail');
     if (this.players.every((p) => p.failed) && !this.online) { this.failedAll = true; this._finish(); }
-    else if (!this.solo) this.hud.callout(`${player.cfg.name} failed — overdrive to save them!`, '#ff3b3b');
+    else if (!this.solo) this.hud.callout(`${player.cfg.name} failed — overdrive to save them!`, '#e5402f');
   }
 
   // ---------------------------------------------------------------- per frame
@@ -369,7 +369,7 @@ export class Session {
       const mine = { ...players[0], onlineId: c.id };
       players[0].onlineId = c.id;
       c.result(mine);
-      this.hud.callout('Waiting for the other players...', '#29e0ff');
+      this.hud.callout('Waiting for the other players...', '#ece5d3');
       const matchId = this.online.matchId;
       remoteResults = c.lastResults && c.lastResults.matchId === matchId ? c.lastResults.results : await new Promise((resolve) => {
         const off = c.on('results', (list, msg) => { if (!matchId || msg?.matchId === matchId) { off(); resolve(list); } });

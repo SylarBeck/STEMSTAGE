@@ -3,12 +3,13 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { settings } from '../settings.js';
 
+// lighting states, like a club rig's gels: amber + red, tungsten + deep blue, crimson + amber, white + red, gold + blue
 const PALETTES = [
-  [0xff2d7a, 0x29e0ff],
-  [0xffa21a, 0xff2d55],
-  [0x7a5cff, 0x29ffc6],
-  [0x2b8cff, 0xff3df2],
-  [0xffe14d, 0xff5a1f],
+  [0xff9a2e, 0xd7261c],
+  [0xffd9a0, 0x2447d8],
+  [0xb81d3a, 0xffb347],
+  [0xf2ecdf, 0xd02a1e],
+  [0xffc233, 0x3050e0],
 ];
 
 const GOLD = new THREE.Color(1, 0.8, 0.3);
@@ -101,8 +102,8 @@ export class Stage {
   constructor(quality = 'high') {
     this.quality = quality;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x020107);
-    this.scene.fog = new THREE.FogExp2(0x06040e, 0.021);
+    this.scene.background = new THREE.Color(0x040302);
+    this.scene.fog = new THREE.FogExp2(0x0b0806, 0.021);
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 300);
     this.camPos = new THREE.Vector3(0, 5, 18);
     this.camTarget = new THREE.Vector3(0, 3, -2);
@@ -132,7 +133,7 @@ export class Stage {
 
   // ---------------------------------------------------------------- build
   _lights() {
-    this.scene.add(new THREE.HemisphereLight(0x3a3060, 0x05030a, 0.5));
+    this.scene.add(new THREE.HemisphereLight(0x453528, 0x080504, 0.5));
     this.spots = [];
     const targets = [[-4.5, 1.2, -1.5], [4.5, 1.2, -1.5], [0, 2.2, -4.8], [-8.5, 1.2, -2.5]];
     for (let i = 0; i < 4; i++) {
@@ -145,7 +146,7 @@ export class Stage {
     this.keySpot = new THREE.SpotLight(0xffffff, 260, 40, 0.25, 0.5, 1.2);
     this.keySpot.position.set(0, 13, 7);
     this.scene.add(this.keySpot, this.keySpot.target);
-    this.wallLight = new THREE.PointLight(0xff2d7a, 60, 30, 1.6);
+    this.wallLight = new THREE.PointLight(0xff9a2e, 60, 30, 1.6);
     this.wallLight.position.set(0, 4, -5.5);
     this.scene.add(this.wallLight);
   }
@@ -161,7 +162,7 @@ export class Stage {
     stage.position.set(0, 0.6, -2.5);
     this.scene.add(stage);
     // stage lip LED strip
-    this.lipMat = new THREE.MeshBasicMaterial({ color: 0xff2d7a });
+    this.lipMat = new THREE.MeshBasicMaterial({ color: 0xff9a2e });
     const lip = new THREE.Mesh(new THREE.BoxGeometry(24, 0.08, 0.08), this.lipMat);
     lip.position.set(0, 1.18, 2.5);
     this.scene.add(lip);
@@ -390,7 +391,7 @@ export class Stage {
       const spread = 12 + z * 0.6;
       const x = (Math.random() * 2 - 1) * spread;
       this.crowdData.push({ x, z, phase: Math.random() * Math.PI * 2, amp: 0.4 + Math.random() * 0.8, rot: (Math.random() - 0.5) * 0.6, scale: 0.88 + Math.random() * 0.25, jumper: Math.random() < 0.5 });
-      c.setHSL(0.7 + Math.random() * 0.2, 0.2, 0.05 + Math.random() * 0.08);
+      c.setHSL(0.02 + Math.random() * 0.08, 0.15, 0.04 + Math.random() * 0.07);
       this.crowd.setColorAt(i, c);
     }
     this.scene.add(this.crowd);
@@ -460,7 +461,7 @@ export class Stage {
   }
 
   confettiBurst() {
-    const cols = [[1, 0.2, 0.45], [0.2, 0.9, 1], [1, 0.85, 0.2], [0.5, 0.35, 1], [0.3, 1, 0.5]];
+    const cols = [[1, 0.96, 0.88], [0.95, 0.72, 0.16], [0.88, 0.2, 0.14], [1, 0.96, 0.88], [0.25, 0.4, 0.9]];
     for (let k = 0; k < this.confetti.N * 0.8; k++) {
       const c = cols[k % cols.length];
       this._spawn(this.confetti, (Math.random() * 2 - 1) * 14, 11 + Math.random() * 2, -3 + Math.random() * 14,
@@ -523,7 +524,7 @@ export class Stage {
     const U = this.ledUniforms;
     U.uTime.value = t; U.uPulse.value = pulse; U.uBass.value = f.bass || 0;
     U.uOD.value += (od - U.uOD.value) * Math.min(1, dt * 4);
-    const dimTarget = f.mode === 'game' ? 0.5 : 0.85;
+    const dimTarget = f.mode === 'game' ? 0.45 : 0.7;
     U.uDim.value += (dimTarget - U.uDim.value) * Math.min(1, dt * 2);
     const dim = U.uDim.value;
 

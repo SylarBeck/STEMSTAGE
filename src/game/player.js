@@ -6,9 +6,9 @@ import { FIVE_COLORS, DRUM_COLORS } from './highway.js';
 import { currentRules } from './replay.js';
 
 export const WINDOWS = { perfect: 0.035, great: 0.07, good: 0.115 };
-export const ACCENT = { guitar: 0xff2d7a, bass: 0x29a0ff, drums: 0xffa21a, keys: 0xa66bff, vocals: 0x3dff8a };
-export const PLAYER_COLORS = ['#ff2d7a', '#29e0ff', '#ffcf3a', '#3dff8a'];
-const JUDGE_COLOR = { perfect: '#7fffd4', great: '#29e0ff', good: '#ffe14d', miss: '#ff3b3b' };
+export const ACCENT = { guitar: 0xe0432f, bass: 0x3b7fd6, drums: 0xeea02a, keys: 0x9a6ad8, vocals: 0x6cbf46 };
+export const PLAYER_COLORS = ['#e2432f', '#3f86e0', '#f0b429', '#6cbf46'];
+const JUDGE_COLOR = { perfect: '#f6c945', great: '#ece5d3', good: '#b9ae97', miss: '#e5402f' };
 const MISS_PENALTY = { easy: 0.02, medium: 0.025, hard: 0.03, expert: 0.035 };
 const STREAK_CALLOUTS = new Set([50, 100, 200, 300, 400, 500, 750, 1000, 1500, 2000]);
 const hexRgb = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
@@ -224,7 +224,7 @@ export class Player {
     this.highway.hitFx(n.lane, j);
     this.hud.judge(j.toUpperCase(), JUDGE_COLOR[j]);
     if (STREAK_CALLOUTS.has(this.streak)) {
-      this.hud.callout(`${this.streak} NOTE STREAK!`, '#29e0ff');
+      this.hud.callout(`${this.streak} NOTE STREAK!`, '#ece5d3');
       this.rumble(60, 160, 220);
       if (this.streak >= 100) this.s.stage.sparks();
     }
@@ -279,7 +279,7 @@ export class Player {
     this.od = Math.min(1, this.od + 0.25);
     this.engine.sfxPhrase();
     this.rumble(0, 200, 90); setTimeout(() => this.rumble(0, 200, 90), 130);
-    if (!this.odActive && before < 0.5 && this.od >= 0.5) this.hud.callout('OVERDRIVE READY', '#7fe8ff');
+    if (!this.odActive && before < 0.5 && this.od >= 0.5) this.hud.callout('OVERDRIVE READY', '#ffe39a');
   }
 
   activateOD() {
@@ -290,7 +290,7 @@ export class Player {
     this.engine.cheer(0.8);
     this.highway.odBurst();
     this.s.onOverdrive(this);
-    this.hud.callout('OVERDRIVE!', '#ffcf3a');
+    this.hud.callout('OVERDRIVE!', '#f6c945');
     this.rumble(255, 220, 700);
   }
 
@@ -309,7 +309,7 @@ export class Player {
     this.failed = false;
     this.rock = 0.35;
     this.hud.setFailed(false);
-    this.hud.callout('SAVED!', '#3dff8a');
+    this.hud.callout('SAVED!', '#8dc044');
   }
 
   // ---------------------------------------------------------------- DualSense

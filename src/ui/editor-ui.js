@@ -410,7 +410,7 @@ export function installEditor(ui) {
       g2.fillRect(x0, y - (measure ? 1.5 : 0.75), lw * 5, measure ? 3 : 1.5);
       if (measure) {
         g2.fillStyle = 'rgba(255,255,255,0.5)';
-        g2.font = `${12 * dpr}px Rajdhani, sans-serif`;
+        g2.font = `600 ${13 * dpr}px 'Barlow Condensed', sans-serif`;
         g2.textAlign = 'right';
         g2.fillText(String(Math.floor((b - down) / 4) + 1), x0 - 16, y + 4);
       }
@@ -443,10 +443,10 @@ export function installEditor(ui) {
       g2.globalAlpha = 1;
     }
     // strike line + cursor
-    g2.fillStyle = E.playing ? '#ff2d7a' : 'rgba(41,224,255,0.9)';
+    g2.fillStyle = E.playing ? '#df3a2c' : 'rgba(236,229,211,0.9)';
     g2.fillRect(x0 - 6, strike - 2, lw * 5 + 12, 4);
     if (!E.playing) {
-      g2.strokeStyle = '#29e0ff';
+      g2.strokeStyle = '#f0b429';
       g2.lineWidth = 3 * dpr;
       roundRect(x0 + E.lane * lw + 4, strike - 14 * dpr, lw - 8, 28 * dpr, 9 * dpr);
       g2.stroke();

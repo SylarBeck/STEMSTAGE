@@ -9,7 +9,7 @@ import { Trigger } from '../input/dualsense.js';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const DRUM_KEY_COLORS = ['#ff8a1a', '#ff2b4a', '#ffe62b', '#2b8cff', '#2bff5a'];
+const DRUM_KEY_COLORS = ['#ff8a1a', '#f2332b', '#ffd21f', '#2f84f0', '#2ed24f'];
 
 export function installControllers(ui) {
   const app = ui.app, input = app.input, ds = app.ds;
@@ -60,7 +60,7 @@ export function installControllers(ui) {
   }
 
   function artFor(d, big = false) {
-    const accent = d.kind === 'pad' && d.pad?.hid ? '#29e0ff' : '#ff2d7a';
+    const accent = d.kind === 'pad' && d.pad?.hid ? '#f0b429' : '#df3a2c';
     return controllerSvg(d.det.kind, { accent, laneKeys: big ? laneKeysFor(d) : {} });
   }
 

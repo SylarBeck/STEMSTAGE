@@ -57,7 +57,9 @@ function rating(notes) {
   }
   return Math.max(1, Math.min(7, Math.round(Math.log2(peak + 1) * 2.1)));
 }
-const ratingHtml = (r) => (r ? `<span class="rating">${[1, 2, 3, 4, 5, 6, 7].map((k) => `<i class="${k <= r ? 'on' : ''}"></i>`).join('')}</span>` : '');
+// shown the Rock Band way: a tier name and five dots (Warmup has none, Impossible turns them red)
+const TIERS = ['', 'Warmup', 'Apprentice', 'Solid', 'Moderate', 'Challenging', 'Nightmare', 'Impossible'];
+const ratingHtml = (r) => (r ? `<span class="rating ${r >= 7 ? 'max' : ''}" title="${TIERS[r]}">${[1, 2, 3, 4, 5].map((k) => `<i class="${k < r ? 'on' : ''}"></i>`).join('')}</span>` : '');
 const INST_ICON = Object.fromEntries(INSTRUMENTS.map((i) => [i.id, i.ico]));
 const DIFFS = ['easy', 'medium', 'hard', 'expert'];
 
@@ -759,7 +761,7 @@ export class UI {
       <span class="ok"><i></i>${songs.length} song${songs.length === 1 ? '' : 's'}</span>
       <span class="${devs.length ? 'ok' : ''}"><i></i>${devs.length ? `${devs.length} controller${devs.length === 1 ? '' : 's'}` : 'Keyboard'}</span></div>`;
     let body = '';
-    const cover = (s) => { const cv = s && coverUrl(s); return `<div class="hero-cover" style="background:${cv ? `url('${cv}') center/cover` : this.art(s || { hue: 320 })}"></div>`; };
+    const cover = (s) => { const cv = s && coverUrl(s); return `<div class="hero-cover" style="background:${cv ? `url('${cv}') center/cover` : this.art(s || { hue: 320 })}">${cv || !s ? '' : `<span class="cover-type">${esc(s.title)}</span>`}</div>`; };
     switch (key) {
       case 'play': body = `${cover(pick)}<div class="hero-k">Quickplay</div><h2>${pick ? esc(pick.title) : 'Your setlist'}</h2><p>${pick ? `${esc(pick.artist)} · ${Math.round(pick.bpm)} BPM · ${fmtTime(pick.duration)}` : 'Import a song to get started.'}</p>`; break;
       case 'band': body = `<div class="hero-k">Local multiplayer</div><h2>Up to 4 players</h2><p>Everyone brings a controller and gets their own highway.</p><div class="hero-devs">${devArt(devs) || '<p class="dim">Or share one keyboard.</p>'}</div>`; break;
@@ -853,9 +855,10 @@ export class UI {
     this.applyFocus(false);
   }
 
+  /** Sleeve for a song without cover art: two screen-printed blocks of the song's colour under a halftone. */
   art(s) {
-    const h = s?.hue ?? 300;
-    return `linear-gradient(135deg, hsl(${h} 90% 55%), hsl(${(h + 60) % 360} 90% 35%) 60%, hsl(${(h + 140) % 360} 80% 20%))`;
+    const h = s?.hue ?? 20;
+    return `radial-gradient(circle, rgba(12,10,8,0.4) 1.1px, transparent 1.6px) 0 0 / 6px 6px, linear-gradient(162deg, hsl(${h} 38% 43%) 0 52%, hsl(${(h + 12) % 360} 45% 24%) 52%)`;
   }
 
   selectSong(id, focusDetail) {
@@ -915,7 +918,7 @@ export class UI {
     const art = $('#detail-art');
     art.classList.toggle('has-cover', !!cv);
     art.style.background = cv ? '#000' : this.art(s);
-    art.innerHTML = (cv ? `<img src="${cv}" alt="" />` : '') + `<div class="bpm">${Math.round(s.bpm)}<small> BPM</small></div>`;
+    art.innerHTML = (cv ? `<img src="${cv}" alt="" />` : `<span class="cover-type">${esc(s.title)}</span>`) + `<div class="bpm">${Math.round(s.bpm)}<small> BPM</small></div>`;
     $('#detail-title').textContent = s.title;
     $('#detail-artist').textContent = s.artist;
     const tr = s.analysis?.transcriber || {};
@@ -955,6 +958,9 @@ export class UI {
         const count = ok ? ch.notes[this.difficulty]?.length : 0;
         return `<div class="opt inst ${i.id === this.instrument ? 'sel' : ''} ${ok ? '' : 'disabled'}" data-val="${i.id}" title="${ok ? `${count} notes` : esc(ch?.reason || '')}"><span class="ico">${i.ico}</span><span>${i.label}</span>${ok ? ratingHtml(rating(ch.notes[this.difficulty])) : ''}</div>`;
       }).join('');
+      const tier = s.charts[this.instrument]?.available ? rating(s.charts[this.instrument].notes[this.difficulty]) : 0;
+      $('#pick-tier').textContent = tier ? `— ${TIERS[tier]}` : '';
+      $('#pick-tier').classList.toggle('max', tier >= 7);
       $('#pick-difficulty').innerHTML = DIFFS.map((df) => {
         const n = s.charts[this.instrument]?.notes?.[df]?.length ?? 0;
         return `<div class="opt ${df === this.difficulty ? 'sel' : ''}" data-val="${df}">${df}<small>${n}</small></div>`;

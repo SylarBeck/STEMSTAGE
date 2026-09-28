@@ -1,8 +1,8 @@
 // In-game HUD (DOM overlay). `Hud` owns the global elements and doubles as the solo player's
 // panel; `PlayerHud` is the compact per-player panel used in band mode. Writes only on change.
 const $ = (id) => document.getElementById(id);
-const PLAYER_COLORS = ['#ff2d7a', '#29e0ff', '#ffcf3a', '#3dff8a'];
 import { instIcon, fa } from './icons.js';
+import { PLAYER_COLORS } from '../game/player.js';
 const ICON = { guitar: instIcon('guitar'), bass: instIcon('bass'), drums: instIcon('drums'), keys: instIcon('keys'), vocals: instIcon('vocals') };
 
 function popClass(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
@@ -14,7 +14,7 @@ class HudBase {
     const j = this.el.judge;
     j.textContent = text;
     j.style.color = color;
-    j.style.textShadow = `0 0 18px ${color}`;
+    j.style.textShadow = '0 3px 0 #0b0a09, 2px 0 0 #0b0a09, -2px 0 0 #0b0a09';
     popClass(j, 'show');
   }
 
@@ -87,7 +87,7 @@ export class Hud extends HudBase {
     this._set('mult', s.mult, (v) => { this.el.mult.innerHTML = `${v}&times;`; popClass(this.el.mult, 'bump'); });
     this._set('ring', Math.round(s.multProgress * 100), (v) => { this.el.ring.style.strokeDashoffset = String(264 * (1 - v / 100)); });
     this._set('ringCol', s.odActive ? 'od' : s.mult >= s.maxMult ? 'max' : 'n', (v) => {
-      this.el.ring.style.stroke = v === 'od' ? 'var(--gold)' : v === 'max' ? 'var(--accent)' : 'var(--accent2)';
+      this.el.ring.style.stroke = v === 'od' ? 'var(--gold)' : v === 'max' ? 'var(--accent)' : 'var(--ink)';
     });
     this._set('streak', s.streak, (v) => { this.el.streak.textContent = v; });
     this._set('od', Math.round(s.od * 200) / 2, (v) => { this.el.od.style.width = `${v * 100}%`; });
@@ -203,7 +203,7 @@ export class PlayerHud extends HudBase {
     this._set('odState', s.odActive ? 'active' : s.od >= 0.5 ? 'ready' : '', (v) => { this.el.odBar.dataset.state = v; });
     this._set('rock', Math.round(s.rock * 100), (v) => {
       this.el.rock.style.width = `${v}%`;
-      this.el.rock.style.background = v < 25 ? '#ff2b3a' : v < 60 ? '#ffe22b' : '#2bff6a';
+      this.el.rock.style.background = v < 25 ? '#c7301f' : v < 60 ? '#d8a21a' : '#5da336';
     });
   }
 
