@@ -124,6 +124,27 @@ class Discord {
     });
   }
 
+  /** In an online room: party size, and the invite code as Discord's join secret, so friends get a Join button. */
+  room({ code, players, host, song }) {
+    this.activity({
+      details: song ? `Online · ${song.title}${song.artist ? ` — ${song.artist}` : ''}` : 'In an online room',
+      state: host ? 'Hosting · join in!' : 'In the lobby',
+      party: { id: `room-${code}`, size: Math.max(1, players), max: 8 }, secret: code,
+    });
+  }
+
+  /** Events from Discord: { type: 'join', secret } (a friend pressed Join) or { type: 'join-request', user }. */
+  onEvent(fn) {
+    (this.handlers ||= new Set()).add(fn);
+    if (this.es || typeof EventSource === 'undefined') return;
+    this.es = new EventSource(`/api/discord/events?clientId=${encodeURIComponent(appId())}`);
+    this.es.onmessage = (e) => {
+      let ev;
+      try { ev = JSON.parse(e.data); } catch { return; }
+      this.handlers.forEach((h) => h(ev));
+    };
+  }
+
   paused(song) { this.activity({ details: `${song.title}${song.artist ? ` — ${song.artist}` : ''}`, state: 'Paused' }); }
 
   results(song, r) {

@@ -6,6 +6,7 @@ Nothing to set up for players: log in with Discord and your status follows what 
 |---|---|---|
 | **Log in with Discord** | Links your STEMSTAGE profile to your Discord account: your Discord avatar and name show on your profile | A Discord account |
 | **Automatic status** | While you play, your Discord status shows the song, artist, part, difficulty and time left, then your result | The Discord app running on this PC |
+| **Join from Discord** | While you're in an online room, friends press **Join** on your Discord status and land straight in your room: no code to type | The Discord app, on both PCs |
 | **Live status on your profile** | Your career page shows your Discord status (online / idle / do not disturb), custom status, and what you're playing or listening to | Joining the [Lanyard](https://github.com/Phineas/lanyard) Discord server once (optional) |
 
 ## Log in with Discord
@@ -26,6 +27,17 @@ When the Discord desktop app is running on the same PC, STEMSTAGE updates your s
 - **Paused**, **practicing**, **watching a replay**, **results** ("12,345 points · 5★") and **in the menus**
 
 Turn it off with **Settings → Discord → Show what I play on Discord**. *Test Discord status* checks that the Discord app answers. The browser version of Discord can't show game status, and Discord's own setting *Activity Privacy → Share your detected activities* has to be on.
+
+## Join from Discord
+
+When you **host an online room** (or join one), your Discord status shows the room, its size ("2 of 8") and Discord's **Join** button, or **Ask to Join** for friends who aren't allowed to join directly.
+
+- A friend presses **Join** → their STEMSTAGE opens the Online screen and connects to your room. If STEMSTAGE isn't running, Discord starts it first (the desktop app registers itself with Discord for this the first time it runs).
+- **Ask to Join** requests are accepted automatically, since the room is open to anyone with the invite code anyway, and you see "*name* is joining through Discord".
+- It works for internet rooms (invite codes). Local-network rooms have no code, so they don't get a Join button.
+- In a song, your friend is asked to finish or quit first.
+
+Under the hood the join secret is the room's invite code, so it's the same as typing it in Online → Join.
 
 ## Live status on your profile
 

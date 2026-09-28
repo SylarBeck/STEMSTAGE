@@ -3,6 +3,7 @@
 import { online, hostInfo, startHosting, stopHosting, inviteCode } from '../net/online.js';
 import { profiles, PROFILE_COLORS } from '../profile/profiles.js';
 import { getSong, getAudio, coverUrl } from '../storage/library.js';
+import { discord } from '../net/discord.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -44,7 +45,7 @@ export function installOnline(ui) {
     if (info.hosting && info.internet) {
       const t = info.tunnel || {};
       if (t.status === 'ready' && t.url) {
-        st.code = inviteCode(t.url);
+        if (st.code !== inviteCode(t.url)) { st.code = inviteCode(t.url); presence(); }
         html = `<div class="invite-label">Invite code</div><div class="invite-code">${esc(st.code)}</div>
           <div class="btn-row tight"><button class="nav-btn primary" data-nav data-action="ol-copy">Copy invite</button></div>
           <small>Friends choose Online → Join and type this code. No port forwarding needed.</small>`;
@@ -78,6 +79,28 @@ export function installOnline(ui) {
     }
   }
 
+  /** Discord status while in a room: friends can press Join on it (internet rooms only: LAN has no invite code). */
+  function presence() {
+    const room = online.connected && online.room;
+    const code = online.host ? st.code : inviteCode(online.baseUrl);
+    if (room && code && !app.game.running) discord.room({ code, players: room.players.length, host: online.host, song: room.song });
+  }
+
+  /** A friend pressed Join on our Discord status: go to their room. */
+  function joinFromDiscord(code) {
+    if (app.game.running) { ui.toast('Finish or quit this song, then press Join in Discord again', 'err'); return; }
+    if (online.connected) online.close();
+    ui.show('online');
+    $('#ol-addr').value = code;
+    localStorage.setItem('stemstage.online.last', code);
+    ui.toast('Joining your friend’s room from Discord…');
+    connect(code);
+  }
+  discord.onEvent((ev) => {
+    if (ev.type === 'join' && ev.secret) joinFromDiscord(ev.secret);
+    else if (ev.type === 'join-request') ui.toast(`${ev.user.globalName || ev.user.username} is joining through Discord`, 'ok');
+  });
+
   function render() {
     const connected = online.connected;
     $('#online-lobby').hidden = !connected;
@@ -85,6 +108,7 @@ export function installOnline(ui) {
     refreshHost();
     if (!connected) { ui.applyFocus(false); return; }
     const room = online.room;
+    presence();
     $('#ol-room').textContent = `Room ${room.code}`;
     $('#ol-status').textContent = online.host ? 'You are the host' : `Connected${inviteCode(online.baseUrl) ? ` to ${inviteCode(online.baseUrl)}` : ` to ${online.address}`}${online.rtt ? ` · ${Math.round(online.rtt)} ms` : ''}`;
     const song = room.song;
@@ -172,6 +196,7 @@ export function installOnline(ui) {
   online.on('error', (msg) => ui.toast(msg, 'err'));
   online.on('closed', (reason) => { st.closed = true; ui.toast(reason || 'Room closed', 'err'); });
   online.on('disconnected', () => {
+    discord.menus();
     if (!st.closed) ui.toast('Disconnected from the room', 'err');
     st.closed = false;
     if (ui.screen === 'online') render();
@@ -195,6 +220,8 @@ export function installOnline(ui) {
       clearTimeout(st.pollTimer);
       online.close();
       await stopHosting();
+      st.code = null;
+      discord.menus();
       ui.toast('Stopped hosting');
       render();
       await refreshHost();
@@ -210,7 +237,7 @@ export function installOnline(ui) {
       localStorage.setItem('stemstage.online.last', addr);
       connect(addr);
     },
-    'ol-leave': () => { if (online.host) { ui.actionHooks['ol-stop'](); return; } online.close(); render(); },
+    'ol-leave': () => { if (online.host) { ui.actionHooks['ol-stop'](); return; } online.close(); discord.menus(); render(); },
     'ol-ready': () => setMine({ ready: !me()?.ready }),
     'ol-choose': () => { ui.mode = 'online-pick'; ui.show('library'); },
     'ol-start': () => online.start(),

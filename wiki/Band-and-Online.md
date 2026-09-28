@@ -10,6 +10,8 @@ Open **Play → Band**. Each player presses a button on their own controller to 
 2. Friends open **Online → Join**, type the code (spaces or dashes, any case) and press **Join**.
 3. The host picks a song. Friends who don't have it download it from the host automatically. Then everyone readies up and the host starts the match.
 
+**From Discord:** while you're in a room, friends can press **Join** on your Discord status instead of typing the code (see [Discord](Discord#join-from-discord)).
+
 No router setup is needed. The room runs through a free [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/): the game downloads `cloudflared` once (~55 MB) and only makes outgoing connections. **Local network** hosts on your Wi-Fi/LAN only (port 5180). Friends type the address it shows instead of a code.
 
 Songs are sent compressed (Opus or Ogg Vorbis): about 20 MB instead of 250 MB for a 4-minute song.

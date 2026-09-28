@@ -96,7 +96,47 @@ fn plain_path(p: PathBuf) -> PathBuf {
     }
 }
 
+/// STEMSTAGE's Discord application (the same ID as DISCORD_APP_ID in src/net/discord.js).
+const DISCORD_APP_ID: &str = "1553872601603117127";
+
+/// Register the `discord-<app id>://` protocol so Discord can start STEMSTAGE when a friend presses Join on
+/// someone's status and the game isn't running (the join itself is delivered once the game connects to Discord).
+fn register_discord_launch() {
+    let Ok(exe) = std::env::current_exe().map(plain_path) else { return };
+    #[cfg(windows)]
+    {
+        let exe = exe.display().to_string();
+        let key = format!(r"HKCU\Software\Classes\discord-{DISCORD_APP_ID}");
+        let reg = |args: &[&str]| {
+            let mut c = Command::new("reg");
+            c.args(args).stdout(Stdio::null()).stderr(Stdio::null());
+            no_console(&mut c);
+            let _ = c.status();
+        };
+        reg(&["add", &key, "/ve", "/d", &format!("URL:Run game {DISCORD_APP_ID} protocol"), "/f"]);
+        reg(&["add", &key, "/v", "URL Protocol", "/d", "", "/f"]);
+        reg(&["add", &format!(r"{key}\DefaultIcon"), "/ve", "/d", &exe, "/f"]);
+        reg(&["add", &format!(r"{key}\shell\open\command"), "/ve", "/d", &format!("\"{exe}\""), "/f"]);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // an AppImage runs from a temporary mount: register the AppImage file itself
+        let exe = std::env::var("APPIMAGE").map(PathBuf::from).unwrap_or(exe);
+        let Some(apps) = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share"))).map(|d| d.join("applications")) else { return };
+        let _ = fs::create_dir_all(&apps);
+        let name = format!("discord-{DISCORD_APP_ID}.desktop");
+        let entry = format!(
+            "[Desktop Entry]\nName=STEMSTAGE\nExec=\"{}\" %u\nType=Application\nNoDisplay=true\nCategories=Game;\nMimeType=x-scheme-handler/discord-{DISCORD_APP_ID};\n",
+            exe.display()
+        );
+        if fs::write(apps.join(&name), entry).is_ok() {
+            let _ = Command::new("xdg-mime").args(["default", &name, &format!("x-scheme-handler/discord-{DISCORD_APP_ID}")]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        }
+    }
+}
+
 fn launch(app: &tauri::AppHandle) {
+    register_discord_launch();
     let l = app.state::<Launcher>();
     // resource_dir() is a verbatim path (\\?\C:\...) on Windows; Node can't resolve its entry script from one
     let res = app.path().resource_dir().map(|p| plain_path(p).join("app")).unwrap_or_default();
