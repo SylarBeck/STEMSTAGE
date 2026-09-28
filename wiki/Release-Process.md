@@ -30,7 +30,7 @@ Builds made by the workflow get `STEMSTAGE_UPDATE_REPO=${{ github.repository }}`
 
 ## Website
 
-`site/` is a static page (no build step): `index.html` + `img/`. Download buttons are filled in from the GitHub API (latest release assets) in the visitor's browser. To refresh screenshots, run `node tools/screenshots-real.mjs` / `npm run screenshots`, then convert to WebP:
+`site/` is a static site (no build step): `index.html` plus `leaderboard/`, `player/`, `join/` and `login/`, sharing `css/site.css` and `js/site.js` (phone menu, screenshot viewer, send-to-computer) and `img/`. Every layout is phone-first. Download buttons are filled in from the GitHub API (latest release assets) in the visitor's browser. To refresh screenshots, run `node tools/screenshots-real.mjs` / `npm run screenshots`, then convert to WebP:
 
 ```bash
 ffmpeg -i docs/screenshots/gameplay.png -vf scale=1280:-2 -c:v libwebp -quality 78 site/img/gameplay.webp

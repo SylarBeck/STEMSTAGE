@@ -3,7 +3,7 @@
 // stays in this browser (localStorage) and the API checks it with Discord on every /v1/me call.
 //
 // Pages include this script and get:
-//   - a Log in button (or your avatar + menu) in the nav's .links
+//   - a Log in button (or your avatar + menu) at the right of the nav
 //   - window.stemstageMe: a promise of { user, players: [{ playerId, name, total, charts }] } or null
 //   - a 'stemstage:me' event on document with the same object as detail
 (() => {
@@ -45,38 +45,37 @@
   const style = document.createElement('style');
   style.textContent = `
     .ss-auth { position: relative; display: flex; align-items: center; }
-    .ss-auth button { display: inline-flex; align-items: center; gap: 8px; border: 0; cursor: pointer; font: 700 15px 'Rajdhani', system-ui, sans-serif; color: #fff; background: #5865f2; padding: 7px 14px; border-radius: 999px; white-space: nowrap; }
-    .ss-auth button:hover { filter: brightness(1.1); }
-    .ss-auth button.me { background: rgba(255,255,255,0.08); padding: 4px 12px 4px 4px; }
-    .ss-auth img, .ss-auth .ini { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: #5865f2; font-weight: 800; }
-    .ss-menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 230px; padding: 8px; border-radius: 14px; background: #120c22; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 20px 60px rgba(0,0,0,0.6); z-index: 50; }
+    .ss-auth > button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; min-width: 42px; border: 0; border-radius: 2px; cursor: pointer; font: 800 16px 'Barlow Condensed', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: #fff; background: #5865f2; padding: 6px 12px; white-space: nowrap; }
+    .ss-auth > button i { font-size: 18px; }
+    .ss-auth > button:hover { filter: brightness(1.12); }
+    .ss-auth > button.me { background: transparent; border: 2px solid rgba(236,229,211,0.26); color: #ece5d3; padding: 3px 10px 3px 3px; letter-spacing: 0.02em; }
+    .ss-auth img, .ss-auth .ini { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: #5865f2; font-weight: 800; color: #fff; flex: none; }
+    .ss-menu { position: absolute; right: 0; top: calc(100% + 10px); width: min(300px, calc(100vw - 24px)); padding: 8px; border-radius: 0; background: #1a1714; border: 1px solid rgba(236,229,211,0.2); border-top: 5px solid #df3a2c; box-shadow: 0 20px 60px rgba(0,0,0,0.7); z-index: 50; }
     .ss-menu[hidden] { display: none; }
-    .ss-menu a, .ss-menu .ss-item { display: flex; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 9px; color: #f4f1fb; font: 600 16px 'Rajdhani', system-ui, sans-serif; text-decoration: none; cursor: pointer; background: none; width: 100%; border: 0; text-align: left; }
-    .ss-menu a:hover, .ss-menu .ss-item:hover { background: rgba(255,255,255,0.07); }
-    .ss-menu small { display: block; color: #a79fbe; padding: 4px 10px 8px; font-size: 13px; }
-    .ss-menu hr { border: 0; border-top: 1px solid rgba(255,255,255,0.08); margin: 6px 0; }
-    tr.mine td { background: rgba(88,101,242,0.16) !important; }
-    li.mine { background: rgba(88,101,242,0.12); border-radius: 8px; padding-left: 8px !important; }
-    @media (max-width: 760px) { .ss-auth .ss-name { display: none; } }`;
+    .ss-menu a, .ss-menu .ss-item { display: flex; gap: 10px; align-items: center; min-height: 44px; padding: 8px 10px; color: #ece5d3; font: 700 18px 'Barlow Condensed', system-ui, sans-serif; text-decoration: none; cursor: pointer; background: none; width: 100%; border: 0; text-align: left; }
+    .ss-menu a:hover, .ss-menu .ss-item:hover { background: #ece5d3; color: #15120e; }
+    .ss-menu small { display: block; color: #a59d8b; padding: 4px 10px 8px; font: 500 15px 'Barlow Condensed', system-ui, sans-serif; }
+    .ss-menu hr { border: 0; border-top: 1px solid rgba(236,229,211,0.12); margin: 6px 0; }
+    @media (max-width: 999px) { .ss-auth .ss-name { display: none; } .ss-auth > button.me { padding: 3px; } }`;
   document.head.appendChild(style);
 
   const box = document.createElement('div');
   box.className = 'ss-auth';
-  const mount = () => (document.querySelector('nav .links') || document.querySelector('nav') || document.body).appendChild(box);
+  const mount = () => { const right = document.querySelector('.nav .right'); if (right) right.prepend(box); else (document.querySelector('nav') || document.body).appendChild(box); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 
   const discordIcon = '<i class="fa-brands fa-discord" aria-hidden="true"></i>';
   function renderOut() {
-    box.innerHTML = `<button type="button">${discordIcon}<span class="ss-name">Log in</span></button>`;
+    box.innerHTML = `<button type="button" aria-label="Log in with Discord">${discordIcon}<span class="ss-name">Log in</span></button>`;
     box.querySelector('button').onclick = login;
   }
   function renderIn(me) {
     const u = me.user;
     const name = u.globalName || u.username;
-    box.innerHTML = `<button type="button" class="me" aria-haspopup="true">${u.avatar ? `<img src="${esc(u.avatar)}" alt="">` : `<span class="ini">${esc(name[0] || '?')}</span>`}<span class="ss-name">${esc(name)}</span></button>
+    box.innerHTML = `<button type="button" class="me" aria-haspopup="true" aria-label="${esc(name)}: your profiles">${u.avatar ? `<img src="${esc(u.avatar)}" alt="">` : `<span class="ini">${esc(name[0] || '?')}</span>`}<span class="ss-name">${esc(name)}</span></button>
       <div class="ss-menu" hidden>
         <small>${discordIcon} Logged in as @${esc(u.username)}</small>
-        ${me.players.length ? me.players.map((p) => `<a href="/player/?id=${encodeURIComponent(p.playerId)}"><i class="fa-solid fa-user"></i> ${esc(p.name)}<span style="margin-left:auto;color:#a79fbe">${Number(p.total).toLocaleString()}</span></a>`).join('')
+        ${me.players.length ? me.players.map((p) => `<a href="/player/?id=${encodeURIComponent(p.playerId)}"><i class="fa-solid fa-user"></i> ${esc(p.name)}<span style="margin-left:auto;opacity:.7">${Number(p.total).toLocaleString()}</span></a>`).join('')
           : '<small>No STEMSTAGE profile is linked to this Discord account yet. In the game: Career → Link Discord, then play a song or press Share profile.</small>'}
         <a href="/leaderboard/"><i class="fa-solid fa-ranking-star"></i> Leaderboard</a>
         <hr><button class="ss-item" type="button" data-out><i class="fa-solid fa-right-from-bracket"></i> Log out</button>
