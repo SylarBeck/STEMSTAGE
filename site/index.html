@@ -42,7 +42,7 @@
     nav .wrap { display: flex; align-items: center; gap: 24px; height: 64px; }
     nav .brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 900; letter-spacing: 0.18em; color: var(--ink); }
     nav .brand img { width: 32px; height: 32px; border-radius: 8px; }
-    nav .links { display: flex; gap: 22px; margin-left: auto; font-weight: 600; }
+    nav .links { display: flex; gap: 22px; margin-left: auto; font-weight: 600; align-items: center; }
     nav .links a { color: var(--dim); }
     nav .links a:hover { color: var(--ink); text-decoration: none; }
     @media (max-width: 760px) { nav .links a:not(.gh) { display: none; } }
@@ -286,5 +286,6 @@
     lb.addEventListener('click', () => lb.classList.remove('open'));
     addEventListener('keydown', (e) => { if (e.key === 'Escape') lb.classList.remove('open'); });
   </script>
+  <script src="js/auth.js"></script>
 </body>
 </html>

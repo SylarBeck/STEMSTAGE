@@ -22,8 +22,10 @@
     nav .in { max-width: 1100px; margin: 0 auto; padding: 0 16px; height: 60px; display: flex; align-items: center; gap: 18px; }
     nav .brand { display: flex; align-items: center; gap: 10px; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 0.16em; color: var(--ink); }
     nav .brand img { width: 30px; height: 30px; border-radius: 8px; }
-    nav .links { margin-left: auto; display: flex; gap: 18px; font-weight: 600; }
+    nav .links { margin-left: auto; display: flex; gap: 18px; font-weight: 600; align-items: center; }
+    .you { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 3px 10px; border-radius: 999px; background: #5865f2; color: #fff; font: 700 13px 'Rajdhani', sans-serif; vertical-align: middle; }
     nav .links a { color: var(--dim); }
+    @media (max-width: 640px) { nav .links > a { display: none; } }
     main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 18px; }
     .card { border-radius: 18px; background: var(--panel); border: 1px solid var(--line); padding: 22px; min-width: 0; }
     .card h2 { font-family: 'Orbitron', sans-serif; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; margin: 0 0 16px; display: flex; align-items: center; gap: 10px; }
@@ -139,11 +141,18 @@
           </div>
         </section>
         <p class="muted" style="text-align:center">Player since ${new Date((j.since || 0) * 1000).toLocaleDateString()}${j.updated ? ` · updated ${new Date(j.updated * 1000).toLocaleDateString()}` : ''}</p>`;
+      // logged in with Discord and this is one of your profiles
+      // (the profile can arrive before js/auth.js has loaded: then wait for its event)
+      const onMe = (fn) => (window.stemstageMe ? window.stemstageMe.then(fn) : document.addEventListener('stemstage:me', (e) => fn(e.detail), { once: true }));
+      onMe((me) => {
+        if (me?.players?.some((p) => p.playerId === id)) document.querySelector('h1').insertAdjacentHTML('beforeend', '<span class="you"><i class="fa-brands fa-discord"></i> This is you</span>');
+      });
       document.getElementById('copy').onclick = async (e) => {
         const url = `https://stemstage.varconstint.com/player/?id=${encodeURIComponent(id)}`;
         try { await navigator.clipboard.writeText(url); e.currentTarget.innerHTML = '<i class="fa-solid fa-check"></i> Copied'; } catch { prompt('Copy the link:', url); }
       };
     }).catch(() => { main.innerHTML = '<div class="state">The profile can\'t be loaded right now. Try again in a moment.</div>'; });
   </script>
+  <script src="../js/auth.js"></script>
 </body>
 </html>

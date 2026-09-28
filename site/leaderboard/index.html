@@ -21,8 +21,9 @@
     nav .in { max-width: 1180px; margin: 0 auto; padding: 0 16px; height: 60px; display: flex; align-items: center; gap: 18px; }
     nav .brand { display: flex; align-items: center; gap: 10px; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 0.16em; color: var(--ink); }
     nav .brand img { width: 30px; height: 30px; border-radius: 8px; }
-    nav .links { margin-left: auto; display: flex; gap: 18px; font-weight: 600; }
+    nav .links { margin-left: auto; display: flex; gap: 18px; font-weight: 600; align-items: center; }
     nav .links a { color: var(--dim); }
+    @media (max-width: 640px) { nav .links > a { display: none; } }
     header { max-width: 1180px; margin: 0 auto; padding: 48px 16px 8px; }
     .kicker { font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 0.3em; color: var(--accent); text-transform: uppercase; }
     h1 { font-family: 'Orbitron', sans-serif; font-size: clamp(26px, 5vw, 44px); margin: 8px 0; text-transform: uppercase; }
@@ -109,7 +110,7 @@
       try {
         const b = await get('leaderboard', { song, instrument: $('inst').value, difficulty: $('diff').value, limit: 100 });
         $('board').innerHTML = '<tr><th>#</th><th>Player</th><th>Score</th><th>Stars</th><th>Accuracy</th><th>Streak</th></tr>' + (b.rows.map((r, i) => `
-          <tr class="${i === 0 ? 'top1' : ''}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td><td class="num">${r.score.toLocaleString()}</td>
+          <tr class="${i === 0 ? 'top1' : ''}" data-player="${esc(r.playerId)}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td><td class="num">${r.score.toLocaleString()}</td>
           <td>${stars(r.stars)}${r.fc ? '<i class="fa-solid fa-gem gem" title="Full combo"></i>' : ''}</td><td class="num">${Math.round(r.accuracy * 100)}%</td><td class="num">${r.maxStreak}</td></tr>`).join('')
           || '<tr><td colspan="6" class="muted">Nobody has played this part yet. Be the first!</td></tr>');
       } catch { fail($('board'), 'This board'); }
@@ -122,16 +123,23 @@
     }).catch(() => { $('song').innerHTML = '<option value="">Unavailable</option>'; fail($('board'), 'The leaderboard'); });
     ['song', 'inst', 'diff'].forEach((id) => $(id).addEventListener('change', board));
 
+    // logged in with Discord: highlight your own rows (tables re-render, so keep watching)
+    let mine = new Set();
+    const markMine = () => document.querySelectorAll('[data-player]').forEach((el) => el.classList.toggle('mine', mine.has(el.dataset.player)));
+    document.addEventListener('stemstage:me', (e) => { mine = new Set((e.detail?.players || []).map((p) => p.playerId)); markMine(); });
+    new MutationObserver(markMine).observe(document.querySelector('main'), { childList: true, subtree: true });
+
     get('players', { limit: 25 }).then((p) => {
       $('players').innerHTML = '<tr><th>#</th><th>Player</th><th>Total</th><th>★</th></tr>' + (p.rows.map((r, i) => `
-        <tr class="${i === 0 ? 'top1' : ''}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td><td class="num">${r.total.toLocaleString()}</td><td class="num">${r.stars}</td></tr>`).join('')
+        <tr class="${i === 0 ? 'top1' : ''}" data-player="${esc(r.playerId)}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td><td class="num">${r.total.toLocaleString()}</td><td class="num">${r.stars}</td></tr>`).join('')
         || '<tr><td colspan="4" class="muted">No players yet.</td></tr>');
     }).catch(() => fail($('players'), 'Top players'));
 
     get('recent', { limit: 12 }).then((r) => {
-      $('recent').innerHTML = r.rows.map((x) => `<li><a class="pl" href="../player/?id=${encodeURIComponent(x.playerId)}">${av(x)}<b>${esc(x.player)}</b></a> · <span class="num">${x.score.toLocaleString()}</span> ${stars(x.stars)}
+      $('recent').innerHTML = r.rows.map((x) => `<li data-player="${esc(x.playerId)}"><a class="pl" href="../player/?id=${encodeURIComponent(x.playerId)}">${av(x)}<b>${esc(x.player)}</b></a> · <span class="num">${x.score.toLocaleString()}</span> ${stars(x.stars)}
         <small>${esc(x.song.title)}${x.song.artist ? ` — ${esc(x.song.artist)}` : ''} · ${esc(x.instrument)} ${esc(x.difficulty)} · ${ago(x.date)}</small></li>`).join('') || '<li class="muted">No runs yet.</li>';
     }).catch(() => { $('recent').innerHTML = '<li class="muted">Latest records can\'t be loaded right now.</li>'; });
   </script>
+  <script src="../js/auth.js"></script>
 </body>
 </html>
