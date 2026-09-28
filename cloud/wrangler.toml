@@ -9,4 +9,4 @@ routes = [{ pattern = "api.stemstage.varconstint.com", custom_domain = true }]
 [[d1_databases]]
 binding = "DB"
 database_name = "stemstage"
-database_id = "REPLACE_WITH_DATABASE_ID"
+database_id = "428529cb-ec1b-4b55-a408-e293c93d329c"
