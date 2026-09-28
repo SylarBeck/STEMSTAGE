@@ -68,7 +68,7 @@ export class OnlineClient {
     const deadline = performance.now() + (remote ? 30000 : 4000);
     let lastErr;
     for (let attempt = 0; performance.now() < deadline; attempt++) {
-      try { return await this._open(base, { name, color, profileId, hostKey }); } catch (e) { lastErr = e; }
+      try { return await this._open(base, { name, color, profileId, look, hostKey }); } catch (e) { lastErr = e; }
       if (this.cancelled) break;
       this.emit('connecting', attempt + 1);
       await new Promise((r) => setTimeout(r, 1500));
@@ -76,7 +76,7 @@ export class OnlineClient {
     throw new Error(remote ? `No room found for "${inviteCode(base) || address}" — check the code, or ask the host if their room is still open` : (lastErr?.message || `Could not connect to ${address}`));
   }
 
-  _open(base, { name, color, profileId, hostKey }) {
+  _open(base, { name, color, profileId, look, hostKey }) {
     this.close();
     this.cancelled = false;
     this.base = base;
