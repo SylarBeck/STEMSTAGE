@@ -21,6 +21,7 @@ Every `GET` returns JSON with CORS (`Access-Control-Allow-Origin: *`), so any we
 | `GET /v1/songs?limit=100&q=hotel` | Songs with scores, most played first: `{ rows: [{ key, title, artist, entries, best, last }] }` |
 | `GET /v1/leaderboard?song=<key>&instrument=guitar&difficulty=expert&limit=50` | One chart's board: `{ song, instrument, difficulty, rows: [{ player, playerId, avatar, score, stars, accuracy, fc, maxStreak, date }] }` |
 | `GET /v1/recent?limit=20` | Newest personal bests, with `song: { key, title, artist }` |
+| `GET /v1/player?id=p_…` | A player's public profile: `{ id, name, avatar, since, updated, profile: { color, level, rank, xp, progress, favorite, stats, instruments, achievements: [{ id, name, desc, icon, at }] }, world: { rank, total, charts, stars, fcs, records }, best: [...] }` (`records` = charts where they hold #1) |
 | `GET /v1/song-key?artist=Eagles&title=Hotel%20California` | The board key for a song: `{ key }` |
 | `GET /v1/health` | `{ ok: true }` |
 
@@ -47,6 +48,10 @@ Every `GET` returns JSON with CORS (`Access-Control-Allow-Origin: *`), so any we
 - Only your best run per chart stays on the board. Every run is kept in history.
 - Impossible values are refused (**400**), and each address can send 40 runs per 10 minutes (**429**).
 - The game sends runs of signed-in profiles only. It never sends practice, replays, assisted or failed runs, and Settings → World leaderboard turns it off.
+
+## Profiles (the game does this)
+
+`POST /v1/profile` with the same `player` object plus `profile: { color, level, rank, xp, progress, favorite, stats: { plays, songs, seconds, stars, fcs, bestStreak, accuracy, notes }, instruments: { guitar: { plays, best, accuracy, fcs }, … }, achievements: [{ id, name, desc, icon, at }] }` → `{ ok, url }`. The game sends it after every run it submits and when you press **Share profile**. The public page is `https://stemstage.varconstint.com/player/?id=<player id>`.
 
 ## Callback: Discord announcements
 

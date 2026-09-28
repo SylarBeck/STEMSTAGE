@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS players (
   secret_hash TEXT NOT NULL,      -- sha256 of the secret only that game knows
   name TEXT NOT NULL,
   discord_id TEXT, discord_avatar TEXT,
+  profile TEXT, profile_updated INTEGER, -- the shared profile card (JSON)
   created INTEGER NOT NULL, updated INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS songs (

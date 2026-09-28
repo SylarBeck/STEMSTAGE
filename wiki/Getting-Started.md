@@ -39,4 +39,6 @@ F11 or Alt+Enter toggles fullscreen in the desktop app.
 
 ## Tour, career and challenges
 
-**Tour** takes you through seven venues, from the Garage to a festival main stage, unlocked by stars. The **daily challenge** keeps a day streak. Your **career** page shows XP, level, 34 achievements, history and (new) your linked [Discord](Discord) account.
+**Tour** takes you through seven venues, from the Garage to a festival main stage, unlocked by stars. The **daily challenge** keeps a day streak. Your **career** page shows XP, level, 34 achievements, history and your linked [Discord](Discord) account. **Share profile** publishes it as a web page anyone can open (`stemstage.varconstint.com/player/?id=…`): level and rank, achievements, stats, world rank and world records. It's copied to your clipboard, ready to paste in Discord. The page updates by itself after every run while *Settings → World leaderboard* is on.
+
+The **world leaderboard** (Leaderboards → World, or [on the website](https://stemstage.varconstint.com/leaderboard/)) ranks everyone's best runs per song, instrument and difficulty. Names link to profile pages.

@@ -5,6 +5,8 @@
 //   GET  /v1/players?limit=         overall: every player's best scores added up
 //   GET  /v1/songs?limit=&q=        songs with scores (key, title, artist, runs)
 //   GET  /v1/recent?limit=          newest runs
+//   POST /v1/profile                the game shares a profile card (level, achievements, stats)
+//   GET  /v1/player?id=             a shared profile + its world stats (the website's /player/ page)
 //   GET  /v1/health
 //
 // Every GET answers JSON with CORS, or JSONP with ?callback=<function name>. Songs are matched across players by
@@ -59,6 +61,29 @@ const publicRow = (r) => ({
   ...(r.title !== undefined ? { song: { key: r.song_key, title: r.title, artist: r.artist } } : {}),
 });
 
+// ---------------------------------------------------------------- players
+/** Check a submitted player ({ id, secret, name, discord }): → { ok, id, name, secretHash, discordId, discordAvatar } or { error, status }. */
+async function checkPlayer(env, p = {}) {
+  const name = cleanName(p.name);
+  if (!/^[\w-]{8,64}$/.test(p.id || '') || typeof p.secret !== 'string' || p.secret.length < 16 || p.secret.length > 200) return { error: 'bad player id/secret', status: 400 };
+  if (!name) return { error: 'player name required', status: 400 };
+  const secretHash = await sha256(p.secret);
+  // the first request registers the secret; afterwards it has to match
+  const known = await env.DB.prepare('SELECT secret_hash FROM players WHERE id = ?').bind(p.id).first();
+  if (known && known.secret_hash !== secretHash) return { error: 'this player id belongs to someone else', status: 403 };
+  const discordId = /^\d{15,21}$/.test(p.discord?.id || '') ? p.discord.id : null;
+  const discordAvatar = discordId && /^(a_)?[0-9a-f]{32}$/.test(p.discord?.avatar || '') ? p.discord.avatar : null;
+  return { ok: true, id: p.id, name, secretHash, discordId, discordAvatar };
+}
+const upsertPlayer = (env, pl, now) => env.DB.prepare(`INSERT INTO players (id, secret_hash, name, discord_id, discord_avatar, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(id) DO UPDATE SET name = excluded.name, discord_id = excluded.discord_id, discord_avatar = excluded.discord_avatar, updated = excluded.updated`)
+  .bind(pl.id, pl.secretHash, pl.name, pl.discordId, pl.discordAvatar, now, now);
+
+async function rateLimited(env, ip, now) {
+  const { results: [{ n }] } = await env.DB.prepare('SELECT COUNT(*) AS n FROM hits WHERE ip = ? AND ts > ?').bind(ip, now - RATE.window).all();
+  return n >= RATE.max;
+}
+
 // ---------------------------------------------------------------- POST /v1/scores
 /*
   {
@@ -71,15 +96,14 @@ const publicRow = (r) => ({
 async function submit(req, env, ctx) {
   const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
   const now = Math.floor(Date.now() / 1000);
-  const { results: [{ n }] } = await env.DB.prepare('SELECT COUNT(*) AS n FROM hits WHERE ip = ? AND ts > ?').bind(ip, now - RATE.window).all();
-  if (n >= RATE.max) return json({ error: 'too many runs from this address, try again later' }, 429);
+  if (await rateLimited(env, ip, now)) return json({ error: 'too many runs from this address, try again later' }, 429);
 
   let b;
   try { b = await req.json(); } catch { return json({ error: 'body must be JSON' }, 400); }
-  const p = b?.player || {};
-  const name = cleanName(p.name);
-  if (!/^[\w-]{8,64}$/.test(p.id || '') || typeof p.secret !== 'string' || p.secret.length < 16 || p.secret.length > 200) return json({ error: 'bad player id/secret' }, 400);
-  if (!name) return json({ error: 'player name required' }, 400);
+  const pl = await checkPlayer(env, b?.player);
+  if (pl.error) return json({ error: pl.error }, pl.status);
+  const { name, discordId, discordAvatar } = pl;
+  const p = { id: pl.id };
   if (!INSTRUMENTS.includes(b.instrument) || !DIFFICULTIES.includes(b.difficulty)) return json({ error: 'bad instrument/difficulty' }, 400);
   const title = String(b.song?.title || '').trim().slice(0, 120), artist = String(b.song?.artist || '').trim().slice(0, 120);
   if (!norm(title)) return json({ error: 'song title required' }, 400);
@@ -88,13 +112,6 @@ async function submit(req, env, ctx) {
   if (score === null || stars === null || accuracy === null || notes === null || streak === null) return json({ error: 'bad score fields' }, 400);
   if (streak > notes || score > notes * 2000) return json({ error: 'score out of range for this chart' }, 400);
   const fc = b.fc ? 1 : 0;
-  const discordId = /^\d{15,21}$/.test(p.discord?.id || '') ? p.discord.id : null;
-  const discordAvatar = discordId && /^(a_)?[0-9a-f]{32}$/.test(p.discord?.avatar || '') ? p.discord.avatar : null;
-
-  // the player: first run registers the secret; afterwards it has to match
-  const secretHash = await sha256(p.secret);
-  const known = await env.DB.prepare('SELECT secret_hash FROM players WHERE id = ?').bind(p.id).first();
-  if (known && known.secret_hash !== secretHash) return json({ error: 'this player id belongs to someone else' }, 403);
   const key = await songKey(artist, title);
   const prevTop = await env.DB.prepare('SELECT s.score, pl.name FROM scores s JOIN players pl ON pl.id = s.player_id WHERE s.song_key = ? AND s.instrument = ? AND s.difficulty = ? ORDER BY s.score DESC LIMIT 1')
     .bind(key, b.instrument, b.difficulty).first();
@@ -102,9 +119,7 @@ async function submit(req, env, ctx) {
 
   const stmts = [
     env.DB.prepare('INSERT INTO hits (ip, ts) VALUES (?, ?)').bind(ip, now),
-    env.DB.prepare(`INSERT INTO players (id, secret_hash, name, discord_id, discord_avatar, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET name = excluded.name, discord_id = excluded.discord_id, discord_avatar = excluded.discord_avatar, updated = excluded.updated`)
-      .bind(p.id, secretHash, name, discordId, discordAvatar, now, now),
+    upsertPlayer(env, pl, now),
     env.DB.prepare(`INSERT INTO songs (key, title, artist, duration, created) VALUES (?, ?, ?, ?, ?) ON CONFLICT(key) DO NOTHING`)
       .bind(key, title, artist, clampInt(b.song?.duration, 0, 7200), now),
     env.DB.prepare('INSERT INTO runs (player_id, song_key, instrument, difficulty, score, created) VALUES (?, ?, ?, ?, ?, ?)').bind(p.id, key, b.instrument, b.difficulty, score, now),
@@ -178,6 +193,72 @@ async function recent(url, env) {
   return reply(url, { rows: results.map(publicRow) });
 }
 
+// ---------------------------------------------------------------- profiles
+/*
+  POST /v1/profile
+  { player: { id, secret, name, discord? },
+    profile: { color, level, rank, xp, progress, favorite,
+               stats: { plays, songs, seconds, stars, fcs, bestStreak, accuracy, notes },
+               instruments: { guitar: { plays, best, accuracy, fcs }, ... },
+               achievements: [{ id, name, desc, icon, at }] } }     (at: unlock time in ms, or null = locked)
+*/
+async function saveProfile(req, env) {
+  const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Math.floor(Date.now() / 1000);
+  if (await rateLimited(env, ip, now)) return json({ error: 'too many requests from this address, try again later' }, 429);
+  let b;
+  try { b = await req.json(); } catch { return json({ error: 'body must be JSON' }, 400); }
+  const pl = await checkPlayer(env, b?.player);
+  if (pl.error) return json({ error: pl.error }, pl.status);
+  const pr = b?.profile || {};
+  const num = (v, max) => (Number.isFinite(+v) ? Math.max(0, Math.min(max, +v)) : 0);
+  const str = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, '').slice(0, n);
+  const st = pr.stats || {};
+  const clean = {
+    color: /^#[0-9a-f]{6}$/i.test(pr.color || '') ? pr.color : '#ff2d7a',
+    level: Math.round(num(pr.level, 999)), rank: str(pr.rank, 40), xp: Math.round(num(pr.xp, 1e9)), progress: num(pr.progress, 1),
+    favorite: INSTRUMENTS.includes(pr.favorite) ? pr.favorite : null,
+    stats: {
+      plays: Math.round(num(st.plays, 1e7)), songs: Math.round(num(st.songs, 1e6)), seconds: Math.round(num(st.seconds, 1e9)),
+      stars: Math.round(num(st.stars, 1e7)), fcs: Math.round(num(st.fcs, 1e7)), bestStreak: Math.round(num(st.bestStreak, 1e6)),
+      accuracy: num(st.accuracy, 1), notes: Math.round(num(st.notes, 1e10)),
+    },
+    instruments: Object.fromEntries(INSTRUMENTS.filter((i) => pr.instruments?.[i]).map((i) => {
+      const x = pr.instruments[i];
+      return [i, { plays: Math.round(num(x.plays, 1e7)), best: Math.round(num(x.best, MAX_SCORE)), accuracy: num(x.accuracy, 1), fcs: Math.round(num(x.fcs, 1e7)) }];
+    })),
+    achievements: (Array.isArray(pr.achievements) ? pr.achievements : []).slice(0, 100).map((a) => ({
+      id: str(a.id, 40), name: str(a.name, 60), desc: str(a.desc, 140), icon: /^[a-z0-9-]{1,40}$/.test(a.icon || '') ? a.icon : 'award',
+      at: Number.isFinite(+a.at) && +a.at > 0 ? Math.round(+a.at) : null,
+    })),
+  };
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO hits (ip, ts) VALUES (?, ?)').bind(ip, now),
+    upsertPlayer(env, pl, now),
+    env.DB.prepare('UPDATE players SET profile = ?, profile_updated = ? WHERE id = ?').bind(JSON.stringify(clean), now, pl.id),
+  ]);
+  return json({ ok: true, url: `https://stemstage.varconstint.com/player/?id=${encodeURIComponent(pl.id)}` });
+}
+
+async function player(url, env) {
+  const id = url.searchParams.get('id') || '';
+  if (!/^[\w-]{8,64}$/.test(id)) return json({ error: 'id required' }, 400);
+  const p = await env.DB.prepare('SELECT id, name, discord_id, discord_avatar, profile, profile_updated, created FROM players WHERE id = ?').bind(id).first();
+  if (!p) return json({ error: 'no such player' }, 404);
+  const world = await env.DB.prepare('SELECT COALESCE(SUM(score), 0) AS total, COUNT(*) AS charts, COALESCE(SUM(stars), 0) AS stars, COALESCE(SUM(fc), 0) AS fcs FROM scores WHERE player_id = ?').bind(id).first();
+  const { results: [{ rank }] } = await env.DB.prepare('SELECT COUNT(*) + 1 AS rank FROM (SELECT player_id, SUM(score) AS t FROM scores GROUP BY player_id) WHERE t > ?').bind(world.total).all();
+  const { results: [{ records }] } = await env.DB.prepare(`SELECT COUNT(*) AS records FROM scores s WHERE s.player_id = ? AND s.score = (
+      SELECT MAX(score) FROM scores t WHERE t.song_key = s.song_key AND t.instrument = s.instrument AND t.difficulty = s.difficulty)`).bind(id).all();
+  const { results: best } = await env.DB.prepare(`SELECT s.*, g.title, g.artist, ? AS name FROM scores s JOIN songs g ON g.key = s.song_key WHERE s.player_id = ? ORDER BY s.score DESC LIMIT 12`).bind(p.name, id).all();
+  let profile = null;
+  try { profile = p.profile ? JSON.parse(p.profile) : null; } catch { /* ignore */ }
+  return reply(url, {
+    id: p.id, name: p.name, avatar: avatarOf(p), since: p.created, updated: p.profile_updated, profile,
+    world: { rank: world.charts ? rank : null, total: world.total, charts: world.charts, stars: world.stars, fcs: world.fcs, records },
+    best: best.map((r) => publicRow({ ...r, player_id: id })),
+  }, 30);
+}
+
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
@@ -187,11 +268,13 @@ export default {
     try {
       const path = url.pathname.replace(/\/+$/, '');
       if (req.method === 'POST' && path === '/v1/scores') return await submit(req, env, ctx);
+      if (req.method === 'POST' && path === '/v1/profile') return await saveProfile(req, env);
       if (req.method === 'GET') {
         if (path === '/v1/leaderboard') return await leaderboard(url, env);
         if (path === '/v1/players') return await players(url, env);
         if (path === '/v1/songs') return await songs(url, env);
         if (path === '/v1/recent') return await recent(url, env);
+        if (path === '/v1/player') return await player(url, env);
         if (path === '/v1/song-key') return reply(url, { key: await songKey(url.searchParams.get('artist'), url.searchParams.get('title')) }, 3600);
         if (path === '/v1/health' || path === '') return reply(url, { ok: true, service: 'stemstage-leaderboard', version: 1 }, 5);
       }

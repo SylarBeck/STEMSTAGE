@@ -52,6 +52,8 @@
     .recent li { list-style: none; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
     .recent ul { margin: 0; padding: 0; }
     .recent small { display: block; color: var(--dim); }
+    a.pl { color: var(--ink); }
+    a.pl:hover { color: var(--accent-2); }
     .api { grid-column: 1 / -1; color: var(--dim); font-size: 16px; }
     .api code { color: var(--gold); background: rgba(255, 255, 255, 0.05); padding: 1px 6px; border-radius: 6px; }
   </style>
@@ -107,7 +109,7 @@
       try {
         const b = await get('leaderboard', { song, instrument: $('inst').value, difficulty: $('diff').value, limit: 100 });
         $('board').innerHTML = '<tr><th>#</th><th>Player</th><th>Score</th><th>Stars</th><th>Accuracy</th><th>Streak</th></tr>' + (b.rows.map((r, i) => `
-          <tr class="${i === 0 ? 'top1' : ''}"><td class="pos">${i + 1}</td><td class="name">${av(r)}${esc(r.player)}</td><td class="num">${r.score.toLocaleString()}</td>
+          <tr class="${i === 0 ? 'top1' : ''}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td><td class="num">${r.score.toLocaleString()}</td>
           <td>${stars(r.stars)}${r.fc ? '<i class="fa-solid fa-gem gem" title="Full combo"></i>' : ''}</td><td class="num">${Math.round(r.accuracy * 100)}%</td><td class="num">${r.maxStreak}</td></tr>`).join('')
           || '<tr><td colspan="6" class="muted">Nobody has played this part yet. Be the first!</td></tr>');
       } catch { fail($('board'), 'This board'); }
@@ -122,12 +124,12 @@
 
     get('players', { limit: 25 }).then((p) => {
       $('players').innerHTML = '<tr><th>#</th><th>Player</th><th>Total</th><th>★</th></tr>' + (p.rows.map((r, i) => `
-        <tr class="${i === 0 ? 'top1' : ''}"><td class="pos">${i + 1}</td><td class="name">${av(r)}${esc(r.player)}</td><td class="num">${r.total.toLocaleString()}</td><td class="num">${r.stars}</td></tr>`).join('')
+        <tr class="${i === 0 ? 'top1' : ''}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td><td class="num">${r.total.toLocaleString()}</td><td class="num">${r.stars}</td></tr>`).join('')
         || '<tr><td colspan="4" class="muted">No players yet.</td></tr>');
     }).catch(() => fail($('players'), 'Top players'));
 
     get('recent', { limit: 12 }).then((r) => {
-      $('recent').innerHTML = r.rows.map((x) => `<li>${av(x)}<b>${esc(x.player)}</b> · <span class="num">${x.score.toLocaleString()}</span> ${stars(x.stars)}
+      $('recent').innerHTML = r.rows.map((x) => `<li><a class="pl" href="../player/?id=${encodeURIComponent(x.playerId)}">${av(x)}<b>${esc(x.player)}</b></a> · <span class="num">${x.score.toLocaleString()}</span> ${stars(x.stars)}
         <small>${esc(x.song.title)}${x.song.artist ? ` — ${esc(x.song.artist)}` : ''} · ${esc(x.instrument)} ${esc(x.difficulty)} · ${ago(x.date)}</small></li>`).join('') || '<li class="muted">No runs yet.</li>';
     }).catch(() => { $('recent').innerHTML = '<li class="muted">Latest records can\'t be loaded right now.</li>'; });
   </script>

@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>STEMSTAGE Player</title>
+  <meta name="description" content="A STEMSTAGE player's level, achievements, stats and world records." />
+  <meta property="og:title" content="🎸 My STEMSTAGE profile" />
+  <meta property="og:description" content="Level, rank, achievements, stats and world records in STEMSTAGE, the rhythm game that plays any song." />
+  <meta property="og:image" content="https://stemstage.varconstint.com/img/hero.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#05030a" />
+  <link rel="icon" href="../img/favicon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <style>
+    :root { --bg: #05030a; --panel: rgba(18, 12, 34, 0.78); --line: rgba(255, 255, 255, 0.09); --ink: #f4f1fb; --dim: #a79fbe; --accent: #ff2d7a; --accent-2: #29e0ff; --gold: #ffcf3a; --good: #3dff8a; --pc: #ff2d7a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Rajdhani', system-ui, sans-serif; font-size: 18px; }
+    a { color: var(--accent-2); text-decoration: none; }
+    nav { position: sticky; top: 0; z-index: 5; backdrop-filter: blur(14px); background: rgba(5, 3, 10, 0.78); border-bottom: 1px solid var(--line); }
+    nav .in { max-width: 1100px; margin: 0 auto; padding: 0 16px; height: 60px; display: flex; align-items: center; gap: 18px; }
+    nav .brand { display: flex; align-items: center; gap: 10px; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 0.16em; color: var(--ink); }
+    nav .brand img { width: 30px; height: 30px; border-radius: 8px; }
+    nav .links { margin-left: auto; display: flex; gap: 18px; font-weight: 600; }
+    nav .links a { color: var(--dim); }
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 18px; }
+    .card { border-radius: 18px; background: var(--panel); border: 1px solid var(--line); padding: 22px; min-width: 0; }
+    .card h2 { font-family: 'Orbitron', sans-serif; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; margin: 0 0 16px; display: flex; align-items: center; gap: 10px; }
+    .card h2 i { color: var(--accent-2); }
+    .head { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; background: linear-gradient(135deg, color-mix(in srgb, var(--pc) 22%, transparent), rgba(18, 12, 34, 0.78) 55%); }
+    .avatar { width: 108px; height: 108px; border-radius: 50%; flex: none; display: grid; place-items: center; font: 900 44px 'Orbitron', sans-serif; color: #0a0814; background: var(--pc); box-shadow: 0 0 28px color-mix(in srgb, var(--pc) 55%, transparent); object-fit: cover; }
+    .who { flex: 1 1 260px; min-width: 0; }
+    h1 { font-family: 'Orbitron', sans-serif; font-size: clamp(24px, 5vw, 38px); margin: 0; word-break: break-word; }
+    .rank { font-family: 'Orbitron', sans-serif; color: var(--gold); letter-spacing: 0.1em; font-size: 14px; margin-top: 4px; text-transform: uppercase; }
+    .xp { height: 8px; border-radius: 99px; background: rgba(255, 255, 255, 0.1); margin: 12px 0 6px; overflow: hidden; max-width: 420px; }
+    .xp div { height: 100%; background: linear-gradient(90deg, var(--accent), var(--gold)); }
+    .who small { color: var(--dim); }
+    .share { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.05); color: var(--ink); font: 800 12px 'Orbitron', sans-serif; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+    .btn.primary { border: 0; color: #120414; background: linear-gradient(90deg, var(--accent), #ff6fa6); }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .tile { padding: 14px 16px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+    .tile b { display: block; font: 800 24px 'Orbitron', sans-serif; font-variant-numeric: tabular-nums; }
+    .tile span { color: var(--dim); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .tile.world b { color: var(--gold); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+    td { padding: 9px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+    .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .scroll { overflow-x: auto; }
+    .muted { color: var(--dim); }
+    .stars { color: var(--gold); letter-spacing: 1px; white-space: nowrap; }
+    .achs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+    .ach { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); }
+    .ach i { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 10px; font-size: 18px; background: rgba(255, 207, 58, 0.14); color: var(--gold); }
+    .ach b { display: block; font-size: 16px; }
+    .ach small { color: var(--dim); font-size: 14px; line-height: 1.25; display: block; }
+    .ach.locked { opacity: 0.4; filter: grayscale(1); }
+    .ach.locked i { background: rgba(255, 255, 255, 0.06); color: var(--dim); }
+    .count { color: var(--dim); font-weight: 600; font-family: 'Rajdhani', sans-serif; letter-spacing: 0; text-transform: none; font-size: 15px; margin-left: auto; }
+    .state { text-align: center; padding: 60px 16px; color: var(--dim); }
+  </style>
+</head>
+<body>
+  <nav><div class="in">
+    <a class="brand" href="../"><img src="../img/icon.png" alt="" />STEMSTAGE</a>
+    <div class="links"><a href="../leaderboard/">Leaderboard</a><a href="../#download">Download</a></div>
+  </div></nav>
+  <main id="main"><div class="state">Loading profile…</div></main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    // ?api= points the page at a local copy of the API (npx wrangler dev) for testing; localhost only
+    const localApi = params.get('api');
+    const API = /^http:\/\/(127\.0\.0\.1|localhost):\d+\/v1$/.test(localApi || '') ? localApi : 'https://api.stemstage.varconstint.com/v1';
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const n = (v) => Number(v || 0).toLocaleString();
+    const stars = (k) => `<span class="stars">${'★'.repeat(Math.max(0, Math.min(5, k || 0)))}</span>`;
+    const hours = (s) => (s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m` : `${Math.floor(s / 60)}m`);
+    const INST = { guitar: 'fa-guitar', bass: 'fa-guitar', drums: 'fa-drum', keys: 'fa-music', vocals: 'fa-microphone' };
+    const main = document.getElementById('main');
+    const id = params.get('id') || '';
+
+    if (!/^[\w-]{8,64}$/.test(id)) main.innerHTML = '<div class="state">This profile link is incomplete. Ask for the link again, or browse the <a href="../leaderboard/">leaderboard</a>.</div>';
+    else fetch(`${API}/player?id=${encodeURIComponent(id)}`).then((r) => r.json().then((j) => ({ ok: r.ok, j }))).then(({ ok, j }) => {
+      if (!ok) { main.innerHTML = `<div class="state">${j.error === 'no such player' ? 'No player with this link.' : 'The profile can\'t be loaded right now.'} See the <a href="../leaderboard/">leaderboard</a>.</div>`; return; }
+      const pr = j.profile || {};
+      const st = pr.stats || {};
+      const w = j.world || {};
+      document.title = `${j.name} · STEMSTAGE`;
+      if (/^#[0-9a-f]{6}$/i.test(pr.color || '')) document.documentElement.style.setProperty('--pc', pr.color);
+      const achs = pr.achievements || [];
+      const got = achs.filter((a) => a.at).sort((a, b) => b.at - a.at);
+      const locked = achs.filter((a) => !a.at);
+      const inst = Object.entries(pr.instruments || {}).sort((a, b) => b[1].plays - a[1].plays);
+      main.innerHTML = `
+        <section class="card head">
+          ${j.avatar ? `<img class="avatar" src="${esc(j.avatar.replace('size=64', 'size=256'))}" alt="">` : `<div class="avatar">${esc(String(j.name)[0]?.toUpperCase() || '?')}</div>`}
+          <div class="who">
+            <h1>${esc(j.name)}</h1>
+            <div class="rank">${pr.level ? `Level ${n(pr.level)} · ${esc(pr.rank || '')}` : 'STEMSTAGE player'}</div>
+            ${pr.level ? `<div class="xp"><div style="width:${Math.round((pr.progress || 0) * 100)}%"></div></div><small>${n(pr.xp)} XP${pr.favorite ? ` · plays <b>${esc(pr.favorite)}</b> the most` : ''}</small>` : ''}
+          </div>
+          <div class="share">
+            <button class="btn primary" id="copy"><i class="fa-solid fa-link"></i> Copy link</button>
+            <a class="btn" href="../#download"><i class="fa-solid fa-download"></i> Get STEMSTAGE</a>
+          </div>
+        </section>
+        <section class="card"><h2><i class="fa-solid fa-chart-simple"></i> Stats</h2><div class="tiles">
+          <div class="tile world"><b>${w.rank ? `#${n(w.rank)}` : '—'}</b><span>World rank</span></div>
+          <div class="tile world"><b>${n(w.records)}</b><span>World records</span></div>
+          <div class="tile"><b>${n(w.total)}</b><span>World score</span></div>
+          <div class="tile"><b>${n(st.plays)}</b><span>Songs played</span></div>
+          <div class="tile"><b>${n(st.songs)}</b><span>Different songs</span></div>
+          <div class="tile"><b>${n(st.stars)}</b><span>Stars earned</span></div>
+          <div class="tile"><b>${n(st.fcs)}</b><span>Full combos</span></div>
+          <div class="tile"><b>${n(st.bestStreak)}</b><span>Best streak</span></div>
+          <div class="tile"><b>${Math.round((st.accuracy || 0) * 100)}%</b><span>Avg accuracy</span></div>
+          <div class="tile"><b>${hours(st.seconds || 0)}</b><span>Time played</span></div>
+        </div></section>
+        <div class="grid2">
+          <section class="card"><h2><i class="fa-solid fa-trophy"></i> Best world runs</h2><div class="scroll"><table>
+            <tr><th>Song</th><th>Part</th><th>Score</th><th>Stars</th></tr>
+            ${(j.best || []).map((r) => `<tr><td>${esc(r.song.title)}<br><small class="muted">${esc(r.song.artist || '')}</small></td><td class="num"><i class="fa-solid ${INST[r.instrument] || 'fa-music'}"></i> ${esc(r.instrument)} · ${esc(r.difficulty)}</td>
+              <td class="num"><a href="../leaderboard/?${new URLSearchParams({ song: r.song.key, inst: r.instrument, diff: r.difficulty })}">${n(r.score)}</a></td><td>${stars(r.stars)}${r.fc ? ' <i class="fa-solid fa-gem" style="color:var(--accent-2)" title="Full combo"></i>' : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No world runs yet.</td></tr>'}
+          </table></div></section>
+          <section class="card"><h2><i class="fa-solid fa-guitar"></i> Instruments</h2><div class="scroll"><table>
+            <tr><th>Part</th><th>Plays</th><th>Best</th><th>Accuracy</th><th>FCs</th></tr>
+            ${inst.map(([k, x]) => `<tr><td><i class="fa-solid ${INST[k] || 'fa-music'}"></i> ${esc(k)}</td><td class="num">${n(x.plays)}</td><td class="num">${n(x.best)}</td><td class="num">${Math.round((x.accuracy || 0) * 100)}%</td><td class="num">${n(x.fcs)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No plays shared yet.</td></tr>'}
+          </table></div></section>
+        </div>
+        <section class="card"><h2><i class="fa-solid fa-medal"></i> Achievements <span class="count">${got.length} / ${achs.length || '—'}</span></h2>
+          <div class="achs">
+            ${got.map((a) => `<div class="ach"><i class="fa-solid fa-${esc(a.icon)}"></i><div><b>${esc(a.name)}</b><small>${esc(a.desc)} · ${new Date(a.at).toLocaleDateString()}</small></div></div>`).join('')}
+            ${locked.map((a) => `<div class="ach locked"><i class="fa-solid fa-${esc(a.icon)}"></i><div><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div></div>`).join('')}
+            ${achs.length ? '' : '<p class="muted">Achievements appear once this player shares their profile from the game.</p>'}
+          </div>
+        </section>
+        <p class="muted" style="text-align:center">Player since ${new Date((j.since || 0) * 1000).toLocaleDateString()}${j.updated ? ` · updated ${new Date(j.updated * 1000).toLocaleDateString()}` : ''}</p>`;
+      document.getElementById('copy').onclick = async (e) => {
+        const url = `https://stemstage.varconstint.com/player/?id=${encodeURIComponent(id)}`;
+        try { await navigator.clipboard.writeText(url); e.currentTarget.innerHTML = '<i class="fa-solid fa-check"></i> Copied'; } catch { prompt('Copy the link:', url); }
+      };
+    }).catch(() => { main.innerHTML = '<div class="state">The profile can\'t be loaded right now. Try again in a moment.</div>'; });
+  </script>
+</body>
+</html>

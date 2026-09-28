@@ -7,7 +7,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const initials = (n) => String(n || '?').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 import { instIcon, fa, starsOnly, achIcon } from './icons.js';
 import { discord, discordAvatar, STATUS_LABEL } from '../net/discord.js';
-import { submitRuns, worldBoard, worldPlayers } from '../net/leaderboard.js';
+import { submitRuns, worldBoard, worldPlayers, shareProfile } from '../net/leaderboard.js';
 const ICON = { guitar: instIcon('guitar'), bass: instIcon('bass'), drums: instIcon('drums'), keys: instIcon('keys'), vocals: instIcon('vocals') };
 const DIFFS = ['easy', 'medium', 'hard', 'expert'];
 const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'];
@@ -134,6 +134,7 @@ export function installSocial(ui) {
         <div class="actions">
           <button class="nav-btn" data-nav data-action="profiles">Switch profile</button>
           ${mine ? '<button class="nav-btn" data-nav data-action="pf-signout">Sign out</button><button class="nav-btn" data-nav data-action="pf-pin">Set PIN</button>' : ''}
+          ${mine ? `<button class="nav-btn primary" data-nav data-action="pf-share">${fa('share-nodes')} Share profile</button>` : ''}
           ${mine ? `<button class="nav-btn discord" data-nav data-action="pf-discord">${dcIcon} ${p.discord ? 'Unlink Discord' : 'Link Discord'}</button>` : ''}
           ${mine ? '<button class="nav-btn danger" data-nav data-action="pf-delete">Delete</button>' : ''}
         </div>
@@ -338,6 +339,21 @@ export function installSocial(ui) {
     'pin-ok': submitPin,
     'pin-cancel': renderProfiles,
     'pf-discord': linkDiscord,
+    'pf-share': async () => {
+      const p = profiles.current;
+      if (!p) return;
+      ui.toast('Publishing your profile…');
+      try {
+        const url = await shareProfile(p.id);
+        let copied = false;
+        try { await navigator.clipboard.writeText(url); copied = true; } catch { /* no clipboard */ }
+        ui.toast(copied ? `Profile link copied: ${url}` : url, 'ok');
+        await ui.openSheet({ title: 'Your profile page', sub: url, items: [
+          { label: 'Copy link', icon: 'link', desc: 'Your level, rank, achievements, stats and world records, for anyone to see', run: async () => { try { await navigator.clipboard.writeText(url); ui.toast('Link copied', 'ok'); } catch { ui.toast(url); } } },
+          { label: 'Open it', icon: 'arrow-up-right-from-square', desc: 'In your browser', run: () => window.open(url, '_blank') },
+        ] });
+      } catch (e) { ui.toast(`Couldn't publish your profile: ${e.message}`, 'err'); }
+    },
     'pf-signout': () => { profiles.signOut(); ui.refreshStatus(); ui.show('profiles'); },
     'pf-pin': async () => {
       const p = profiles.current;
