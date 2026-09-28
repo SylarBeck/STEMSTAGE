@@ -52,6 +52,7 @@
           <button class="menu-item" data-nav data-action="setlists" data-hero="setlists"><b>Setlists</b></button>
           <button class="menu-item" data-nav data-action="career" data-hero="career"><b>Career</b></button>
           <button class="menu-item" data-nav data-action="leaderboard" data-hero="leaderboard"><b>Leaderboards</b></button>
+          <button class="menu-item" data-nav data-action="chartlib" data-hero="chartlib"><b>Chart library</b></button>
           <button class="menu-item" data-nav data-action="stream" data-hero="stream"><b>Stream</b></button>
           <button class="menu-item" data-nav data-action="controller" data-hero="controller"><b>Controllers</b></button>
           <button class="menu-item" data-nav data-action="settings" data-hero="settings"><b>Settings</b></button>
@@ -213,6 +214,14 @@
     </section>
 
     <!-- LEADERBOARDS -->
+    <section class="screen" id="screen-chartlib">
+      <div class="screen-title"><h1>Chart library</h1><p>Songs players have charted, with their ranked parts</p></div>
+      <div class="chartlib">
+        <div class="yt-search"><input type="text" id="cl-q" placeholder="Search charted songs" spellcheck="false" data-osk="Search charted songs" data-osk-submit="cl-search" /><button class="nav-btn primary" data-nav data-action="cl-search">Search</button></div>
+        <div class="cl-list" id="cl-list"></div>
+      </div>
+    </section>
+
     <section class="screen" id="screen-leaderboard">
       <div class="screen-title"><h1>Leaderboards</h1></div>
       <div class="leaderboards">

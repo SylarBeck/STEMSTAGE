@@ -385,7 +385,8 @@ export function installSocial(ui) {
         ${s.achievements.length ? `<div class="rp-ach">${s.achievements.map((a) => `<span>${achIcon(a.id)} ${esc(a.name)}</span>`).join('')}</div>` : ''}</div></div>`;
     }).join('');
     for (const s of summaries) for (const a of s.achievements) ui.toast(`${s.name}: ${a.name} — ${a.desc}`, 'ok', 'trophy');
-    submitRuns(r).then((list) => {
+    ui.lastSubmit = submitRuns(r);
+    ui.lastSubmit.then((list) => {
       for (const w of list) {
         if (w.firstChart) ui.toast(`${w.name}: your ${w.instrument} chart is now the ranked chart for this song — everyone plays it`, 'ok', 'crown');
         // the board people compete on: the ranked chart (or, before a song has one, the old unranked board)

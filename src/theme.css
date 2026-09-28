@@ -860,6 +860,15 @@ body.chrome #screen-results { background: radial-gradient(ellipse at center, rgb
 .tour-col { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .daily { padding: 12px 16px; border-left: 6px solid var(--gold); }
 .daily.done { border-left-color: var(--good); }
+.daily.weekly { border-left-color: var(--accent); margin-top: 10px; }
+.daily.weekly.sel { box-shadow: inset 0 0 0 2px var(--accent); }
+.daily.weekly .nav-btn { margin-top: 8px; }
+.vd-banner.wk { --vh: 5; }
+.wk-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 12px; }
+.wk-cols h4 { font-family: var(--body); font-weight: 800; font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); margin: 0 0 6px; }
+.wk-cols h4 small { letter-spacing: 0.04em; text-transform: none; font-weight: 600; margin-left: 6px; }
+.wk-weeks { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; color: var(--dim); font-size: 14px; }
+@media (max-width: 1100px) { .wk-cols { grid-template-columns: 1fr; } }
 .dl-k { align-self: flex-start; display: inline-block; font-family: var(--body); font-weight: 800; font-size: 14px; letter-spacing: 0.18em; color: var(--gold); margin-bottom: 6px; }
 .daily b { display: block; font-family: var(--display); font-weight: 400; font-size: 26px; line-height: 1.05; text-transform: uppercase; } .daily small { color: var(--dim); }
 .dl-goal { margin: 8px 0; font-weight: 700; } .dl-goal em { font-style: normal; color: var(--gold); margin-left: 6px; }
@@ -964,6 +973,19 @@ html[data-hud="huge"] #hud .hud-left, html[data-hud="huge"] #hud .hud-right, htm
 
 /* ---------- career tabs / tour list: one screen each ---------- */
 .career-tabs { margin: 10px 0 12px; }
+/* chart library */
+.chartlib { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; max-width: 1100px; }
+.cl-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 4px; }
+.cl-song { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) auto 150px 170px; gap: 14px; align-items: center; padding: 10px 16px; background: rgba(18,16,14,0.9); border-left: 5px solid var(--accent); cursor: pointer; }
+.cl-song.have { border-left-color: var(--good); }
+.cl-song .cl-t b { display: block; font-family: var(--display); font-weight: 400; font-size: 24px; line-height: 1.05; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-song .cl-t small { color: var(--dim); font-size: 16px; }
+.cl-song .cl-parts { display: flex; gap: 8px; font-size: 18px; color: var(--gold); }
+.cl-song .cl-meta { color: var(--dim); font-size: 15px; }
+.cl-song .cl-act { font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; font-size: 14px; text-align: right; }
+.cl-song.have .cl-act { color: var(--good); }
+.cl-song:hover, .cl-song.focus { background: var(--ink); color: var(--dark); }
+.cl-song:hover small, .cl-song.focus small, .cl-song:hover .cl-meta, .cl-song.focus .cl-meta { color: #4a4336; }
 /* character editor: the card on the left, the band member on the stage behind it on the right */
 #career[data-tab="character"] .career-page[data-page="character"] { max-width: 820px; }
 .char-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }

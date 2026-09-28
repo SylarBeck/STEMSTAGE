@@ -12,6 +12,7 @@ import { installOnline } from './online-ui.js';
 import { installControllers } from './controllers-ui.js';
 import { installSetlists } from './setlists-ui.js';
 import { installTour } from './tour-ui.js';
+import { installChartLibrary } from './chartlib-ui.js';
 import { installEditor } from './editor-ui.js';
 import { installStream } from './stream-ui.js';
 import { tourStars, TOUR_MAX, dailyDone, VENUES, unlocked } from '../profile/career.js';
@@ -25,7 +26,7 @@ import { bindings } from '../input/bindings.js';
 import { PLAYER_COLORS } from '../game/player.js';
 import { fa, instIcon, stars as starsHtml, starsOnly, achIcon } from './icons.js';
 import { pickGhost, replaysFor, loadReplay, saveReplay } from '../game/replay.js';
-import { worldCharts, partChart, prepareRankedCharts, ensureFingerprint, useWorldChart, useOwnChart, allowRanked, voteChart } from '../net/charts.js';
+import { worldCharts, partChart, prepareRankedCharts, ensureFingerprint, useWorldChart, useOwnChart, allowRanked, voteChart, shareChart } from '../net/charts.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -43,7 +44,7 @@ const SORTS = [['recent', 'Recent'], ['title', 'Title'], ['artist', 'Artist'], [
 const SPEEDS = [0.5, 0.6, 0.7, 0.8, 0.9, 1];
 const SCREEN_LABEL = {
   menu: 'Main menu', library: 'Setlist', import: 'Import song', settings: 'Settings', band: 'Band', controller: 'Controllers', howto: 'How to play',
-  profiles: 'Profiles', career: 'Career', leaderboard: 'Leaderboards', setlists: 'Setlists', marathon: 'Marathon', tour: 'Tour', editor: 'Chart editor', stream: 'Stream', online: 'Online', practice: 'Practice', songinfo: 'Song info', results: 'Results',
+  profiles: 'Profiles', career: 'Career', leaderboard: 'Leaderboards', chartlib: 'Chart library', setlists: 'Setlists', marathon: 'Marathon', tour: 'Tour', editor: 'Chart editor', stream: 'Stream', online: 'Online', practice: 'Practice', songinfo: 'Song info', results: 'Results',
   calibrate: 'Calibration', pause: 'Paused',
 };
 const CHROME_OFF = new Set(['title', 'hud', 'calibrate']);
@@ -192,6 +193,7 @@ export class UI {
     this.controllers = installControllers(this);
     this.setlists = installSetlists(this);
     this.tour = installTour(this);
+    installChartLibrary(this);
     this.editor = installEditor(this);
     this.stream = installStream(this);
     autoCheck(this);
@@ -469,7 +471,7 @@ export class UI {
       const back = {
         library: this.mode === 'band' ? 'band' : this.mode === 'online-pick' ? 'online' : this.mode === 'setlist-add' ? 'setlists' : 'menu', import: 'menu', setlists: 'menu', tour: 'menu', stream: 'menu', settings: 'menu', controller: 'menu',
         howto: 'menu', band: 'menu', results: this.lastPlay?.online ? 'online' : 'library', menu: 'title', profiles: 'menu',
-        career: 'menu', leaderboard: 'menu', online: 'menu', practice: 'library', songinfo: 'library',
+        career: 'menu', leaderboard: 'menu', chartlib: 'menu', online: 'menu', practice: 'library', songinfo: 'library',
       };
       if (this.screen === 'library' && this.mode === 'online-pick') this.mode = 'solo';
       if (this.screen === 'pause') { this.action('resume'); return; }
@@ -792,6 +794,7 @@ export class UI {
         body = `<div class="hero-k">Career</div><div class="hero-prof">${avatarHtml(p, 72)}<div><h2>${esc(p.name)}</h2><p>Level ${lv.level} · ${esc(lv.rank)}</p></div></div><div class="xpbar"><div style="width:${Math.round(lv.progress * 100)}%"></div></div><p class="dim">${lv.into.toLocaleString()} / ${lv.span.toLocaleString()} XP to level ${lv.level + 1}</p>`;
         break;
       }
+      case 'chartlib': body = '<div class="hero-k">Chart library</div><h2>Every charted song</h2><p>Songs players have charted, with their ranked parts. Get one you don\u2019t have from YouTube and play its ranked chart.</p>'; break;
       case 'leaderboard': {
         const rows = profiles.globalBoard().slice(0, 3);
         body = `<div class="hero-k">Leaderboards</div><h2>Top players</h2>${rows.length ? rows.map((r, i) => `<div class="hero-row"><b>${i + 1}</b>${avatarHtml(r.profile, 28)}<span>${esc(r.profile.name)}</span><em>${r.totalScore.toLocaleString()}</em></div>`).join('') : '<p class="dim">No scores yet.</p>'}`;
@@ -1125,6 +1128,16 @@ export class UI {
 
   applyVenue(forGame = false) { this.app.stage.setVenue(this.venueId(forGame)); }
 
+  /** Import a song the world has charts for: search YouTube for it; it keeps the world's title and artist. */
+  findOnYouTube(artist, title) {
+    this.worldWant = { artist, title };
+    this.show('import');
+    this.importTab = 'youtube';
+    this.renderImportTab();
+    $('#yt-q').value = artist ? `${artist} - ${title}` : title;
+    this.action('yt-search');
+  }
+
   /**
    * The band on stage: each player's character at their part (cfgs: [{ instrument, profileId?, look? }]);
    * in the menus, the signed-in profile's at the part it picked.
@@ -1200,6 +1213,7 @@ export class UI {
     const mineOn = !part.world && !list.rows.some((r) => r.id === cur.id && r.ranked);
     if (part.world || !part.pin) items.push({ label: 'Play my own chart', icon: 'user', desc: mineOn && !part.pin ? 'You play it now (the ranked one is lined up when you play, unless you pick this)' : 'The chart your import made (or your edits): its runs have their own board', run: () => this.ownWorldChart(s, inst) });
     if (part.pin || part.refused) items.push({ label: 'Play the ranked chart again', icon: 'rotate', desc: 'Swap the ranked chart back in the next time you play', run: () => this.rankedWorldChart(s, inst) });
+    if (!list.rows.some((r) => r.id === cur.id)) items.push({ label: 'Share my chart', icon: 'share-nodes', desc: profiles.current ? 'Put your chart in the chart library now (a chart you fixed in the editor, say), for others to play and vote for' : 'Sign in to share charts', disabled: !profiles.current, run: () => this.shareWorldChart(s, inst) });
     this.openSheet({ title: `World charts · ${inst}`, sub: `${s.title} · a chart needs ${list.voteMin} votes, and more than the ranked one has, to replace it`, items });
   }
 
@@ -1240,6 +1254,18 @@ export class UI {
     await allowRanked(song, inst);
     await this.reloadSongs();
     this.toast(`${inst}: the ranked chart goes on the next time you play`, 'ok');
+    this._refreshDetail(s.id);
+  }
+
+  async shareWorldChart(s, inst) {
+    const p = profiles.current;
+    if (!p) return;
+    this.toast('Uploading your chart…');
+    try {
+      const song = await getSong(s.id);
+      const res = await shareChart(song, inst, p, () => getAudio(s.id));
+      this.toast(res.downloaded ? 'You play a world chart on this part: nothing new to share' : res.known ? 'That chart is in the library already' : res.ranked ? `Shared: your ${inst} chart is the first one, so it\u2019s the ranked chart` : `Shared: players can play your ${inst} chart and vote for it`, 'ok', 'share-nodes');
+    } catch (e) { this.toast(`Couldn\u2019t share the chart: ${e.message}`, 'err'); }
     this._refreshDetail(s.id);
   }
 
@@ -1749,6 +1775,15 @@ export class UI {
       const song = youtube
         ? await importFromYouTube(ytItem, this.splitter, this.app.engine, report)
         : await importFile(file, this.splitter, this.app.engine, report);
+      // imported for a world chart (weekly challenge, chart library): keep the world's title and artist so the boards match
+      if (youtube && this.worldWant) {
+        const want = this.worldWant;
+        this.worldWant = null;
+        if (song.title !== want.title || song.artist !== want.artist) {
+          const saved = await getSong(song.id);
+          if (saved) { Object.assign(saved, { title: want.title, artist: want.artist }); Object.assign(song, { title: want.title, artist: want.artist }); await saveSongJson(saved).catch(() => {}); }
+        }
+      }
       const bits = [song.method === 'ai' ? 'AI split' : 'DSP split', `${song.bpm} BPM`, song.album && `album ${song.album}`].filter(Boolean);
       this.toast(`"${song.title}" by ${song.artist} is ready — ${bits.join(' · ')}`, 'ok');
       const fresh = await profiles.count(youtube ? 'youtube_import' : 'import');

@@ -13,6 +13,9 @@
 //   GET  /v1/charts?song=&instrument=   the charts players uploaded for a song part, ranked one first, with votes
 //   GET  /v1/chart?id=              one chart in full (the game downloads it and lines it up with its own audio)
 //   POST /v1/charts/vote            vote for the chart a song part should be ranked on
+//   GET  /v1/library?q=&limit=&offset=   the chart library: songs with uploaded charts, their parts and players
+//   GET  /v1/challenge?player=      this week's challenge (a ranked song part) and its board
+//   GET  /v1/season?player=         this season's standings (points from the weekly challenges)
 //   GET  /v1/rooms                  public online rooms (hosts re-announce every 30 s; listed for 90 s)
 //   POST /v1/rooms                  a host lists / refreshes its room   POST /v1/rooms/close   takes it down
 //   GET  /v1/health
@@ -40,6 +43,9 @@ const VOTE_MIN = 3; // votes a chart needs before it can replace the ranked one
 const MAX_CHART_BYTES = 1_500_000;
 const RATE = { window: 600, max: 40 }; // runs per address per 10 minutes
 const ROOM_FRESH = 90, ROOM_KEEP = 600, ROOM_MODES = ['versus', 'battle', 'band'];
+// weekly challenges: weeks start on Monday 00:00 UTC; a season is six weeks
+const WEEK0 = Date.UTC(2026, 8, 28) / 1000, WEEK = 7 * 86400, SEASON_WEEKS = 6; // week 0 = season 1 starts Monday 28 September 2026
+const WEEK_DIFFS = ['hard', 'expert', 'medium', 'expert', 'hard', 'expert'];
 
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), {
   status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store', ...extra },
@@ -364,6 +370,104 @@ async function rooms(url, env) {
   return reply(url, { rows: results.map((r) => ({ ...r, playing: !!r.playing })) }, 5);
 }
 
+// ---------------------------------------------------------------- chart library
+/** Songs that have charts, most played first: the parts with a ranked chart, how many charts, how many players. */
+async function library(url, env) {
+  const q = norm(url.searchParams.get('q') || '');
+  const limit = limitOf(url, 50, 200), offset = clampInt(url.searchParams.get('offset') ?? 0, 0, 100000);
+  const { results } = await env.DB.prepare(`SELECT g.key, g.title, g.artist, g.duration,
+      (SELECT COUNT(*) FROM charts c WHERE c.song_key = g.key) AS charts,
+      (SELECT GROUP_CONCAT(rc.instrument) FROM ranked_charts rc WHERE rc.song_key = g.key) AS parts,
+      (SELECT COUNT(DISTINCT r.player_id) FROM runs r WHERE r.song_key = g.key) AS players,
+      (SELECT MAX(c.created) FROM charts c WHERE c.song_key = g.key) AS updated
+    FROM songs g WHERE EXISTS (SELECT 1 FROM charts c WHERE c.song_key = g.key) ${q ? "AND lower(g.title || ' ' || COALESCE(g.artist, '')) LIKE ?" : ''}
+    ORDER BY players DESC, updated DESC LIMIT ? OFFSET ?`).bind(...(q ? [`%${q}%`] : []), limit, offset).all();
+  const order = Object.fromEntries(INSTRUMENTS.map((i, k) => [i, k]));
+  return reply(url, {
+    rows: results.map((r) => ({ key: r.key, title: r.title, artist: r.artist, duration: r.duration, charts: r.charts, players: r.players, updated: r.updated,
+      parts: String(r.parts || '').split(',').filter(Boolean).sort((a, b) => order[a] - order[b]) })),
+  }, 60);
+}
+
+// ---------------------------------------------------------------- weekly challenges + seasons
+const weekOf = (t) => Math.floor((t - WEEK0) / WEEK);
+const weekRange = (w) => [WEEK0 + w * WEEK, WEEK0 + (w + 1) * WEEK];
+const seasonOf = (w) => Math.floor(w / SEASON_WEEKS) + 1;
+/** Season points for a place on a weekly board: 100 for first, down to 10 for taking part. */
+const pointsFor = (rank) => [0, 100, 80, 65, 55, 50][rank] ?? Math.max(10, 50 - (rank - 5) * 2);
+
+/**
+ * The challenge of a week: picked the first time anyone asks, among the ranked song parts most people play
+ * (so most players can have the song), and then kept. null when nothing is ranked yet.
+ */
+async function challengeOf(env, week, create) {
+  const row = await env.DB.prepare(`SELECT c.*, g.title, g.artist FROM challenges c JOIN songs g ON g.key = c.song_key WHERE c.week = ?`).bind(week).first();
+  if (row || !create) return row || null;
+  const { results } = await env.DB.prepare(`SELECT rc.song_key, rc.instrument, rc.chart_id,
+      (SELECT COUNT(DISTINCT r.player_id) FROM runs r WHERE r.chart_id = rc.chart_id) AS players
+    FROM ranked_charts rc JOIN songs g ON g.key = rc.song_key ORDER BY players DESC, rc.song_key LIMIT 24`).all();
+  if (!results.length) return null;
+  // not last week's song again when there's a choice
+  const last = await env.DB.prepare('SELECT song_key FROM challenges WHERE week = ?').bind(week - 1).first();
+  const pool = results.length > 1 ? results.filter((r) => r.song_key !== last?.song_key) : results;
+  const hash = [...(await sha256(`stemstage-week-${week}`))].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const pick = pool[hash % pool.length];
+  await env.DB.prepare('INSERT INTO challenges (week, song_key, instrument, difficulty, chart_id, created) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(week) DO NOTHING')
+    .bind(week, pick.song_key, pick.instrument, WEEK_DIFFS[((week % WEEK_DIFFS.length) + WEEK_DIFFS.length) % WEEK_DIFFS.length], pick.chart_id, Math.floor(Date.now() / 1000)).run();
+  return challengeOf(env, week, false);
+}
+
+/** A challenge's board: each player's best run on its chart during its week. */
+async function challengeBoard(env, c, limit = 100) {
+  const [from, to] = weekRange(c.week);
+  const { results } = await env.DB.prepare(`SELECT r.player_id, MAX(r.score) AS score, MIN(r.created) AS first, COUNT(*) AS runs, p.name, p.discord_id, p.discord_avatar
+    FROM runs r JOIN players p ON p.id = r.player_id
+    WHERE r.chart_id = ? AND r.song_key = ? AND r.instrument = ? AND r.difficulty = ? AND r.created >= ? AND r.created < ?
+    GROUP BY r.player_id ORDER BY score DESC, first ASC LIMIT ?`).bind(c.chart_id, c.song_key, c.instrument, c.difficulty, from, to, limit).all();
+  return results.map((r, i) => ({ rank: i + 1, player: r.name, playerId: r.player_id, avatar: avatarOf(r), score: r.score, runs: r.runs, points: pointsFor(i + 1) }));
+}
+
+const challengeInfo = (c) => ({
+  week: c.week, season: seasonOf(c.week), starts: weekRange(c.week)[0], ends: weekRange(c.week)[1],
+  song: { key: c.song_key, title: c.title, artist: c.artist }, instrument: c.instrument, difficulty: c.difficulty, chart: c.chart_id,
+});
+
+async function challenge(url, env) {
+  const now = Math.floor(Date.now() / 1000);
+  const week = weekOf(now);
+  const c = await challengeOf(env, week, true);
+  if (!c) return reply(url, { week, season: seasonOf(week), starts: weekRange(week)[0], ends: weekRange(week)[1], none: true }, 60);
+  const rows = await challengeBoard(env, c, 200);
+  const who = url.searchParams.get('player') || '';
+  const me = rows.find((r) => r.playerId === who) || null;
+  return reply(url, { ...challengeInfo(c), players: rows.length, rows: rows.slice(0, limitOf(url, 25, 100)), me }, 30);
+}
+
+async function season(url, env) {
+  const now = Math.floor(Date.now() / 1000);
+  const week = weekOf(now), s = seasonOf(week);
+  const first = (s - 1) * SEASON_WEEKS;
+  const weeks = [];
+  const table = new Map();
+  for (let w = first; w <= week; w++) {
+    const c = await challengeOf(env, w, w === week);
+    if (!c) continue;
+    const rows = await challengeBoard(env, c, 500);
+    weeks.push({ ...challengeInfo(c), players: rows.length, winner: rows[0] ? { player: rows[0].player, playerId: rows[0].playerId, score: rows[0].score } : null });
+    for (const r of rows) {
+      const t = table.get(r.playerId) || { player: r.player, playerId: r.playerId, avatar: r.avatar, points: 0, weeks: 0, wins: 0 };
+      t.points += r.points; t.weeks++; if (r.rank === 1) t.wins++;
+      table.set(r.playerId, t);
+    }
+  }
+  const rows = [...table.values()].sort((a, b) => b.points - a.points || b.wins - a.wins).map((r, i) => ({ rank: i + 1, ...r }));
+  const who = url.searchParams.get('player') || '';
+  return reply(url, {
+    season: s, starts: weekRange(first)[0], ends: weekRange(first + SEASON_WEEKS - 1)[1], week, weeks,
+    rows: rows.slice(0, limitOf(url, 25, 100)), me: rows.find((r) => r.playerId === who) || null, players: rows.length,
+  }, 60);
+}
+
 // ---------------------------------------------------------------- reads
 /*
   GET /v1/leaderboard?song=<key>&instrument=&difficulty=&chart=
@@ -535,6 +639,9 @@ export default {
         if (path === '/v1/charts') return await listCharts(url, env);
         if (path === '/v1/chart') return await getChart(url, env);
         if (path === '/v1/rooms') return await rooms(url, env);
+        if (path === '/v1/challenge') return await challenge(url, env);
+        if (path === '/v1/library') return await library(url, env);
+        if (path === '/v1/season') return await season(url, env);
         if (path === '/v1/song-key') return reply(url, { key: await songKey(url.searchParams.get('artist'), url.searchParams.get('title')) }, 3600);
         if (path === '/v1/health' || path === '') return reply(url, { ok: true, service: 'stemstage-leaderboard', version: 2 }, 5);
       }

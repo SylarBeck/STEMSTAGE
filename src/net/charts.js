@@ -214,6 +214,11 @@ export async function chartForRun(song, inst, profile) {
   if (!part?.available) return null;
   const c = await partChart(inst, part);
   if (c.downloaded || uploaded.has(c.id) || !song.fp) return { id: c.id, first: false };
+  const j = await postChart(song, inst, part, c, profile);
+  return { id: j.chartId, first: !j.known && j.ranked };
+}
+
+async function postChart(song, inst, part, c, profile) {
   const cloud = await identityOf(profile);
   const j = await postJson('/v1/charts', {
     player: playerOf(profile, cloud),
@@ -223,7 +228,22 @@ export async function chartForRun(song, inst, profile) {
   });
   uploaded.add(c.id);
   forget(j.songKey, inst);
-  return { id: j.chartId, first: !j.known && j.ranked };
+  return j;
+}
+
+/**
+ * Song options → World charts → Share my chart: put a part's chart in the chart library now, without a run
+ * (a chart fixed in the editor, for others to play and vote for). `audio`: the stems or a loader (for the
+ * fingerprint of a song that hasn't got one yet). → { id, known, ranked, downloaded }
+ */
+export async function shareChart(song, inst, profile, audio) {
+  const part = song.charts?.[inst];
+  if (!part?.available) throw new Error(`this song has no ${inst} chart`);
+  const c = await partChart(inst, part);
+  if (c.downloaded) return { id: c.id, known: true, downloaded: true };
+  await ensureFingerprint(song, audio);
+  const j = await postChart(song, inst, part, c, profile);
+  return { id: j.chartId, known: j.known, ranked: j.ranked };
 }
 
 /** Vote for the chart a song part should be ranked on (the player must have finished a run on it). */
