@@ -14,7 +14,7 @@ Open **Play → Band**. Each player presses a button on their own controller to 
 
 No router setup is needed. The room runs through a free [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/): the game downloads `cloudflared` once (~55 MB) and only makes outgoing connections. **Local network** hosts on your Wi-Fi/LAN only (port 5180). Friends type the address it shows instead of a code.
 
-Songs are sent compressed (Opus or Ogg Vorbis): about 20 MB instead of 250 MB for a 4-minute song.
+Songs are sent compressed (Opus or Ogg Vorbis): about 20 MB instead of 250 MB for a 4-minute song. A friend who already has the song from an earlier room gets the host's current chart again when it has changed (edited, re-charted, or swapped for the ranked chart): only `song.json`, never the audio.
 
 ## Setlists and marathons
 

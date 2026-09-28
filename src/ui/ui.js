@@ -25,6 +25,7 @@ import { bindings } from '../input/bindings.js';
 import { PLAYER_COLORS } from '../game/player.js';
 import { fa, instIcon, stars as starsHtml, starsOnly, achIcon } from './icons.js';
 import { pickGhost, replaysFor, loadReplay, saveReplay } from '../game/replay.js';
+import { worldCharts, partChart, prepareRankedCharts, ensureFingerprint, useWorldChart, useOwnChart, allowRanked, voteChart } from '../net/charts.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -112,6 +113,7 @@ const SETTINGS_SCHEMA = [
   { action: 'testMic', label: 'Test microphone', desc: 'Sing and see the note you hit' },
   { group: 'World leaderboard' },
   { key: 'worldLeaderboard', label: 'Send my runs to the world leaderboard', desc: 'Signed-in profiles: your score, stars and accuracy (with your profile name and Discord avatar) go to stemstage.varconstint.com/leaderboard. Practice, replays and assisted runs are never sent', type: 'toggle' },
+  { key: 'rankedCharts', label: 'Play the ranked chart of each song', desc: 'Every import makes its own AI chart, so each song has one ranked chart everyone is scored on. It is downloaded and lined up with your recording when you play; runs on your own chart go on that chart\u2019s own board. Pick a chart per song in Song options \u2192 World charts', type: 'toggle' },
   { group: 'Discord' },
   { key: 'discordPresence', label: 'Show what I play on Discord', desc: 'Your Discord status shows the song, part and time left, automatically (needs the Discord app running on this PC)', type: 'toggle' },
   { key: 'discordInvites', label: 'Discord invites', desc: 'Link: your status gets a "Join room" button anyone can use (installs STEMSTAGE if needed). Discord: Discord\u2019s own Join button, which only works for friends who have STEMSTAGE', type: 'choice', options: ['link', 'discord'], labels: { link: 'Join link', discord: 'Discord Join' } },
@@ -981,6 +983,7 @@ export class UI {
     $('#detail-lb').innerHTML = band || pickForRoom ? '' : `<h4>Leaderboard · ${this.instrument} · ${this.difficulty}</h4>` + (lb.length
       ? lb.map((r, i) => `<div class="lb-row ${r.profileId === meId ? 'me' : ''}"><span class="pos">${i + 1}</span><span>${avatarHtml(r.profile, 20)} ${esc(r.profileName)}</span><b>${r.score.toLocaleString()}</b><small>${starsOnly(r.stars)}${r.fc ? ` ${fa('gem')}` : ''}</small></div>`).join('')
       : '<div class="small-note">No scores yet — be the first.</div>');
+    this.renderWorldLine(s);
     const best = band || pickForRoom ? null : getBest(s.id, this.instrument, this.difficulty);
     $('#detail-best').innerHTML = best && !lb.length ? `Best (guest): <b>${best.score.toLocaleString()}</b> · ${starsOnly(best.stars)}` : '';
     $('[data-action="play"]').innerHTML = pickForRoom ? `${fa('check')} Select for match` : this.mode === 'setlist-add' ? `${fa('plus')} Add to setlist` : `${fa('play')} Play`;
@@ -999,6 +1002,7 @@ export class UI {
         ...(band ? [] : [{ label: 'Practice', desc: 'Slow it down (pitch preserved) and start anywhere', run: () => this.openPractice() }]),
         { label: 'Replays & ghosts', desc: 'Watch a recorded run, or race it as a ghost', run: () => this.replaysSheet(s) },
         { label: 'Add to setlist…', desc: 'Put it in a setlist for a marathon', run: () => this.setlists.addToSheet(s) },
+        ...(band ? [] : [{ label: 'World charts', icon: 'earth-americas', desc: `The ranked ${this.instrument} chart and the others players uploaded: play one or vote`, disabled: !s.charts[this.instrument]?.available || settings.worldLeaderboard === false, run: () => this.worldChartsSheet(s) }]),
         ...(band ? [] : [{ label: 'Edit chart', desc: `Fix the ${this.instrument} · ${this.difficulty} notes by hand`, disabled: !s.charts[this.instrument]?.available, run: () => this.editor.open(s.id, this.instrument, this.difficulty) }]),
         { label: s.lyrics?.words?.length ? 'Redo lyrics (AI)' : 'Get lyrics (AI)', desc: this.aiStatus?.lyrics ? `Whisper listens to the vocal stem${s.lyrics?.words?.length ? ` · ${s.lyrics.words.length} words now` : ''}` : 'Needs the AI splitter with Whisper (npm run ai:setup)', disabled: !this.aiStatus?.lyrics || !(s.stemNames || []).includes('vocals'), run: () => this.getLyrics(s) },
         { label: 'Check lyrics online', desc: s.lyrics?.reference ? `Checked against ${s.lyrics.reference.source}${s.lyrics.corrected ? ` · ${s.lyrics.corrected} words fixed` : ''}` : s.lyrics?.words?.length ? 'Fix misheard words with a lyrics database (LRCLIB), keeping the AI timing' : 'Time-synced lyrics from LRCLIB (no AI needed)', disabled: !s.charts?.vocals?.available && !s.lyrics?.words?.length, run: () => this.checkSongLyrics(s) },
@@ -1092,6 +1096,7 @@ export class UI {
     this.toast(`Loading ${s.title}...`);
     const [song, audio] = await Promise.all([getSong(s.id), getAudio(s.id)]);
     if (!audio) { this.toast('Audio for this song is missing — re-import it', 'err'); return; }
+    await this.prepareWorld(song, audio, cfgs.map((c) => c.instrument));
     this.app.menuMusic(false);
     this.stopPreview();
     const ghost = opts.ghost !== undefined ? opts.ghost
@@ -1099,6 +1104,127 @@ export class UI {
     this.lastPlay = { mode: this.mode, ghost };
     this.show('hud');
     await this.app.game.start(song, audio, cfgs, { ghost });
+  }
+
+  // ---------------------------------------------------------------- ranked charts (see net/charts.js)
+  /** Before a song starts: fingerprint the recording once, and put the ranked chart on the parts being played. */
+  async prepareWorld(song, audio, insts) {
+    if (settings.worldLeaderboard === false) return;
+    try { await ensureFingerprint(song, audio); } catch (e) { console.warn('fingerprint:', e.message); return; }
+    const res = await prepareRankedCharts(song, audio, insts, (msg) => this.toast(msg));
+    for (const r of res) {
+      if (r.status === 'swapped') this.toast(`Playing the ranked ${r.inst} chart, lined up with your recording (${r.offset >= 0 ? '+' : '−'}${Math.abs(r.offset).toFixed(2)} s)`, 'ok', 'earth-americas');
+      else if (r.status === 'refused' && r.fresh) this.toast(`The ranked ${r.inst} chart doesn't fit your recording: ${r.reason}. You play your own chart (it has its own board)`, 'err');
+    }
+    if (res.some((r) => r.status === 'swapped' || r.fresh)) this.reloadSongs().catch(() => {});
+  }
+
+  /** The ranked-chart status of the picked part, under the pickers (the chart list is fetched in the background). */
+  renderWorldLine(s) {
+    const el = $('#detail-world');
+    if (!el) return;
+    const inst = this.instrument, part = s.charts[inst];
+    const ticket = (this._worldTicket = (this._worldTicket || 0) + 1);
+    el.innerHTML = '';
+    if (this.mode === 'band' || this.mode === 'online-pick' || settings.worldLeaderboard === false || !part?.available) return;
+    const set = (cls, stamp, text) => {
+      if (ticket !== this._worldTicket) return;
+      el.className = `world-line ${cls}`;
+      el.innerHTML = `${fa('earth-americas')}<span class="stamp">${stamp}</span><span class="txt">${text}</span>`;
+    };
+    if (part.pin && !part.world) { set('own', 'Your chart', 'You picked your own chart: its runs have their own board'); return; }
+    if (settings.rankedCharts === false && !part.world) { set('own', 'Your chart', 'Ranked charts are off (Settings): runs go on this chart\u2019s own board'); return; }
+    setTimeout(() => {
+      if (ticket !== this._worldTicket) return;
+      Promise.all([worldCharts(s, inst), partChart(inst, part)]).then(([list, cur]) => {
+        const r = list.rows.find((x) => x.ranked);
+        const by = r?.uploader ? `Chart by ${esc(r.uploader)}` : 'The ranked chart';
+        const players = r ? ` · ${r.players} player${r.players === 1 ? '' : 's'}` : '';
+        if (!list.rankedChart) set('soon', 'No ranked chart yet', 'Finish a run: your chart becomes the one everyone plays');
+        else if (cur.id === list.rankedChart) set('ranked', 'Ranked', `${by}${players}`);
+        else if (part.pin) set('own', 'Picked chart', `${part.world?.uploader ? `By ${esc(part.world.uploader)} · ` : ''}not the ranked one, so its runs have their own board`);
+        else if (part.refused?.id === list.rankedChart) set('own', 'Your chart', `The ranked chart doesn\u2019t fit your recording (${esc(part.refused.reason)})`);
+        else set('soon', 'Ranked chart', `${by}${players} · swapped in when you play`);
+      }).catch(() => { if (ticket === this._worldTicket) el.innerHTML = ''; });
+    }, 250);
+  }
+
+  /** Song options → World charts: every chart uploaded for this part, ranked first; play one or vote. */
+  async worldChartsSheet(s) {
+    const inst = this.instrument;
+    const part = s.charts[inst];
+    if (!part?.available) { this.toast(`This song has no ${inst} chart`, 'err'); return; }
+    let list, cur;
+    try { [list, cur] = await Promise.all([worldCharts(s, inst, { fresh: true }), partChart(inst, part)]); } catch (e) { this.toast(`World charts can't be reached right now (${e.message})`, 'err'); return; }
+    const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    const items = list.rows.map((r) => ({
+      label: `${r.ranked ? 'Ranked · ' : ''}Chart by ${r.uploader || 'a player'}${r.id === cur.id ? ' · playing' : ''}`, icon: r.ranked ? 'crown' : r.id === cur.id ? 'circle-play' : 'file-lines',
+      desc: `${plural(r.votes, 'vote')} · ${plural(r.players, 'player')} · ${r.notes} expert notes${r.edited ? ' · hand-edited' : ''}${list.myVote === r.id ? ' · your vote' : ''}`,
+      run: () => setTimeout(() => this.worldChartSheet(s, inst, r, list, cur), 0),
+    }));
+    if (!items.length) items.push({ label: 'No charts uploaded yet', desc: 'Finish a run on this part and yours becomes the ranked chart', disabled: true });
+    const mineOn = !part.world && !list.rows.some((r) => r.id === cur.id && r.ranked);
+    if (part.world || !part.pin) items.push({ label: 'Play my own chart', icon: 'user', desc: mineOn && !part.pin ? 'You play it now (the ranked one is lined up when you play, unless you pick this)' : 'The chart your import made (or your edits): its runs have their own board', run: () => this.ownWorldChart(s, inst) });
+    if (part.pin || part.refused) items.push({ label: 'Play the ranked chart again', icon: 'rotate', desc: 'Swap the ranked chart back in the next time you play', run: () => this.rankedWorldChart(s, inst) });
+    this.openSheet({ title: `World charts · ${inst}`, sub: `${s.title} · a chart needs ${list.voteMin} votes, and more than the ranked one has, to replace it`, items });
+  }
+
+  worldChartSheet(s, inst, r, list, cur) {
+    const playing = r.id === cur.id;
+    this.openSheet({
+      title: `Chart by ${r.uploader || 'a player'}`, sub: `${r.ranked ? 'Ranked · ' : ''}${r.votes} vote${r.votes === 1 ? '' : 's'} · ${r.runs} run${r.runs === 1 ? '' : 's'} · uploaded ${new Date(r.date * 1000).toLocaleDateString()}`,
+      items: [
+        { label: playing ? 'You play this chart' : 'Play this chart', icon: 'download', desc: playing ? 'It is on this part now' : 'Download it and line it up with your recording', disabled: playing, run: () => this.pickWorldChart(s, inst, r) },
+        { label: list.myVote === r.id ? 'You voted for this chart' : r.ranked ? 'Vote to keep it ranked' : 'Vote for this chart', icon: 'check-to-slot', desc: profiles.current ? 'One vote per song part, for a chart you have finished a run on' : 'Sign in to vote', disabled: list.myVote === r.id || !profiles.current, run: () => this.voteWorldChart(s, inst, r) },
+      ],
+    });
+  }
+
+  async pickWorldChart(s, inst, r) {
+    this.toast('Downloading the chart and lining it up with your recording…');
+    try {
+      const song = await getSong(s.id);
+      const res = await useWorldChart(song, () => getAudio(s.id), inst, r.id, { pin: !r.ranked });
+      if (!res.ok) { this.toast(`That chart doesn't fit your recording: ${res.reason}`, 'err'); return; }
+      if (r.ranked) await allowRanked(song, inst);
+      await this.reloadSongs();
+      this.toast(`${inst}: now playing the chart by ${r.uploader || 'a player'} (${res.offset >= 0 ? '+' : '−'}${Math.abs(res.offset).toFixed(2)} s)`, 'ok', 'earth-americas');
+    } catch (e) { this.toast(`Couldn't get that chart: ${e.message}`, 'err'); }
+    this._refreshDetail(s.id);
+  }
+
+  async ownWorldChart(s, inst) {
+    const song = await getSong(s.id);
+    await useOwnChart(song, inst);
+    await this.reloadSongs();
+    this.toast(`${inst}: playing your own chart (its runs have their own board)`, 'ok');
+    this._refreshDetail(s.id);
+  }
+
+  async rankedWorldChart(s, inst) {
+    const song = await getSong(s.id);
+    await allowRanked(song, inst);
+    await this.reloadSongs();
+    this.toast(`${inst}: the ranked chart goes on the next time you play`, 'ok');
+    this._refreshDetail(s.id);
+  }
+
+  async voteWorldChart(s, inst, r) {
+    const p = profiles.current;
+    if (!p) { this.toast('Sign in to vote', 'err'); return; }
+    try {
+      const j = await voteChart(p, r.id);
+      if (j.promoted) this.toast('Your vote made it the ranked chart!', 'ok', 'crown');
+      else if (j.rankedChart === r.id) this.toast(`Voted to keep this chart ranked (${j.votes} vote${j.votes === 1 ? '' : 's'})`, 'ok', 'check-to-slot');
+      else this.toast(`Voted · ${j.votes} of ${Math.max(j.voteMin, j.rankedVotes + 1)} votes it needs to become the ranked chart`, 'ok', 'check-to-slot');
+    } catch (e) {
+      this.toast(/before voting/.test(e.message) ? 'Finish a run on this chart first (Play this chart), then vote for it' : `Vote failed: ${e.message}`, 'err');
+    }
+    this._refreshDetail(s.id);
+  }
+
+  _refreshDetail(id) {
+    if (this.screen === 'library' && this.selected?.id === id) this.renderDetail(this.songs.find((x) => x.id === id) || this.selected);
   }
 
   /** Song options → Get lyrics: Whisper on the vocal stem (runs in the background). */
@@ -1173,7 +1299,8 @@ export class UI {
     if (!replay?.events) { this.toast('That replay is not saved', 'err'); return; }
     const [song, audio] = await Promise.all([getSong(replay.songId), getAudio(replay.songId)]);
     if (!song || !audio) { this.toast('The song for this replay is missing', 'err'); return; }
-    if (!song.charts[replay.instrument]?.available) { this.toast('The chart changed since this replay was recorded', 'err'); return; }
+    const now = song.charts[replay.instrument]?.available ? song.charts[replay.instrument].notes[replay.difficulty] || [] : null;
+    if (!now || (replay.chart && (replay.chart.n !== now.length || Math.abs((now[0]?.t ?? 0) - replay.chart.t0) > 0.005))) { this.toast('The chart changed since this replay was recorded', 'err'); return; }
     this.app.engine.unlock();
     this.app.menuMusic(false);
     this.stopPreview();

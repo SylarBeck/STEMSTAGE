@@ -1,6 +1,16 @@
 // Online multiplayer client: room connection (invite code over the internet, or a LAN address), clock sync
 // with the host, lobby state, song download from the host, and live score relay during a match.
-import { getSong, copySongFrom } from '../storage/library.js';
+import { getSong, copySongFrom, refreshSongFrom } from '../storage/library.js';
+
+/**
+ * A song's chart revision: friends keep a copy of the host's song, so when the host changes its notes (edits the
+ * chart, re-charts it, swaps in the ranked chart) the copy has to be refreshed before the match.
+ */
+export async function songRev(song) {
+  const body = JSON.stringify([song.charts, song.beats, song.downbeat, song.sub, song.lyrics?.words || null, song.length]);
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body));
+  return [...new Uint8Array(buf)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 /**
  * What the player typed → the room's base URL.
@@ -119,10 +129,10 @@ export class OnlineClient {
         break;
       }
       case 'room': {
-        const prevSong = this.room?.song?.id;
+        const prev = this.room?.song;
         this.room = msg.room;
         this.emit('room', this.room);
-        if (this.room.song && this.room.song.id !== prevSong) this._syncSong(this.room.song);
+        if (this.room.song && (this.room.song.id !== prev?.id || this.room.song.rev !== prev?.rev)) this._syncSong(this.room.song);
         break;
       }
       case 'start': this.remoteLive.clear(); this.matchId = msg.matchId; this.lastResults = null; this.emit('start', msg); break;
@@ -135,12 +145,27 @@ export class OnlineClient {
     }
   }
 
-  /** Make sure the selected song exists locally; download it from the host if not. */
+  /** Make sure the selected song exists locally, with the host's current chart; download it from the host if not. */
   async _syncSong(song) {
     const token = (this.syncing = {});
     const local = await getSong(song.id);
-    if (local) { this.send({ t: 'have', songId: song.id, ok: true }); this.emit('song-ready', local); return; }
+    const current = local && (this.host || !song.rev || (await songRev(local)) === song.rev);
+    if (token !== this.syncing) return;
+    if (current) { this.send({ t: 'have', songId: song.id, ok: true }); this.emit('song-ready', local); return; }
     if (this.host) return;
+    if (local) {
+      // an older copy: the audio is the same (song ids are never reused), only song.json changed
+      try {
+        this.send({ t: 'have', songId: song.id, ok: false, progress: 0.5 });
+        const fresh = await refreshSongFrom(this.baseUrl, song.id);
+        if (token !== this.syncing) return;
+        this.send({ t: 'have', songId: song.id, ok: true });
+        this.emit('song-ready', fresh);
+      } catch (e) {
+        this.emit('error', `Couldn't get the host's chart for "${song.title}": ${e.message}`);
+      }
+      return;
+    }
     try {
       this.send({ t: 'have', songId: song.id, ok: false, progress: 0 });
       let last = 0;

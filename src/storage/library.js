@@ -216,6 +216,24 @@ export async function copySongFrom(baseUrl, id, onProgress) {
   return song;
 }
 
+/** A copied song whose chart changed on the host: fetch its song.json (and cover) again, the stems are the same. */
+export async function refreshSongFrom(baseUrl, id) {
+  if ((await detect()) !== 'folder') throw new Error('Online play needs the songs folder (start the game with play.bat)');
+  const src = `${baseUrl.replace(/\/$/, '')}/songs/${encodeURIComponent(id)}`;
+  const r = await fetch(`${src}/song.json`);
+  if (!r.ok) throw new Error(`song.json ${r.status}`);
+  const song = await r.json();
+  const old = await getSong(id);
+  if (song.cover && (song.cover !== old?.cover || song.coverRev !== old?.coverRev)) {
+    try {
+      const c = await fetch(`${src}/files/${song.cover}`);
+      if (c.ok) await fetch(`${songPath(id)}/files/${song.cover}?name=${encodeURIComponent(folderHint(song))}`, { method: 'PUT', body: await c.arrayBuffer() });
+    } catch { /* optional */ }
+  }
+  await saveSongJson(song);
+  return song;
+}
+
 // ---------------------------------------------------------------- profiles + play history (data folder)
 const DATA = '/api/data';
 const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(d)); } catch { return d; } };

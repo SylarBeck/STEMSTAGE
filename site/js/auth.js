@@ -56,7 +56,11 @@
     .ss-menu a:hover, .ss-menu .ss-item:hover { background: #ece5d3; color: #15120e; }
     .ss-menu small { display: block; color: #a59d8b; padding: 4px 10px 8px; font: 500 15px 'Barlow Condensed', system-ui, sans-serif; }
     .ss-menu hr { border: 0; border-top: 1px solid rgba(236,229,211,0.12); margin: 6px 0; }
-    @media (max-width: 999px) { .ss-auth .ss-name { display: none; } .ss-auth > button.me { padding: 3px; } }`;
+    @media (max-width: 999px) {
+      .ss-auth .ss-name { display: none; } .ss-auth > button.me { padding: 3px; }
+      /* phones: the avatar sits mid-bar, so a menu hung off it would run off the left edge. Drop it full width under the nav instead */
+      .ss-menu { position: fixed; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); top: calc(var(--nav-h, 60px) + env(safe-area-inset-top) + 6px); width: auto; max-height: calc(100svh - var(--nav-h, 60px) - 24px); overflow-y: auto; }
+    }`;
   document.head.appendChild(style);
 
   const box = document.createElement('div');
@@ -81,8 +85,13 @@
         <hr><button class="ss-item" type="button" data-out><i class="fa-solid fa-right-from-bracket"></i> Log out</button>
       </div>`;
     const menu = box.querySelector('.ss-menu');
-    box.querySelector('button.me').onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; };
+    box.querySelector('button.me').onclick = (e) => {
+      e.stopPropagation();
+      menu.hidden = !menu.hidden;
+      if (!menu.hidden) document.querySelector('.nav.open .menu-btn')?.click(); // one menu open at a time
+    };
     document.addEventListener('click', (e) => { if (!box.contains(e.target)) menu.hidden = true; });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') menu.hidden = true; });
     box.querySelector('[data-out]').onclick = () => { forget(); location.reload(); };
   }
 

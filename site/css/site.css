@@ -48,6 +48,7 @@ h1, h2, h3 { margin: 0; font-weight: 400; }
 .h-display { font-family: var(--display); text-transform: uppercase; line-height: 0.98; letter-spacing: 0.01em; }
 h2.h-display { font-size: clamp(38px, 9vw, 64px); }
 .kicker { display: inline-block; font-family: var(--body); font-weight: 800; font-size: 15px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold); margin-bottom: 10px; }
+.stamp.mini { font-size: 11px; letter-spacing: 0.14em; border-width: 1.5px; padding: 0 5px; color: var(--gold); transform: rotate(-2deg); vertical-align: 2px; margin-left: 6px; white-space: nowrap; }
 .stamp { display: inline-block; font-family: var(--body); font-weight: 800; font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--red); border: 2.5px solid currentColor; padding: 1px 8px 0; transform: rotate(-3deg); line-height: 1.35; }
 .scrawl { font-family: var(--hand); font-weight: 400; color: var(--gold); display: inline-block; transform: rotate(-2.5deg); }
 .lead { color: #d4ccb9; font-size: 20px; max-width: 680px; margin: 14px 0 0; }

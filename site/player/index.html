@@ -146,8 +146,8 @@
             ${(j.best || []).map((r) => {
               const part = `<i class="fa-solid ${INST[r.instrument] || 'fa-music'}"></i> ${esc(r.instrument)} · ${esc(r.difficulty)}`;
               const st5 = `${stars(r.stars)}${r.fc ? '<i class="fa-solid fa-gem gem" title="Full combo"></i>' : ''}`;
-              return `<tr><td>${esc(r.song.title)}<small>${esc(r.song.artist || '')}</small><small class="narrow-only">${part}</small></td><td class="wide-only" style="white-space:nowrap">${part}</td>
-              <td class="num"><a href="../leaderboard/?${new URLSearchParams({ song: r.song.key, inst: r.instrument, diff: r.difficulty })}">${n(r.score)}</a><small class="narrow-only">${st5}</small></td><td class="wide-only">${st5}</td></tr>`;
+              return `<tr><td>${esc(r.song.title)}${r.ranked ? '<span class="stamp mini">Ranked</span>' : ''}<small>${esc(r.song.artist || '')}</small><small class="narrow-only">${part}</small></td><td class="wide-only" style="white-space:nowrap">${part}</td>
+              <td class="num"><a href="../leaderboard/?${new URLSearchParams({ song: r.song.key, inst: r.instrument, diff: r.difficulty, ...(r.chart && !r.ranked ? { chart: r.chart } : {}) })}">${n(r.score)}</a><small class="narrow-only">${st5}</small></td><td class="wide-only">${st5}</td></tr>`;
             }).join('') || '<tr><td colspan="4" class="muted">No world runs yet.</td></tr>'}
           </table></section>
           <section class="panel"><h2><i class="fa-solid fa-guitar"></i> Instruments</h2><table class="table">

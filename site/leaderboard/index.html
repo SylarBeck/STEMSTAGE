@@ -29,8 +29,18 @@
     .panel h2 { font-family: var(--display); font-size: 28px; line-height: 1.05; text-transform: uppercase; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
     .panel h2 i { color: var(--gold); font-size: 22px; }
     .filters { display: grid; gap: 8px; margin-bottom: 14px; }
-    .filters select { width: 100%; }
-    @media (min-width: 560px) { .filters { grid-template-columns: 2fr 1fr 1fr; } }
+    .filters select { width: 100%; min-width: 0; }
+    .filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .filters #song, .filters #chart { grid-column: 1 / -1; }
+    @media (min-width: 760px) { .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } .filters #chart { grid-column: auto; } }
+    .board-note { color: var(--dim); font-size: 16px; margin: 12px 0 0; }
+    .charts { list-style: none; margin: 14px 0 0; padding: 0; }
+    .charts li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .charts li b { font-weight: 800; }
+    .charts li small { color: var(--dim); font-size: 15px; }
+    .charts button { all: unset; cursor: pointer; font-weight: 800; color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+    .charts button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+    #charts h3 { font-family: var(--body); font-weight: 800; font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); margin: 22px 0 0; }
     .recent { list-style: none; margin: 0; padding: 0; }
     .recent li { padding: 11px 0; border-bottom: 1px solid var(--line); }
     .recent li:first-child { border-top: 2px solid var(--line-2); }
@@ -65,7 +75,7 @@
     <div class="wrap">
       <h1 class="torn">World leaderboard</h1>
       <div class="scrawl">the best on every stage</div>
-      <p>Runs from every STEMSTAGE player who's signed in to a profile. Everyone who imported the same song plays for the same board.</p>
+      <p>Runs from every STEMSTAGE player who's signed in to a profile. Every import makes its own AI chart, so each song part has one <b>ranked chart</b>: the game downloads it and lines it up with your own recording, and everyone on a ranked board played the same notes. Players can vote a better chart in.</p>
     </div>
   </header>
 
@@ -76,14 +86,17 @@
         <select id="song" aria-label="Song"><option>Loading songs…</option></select>
         <select id="inst" aria-label="Instrument"><option value="guitar">Guitar</option><option value="bass">Bass</option><option value="drums">Drums</option><option value="keys">Keys</option><option value="vocals">Vocals</option></select>
         <select id="diff" aria-label="Difficulty"><option value="expert">Expert</option><option value="hard">Hard</option><option value="medium">Medium</option><option value="easy">Easy</option></select>
+        <select id="chart" aria-label="Chart"><option value="ranked">Ranked chart</option><option value="all">All charts (for fun: charts differ)</option></select>
       </div>
       <table class="table" id="board"><tr><td class="muted">Loading…</td></tr></table>
+      <p class="board-note" id="board-note"></p>
+      <div id="charts"></div>
     </section>
     <div class="side">
       <section class="panel"><h2><i class="fa-solid fa-crown"></i> Top players</h2><table class="table" id="players"><tr><td class="muted">Loading…</td></tr></table></section>
       <section class="panel"><h2><i class="fa-solid fa-bolt"></i> Latest records</h2><ul class="recent" id="recent"><li class="muted">Loading…</li></ul></section>
     </div>
-    <p class="api">Build on it: the leaderboard is a public API at <code>https://api.stemstage.varconstint.com/v1/</code> (<code>leaderboard</code>, <code>players</code>, <code>songs</code>, <code>recent</code>). JSON with CORS, or JSONP with <code>?callback=yourFunction</code>. Docs: <a href="https://github.com/SylarBeck/STEMSTAGE/wiki/Leaderboard-API">wiki → Leaderboard API</a>.</p>
+    <p class="api">Build on it: the leaderboard is a public API at <code>https://api.stemstage.varconstint.com/v1/</code> (<code>leaderboard</code>, <code>players</code>, <code>songs</code>, <code>recent</code>, <code>charts</code>). JSON with CORS, or JSONP with <code>?callback=yourFunction</code>. Docs: <a href="https://github.com/SylarBeck/STEMSTAGE/wiki/Leaderboard-API">wiki → Leaderboard API</a>.</p>
   </main>
 
   <footer>
@@ -110,17 +123,46 @@
     const params = new URLSearchParams(location.search);
     if (params.get('inst')) $('inst').value = params.get('inst');
     if (params.get('diff')) $('diff').value = params.get('diff');
+    const wantChart = params.get('chart');
+    const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    const NOTES = {
+      ranked: 'Runs on the ranked chart: everyone here played the same notes.',
+      unranked: 'No ranked chart yet: these runs were played before ranked charts, each on its own import’s chart.',
+      all: 'Everyone’s best on any chart. Charts differ, so this is for fun: the ranked board is the one that counts.',
+      chart: 'Runs on one uploaded chart (not the ranked one).',
+    };
+
+    // the charts players uploaded for this song part: pick one to see its board
+    async function charts(song, inst) {
+      const box = $('charts');
+      box.innerHTML = '';
+      let c;
+      try { c = await get('charts', { song, instrument: inst }); } catch { return; }
+      const keep = $('chart').value;
+      $('chart').innerHTML = '<option value="ranked">Ranked chart</option><option value="all">All charts (for fun: charts differ)</option>'
+        + c.rows.filter((r) => !r.ranked).map((r) => `<option value="${esc(r.id)}">Chart by ${esc(r.uploader || 'a player')} (${plural(r.players, 'player')})</option>`).join('');
+      $('chart').value = [...$('chart').options].some((o) => o.value === keep) ? keep : 'ranked';
+      if (!c.rows.length) return;
+      box.innerHTML = `<h3>Charts for this part</h3><ul class="charts">${c.rows.map((r) => `<li><button type="button" data-chart="${r.ranked ? 'ranked' : esc(r.id)}">Chart by ${esc(r.uploader || 'a player')}</button>${r.ranked ? '<span class="stamp mini">Ranked</span>' : ''}${r.edited ? '<small>hand-edited</small>' : ''}
+        <small>${plural(r.votes, 'vote')} · ${plural(r.players, 'player')} · ${r.notes} expert notes</small></li>`).join('')}</ul>
+        <p class="board-note">A chart needs ${c.voteMin} votes, and more than the ranked chart has, to replace it. Vote in the game: Song options → World charts.</p>`;
+      box.querySelectorAll('[data-chart]').forEach((b) => b.addEventListener('click', () => { $('chart').value = b.dataset.chart; board(false); }));
+    }
 
     // on a phone the accuracy and streak columns fold away and the stars sit under the score
-    async function board() {
+    async function board(reloadCharts = true) {
       const song = $('song').value;
       if (!song) { $('board').innerHTML = '<tr><td class="muted">No scores yet — play a song in STEMSTAGE while signed in to a profile.</td></tr>'; return; }
-      history.replaceState(null, '', `?${new URLSearchParams({ song, inst: $('inst').value, diff: $('diff').value, ...(API === localApi ? { api: localApi } : {}) })}`);
+      const chart = $('chart').value;
+      history.replaceState(null, '', `?${new URLSearchParams({ song, inst: $('inst').value, diff: $('diff').value, ...(chart !== 'ranked' ? { chart } : {}), ...(API === localApi ? { api: localApi } : {}) })}`);
       $('board').innerHTML = '<tr><td class="muted">Loading…</td></tr>';
+      $('board-note').textContent = '';
+      if (reloadCharts) charts(song, $('inst').value);
       try {
-        const b = await get('leaderboard', { song, instrument: $('inst').value, difficulty: $('diff').value, limit: 100 });
+        const b = await get('leaderboard', { song, instrument: $('inst').value, difficulty: $('diff').value, limit: 100, chart });
+        $('board-note').textContent = NOTES[b.mode] || '';
         $('board').innerHTML = '<tr><th>#</th><th>Player</th><th class="num">Score</th><th class="wide-only">Stars</th><th class="num wide-only">Acc.</th><th class="num wide-only">Streak</th></tr>' + (b.rows.map((r, i) => `
-          <tr class="${i === 0 ? 'top1' : ''}" data-player="${esc(r.playerId)}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a></td>
+          <tr class="${i === 0 ? 'top1' : ''}" data-player="${esc(r.playerId)}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a>${b.mode === 'all' && r.ranked ? '<span class="stamp mini">Ranked</span>' : ''}</td>
           <td class="num">${r.score.toLocaleString()}<small class="narrow-only">${stars(r.stars)}${r.fc ? '<i class="fa-solid fa-gem gem" title="Full combo"></i>' : ''}</small></td>
           <td class="wide-only">${stars(r.stars)}${r.fc ? '<i class="fa-solid fa-gem gem" title="Full combo"></i>' : ''}</td><td class="num wide-only">${Math.round(r.accuracy * 100)}%</td><td class="num wide-only">${r.maxStreak}</td></tr>`).join('')
           || '<tr><td colspan="6" class="muted">Nobody has played this part yet. Be the first!</td></tr>');
@@ -130,9 +172,12 @@
     get('songs', { limit: 500 }).then((s) => {
       $('song').innerHTML = s.rows.map((x) => `<option value="${esc(x.key)}">${esc(x.title)}${x.artist ? ` — ${esc(x.artist)}` : ''} (${x.entries})</option>`).join('') || '<option value="">No songs yet</option>';
       if (params.get('song') && s.rows.some((x) => x.key === params.get('song'))) $('song').value = params.get('song');
+      if (wantChart) { if (![...$('chart').options].some((o) => o.value === wantChart)) $('chart').add(new Option('Chart', wantChart)); $('chart').value = wantChart; }
       board();
     }).catch(() => { $('song').innerHTML = '<option value="">Unavailable</option>'; fail($('board'), 'The leaderboard'); });
-    ['song', 'inst', 'diff'].forEach((id) => $(id).addEventListener('change', board));
+    ['song', 'inst'].forEach((id) => $(id).addEventListener('change', () => { $('chart').value = 'ranked'; board(); }));
+    $('diff').addEventListener('change', () => board(false));
+    $('chart').addEventListener('change', () => board(false));
 
     // logged in with Discord: highlight your own rows (tables re-render, so keep watching)
     let mine = new Set();
@@ -147,7 +192,7 @@
     }).catch(() => fail($('players'), 'Top players'));
 
     get('recent', { limit: 12 }).then((r) => {
-      $('recent').innerHTML = r.rows.map((x) => `<li data-player="${esc(x.playerId)}"><a class="pl" href="../player/?id=${encodeURIComponent(x.playerId)}">${av(x)}${esc(x.player)}</a> · <span class="num">${x.score.toLocaleString()}</span> ${stars(x.stars)}
+      $('recent').innerHTML = r.rows.map((x) => `<li data-player="${esc(x.playerId)}"><a class="pl" href="../player/?id=${encodeURIComponent(x.playerId)}">${av(x)}${esc(x.player)}</a> · <span class="num">${x.score.toLocaleString()}</span> ${stars(x.stars)}${x.ranked ? '<span class="stamp mini">Ranked</span>' : ''}
         <small>${esc(x.song.title)}${x.song.artist ? ` — ${esc(x.song.artist)}` : ''} · ${esc(x.instrument)} ${esc(x.difficulty)} · ${ago(x.date)}</small></li>`).join('') || '<li class="muted">No runs yet.</li>';
     }).catch(() => { $('recent').innerHTML = '<li class="muted">Latest records can\'t be loaded right now.</li>'; });
   </script>

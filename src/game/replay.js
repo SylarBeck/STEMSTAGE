@@ -75,6 +75,7 @@ export const currentRules = () => ({
 });
 
 export function buildReplay(song, player, recorder, result) {
+  const notes = song.charts?.[result.instrument]?.notes?.[result.difficulty] || [];
   return {
     v: 1,
     id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
@@ -83,6 +84,7 @@ export function buildReplay(song, player, recorder, result) {
     profileId: result.profileId || null, name: result.name, color: result.color,
     score: result.score, stars: result.stars, accuracy: +result.accuracy.toFixed(4), fc: !result.failed && result.miss === 0 && result.total > 0,
     failed: !!result.failed, maxStreak: result.maxStreak, date: Date.now(), rules: player.rules,
+    chart: { n: notes.length, t0: notes[0]?.t ?? 0 }, // to tell when the chart changed since (an edit, or a ranked chart swapped in)
     events: recorder.events, timeline: recorder.timeline,
   };
 }

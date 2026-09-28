@@ -1,6 +1,6 @@
 // Online screen: host (invite code over the internet, or LAN) / join, lobby (players, instruments, ready),
 // song selection, chat, match start.
-import { online, hostInfo, startHosting, stopHosting, inviteCode } from '../net/online.js';
+import { online, hostInfo, startHosting, stopHosting, inviteCode, songRev } from '../net/online.js';
 import { profiles, PROFILE_COLORS } from '../profile/profiles.js';
 import { getSong, getAudio, coverUrl } from '../storage/library.js';
 import { discord, inviteLink } from '../net/discord.js';
@@ -294,7 +294,7 @@ export function installOnline(ui) {
   /** Called from the setlist when the host picks a song for the room. */
   function selectForRoom(song) {
     const instruments = INSTS.filter((i) => song.charts[i]?.available);
-    online.select({ id: song.id, title: song.title, artist: song.artist, duration: song.duration, instruments });
+    songRev(song).then((rev) => online.select({ id: song.id, title: song.title, artist: song.artist, duration: song.duration, instruments, rev }));
     ui.mode = 'solo';
     ui.show('online');
   }
