@@ -6,6 +6,8 @@ import { FIVE_COLORS, DRUM_COLORS } from './highway.js';
 import { currentRules } from './replay.js';
 
 export const WINDOWS = { perfect: 0.035, great: 0.07, good: 0.115 };
+// Pro mode: tighter timing (and no assists, no no-fail, overstrums count: see replay.js currentRules)
+export const PRO_WINDOWS = { perfect: 0.025, great: 0.05, good: 0.08 };
 export const ACCENT = { guitar: 0xe0432f, bass: 0x3b7fd6, drums: 0xeea02a, keys: 0x9a6ad8, vocals: 0x6cbf46 };
 export const PLAYER_COLORS = ['#e2432f', '#3f86e0', '#f0b429', '#6cbf46'];
 const JUDGE_COLOR = { perfect: '#f6c945', great: '#ece5d3', good: '#b9ae97', miss: '#e5402f' };
@@ -33,6 +35,7 @@ export class Player {
     this.dsOwner = false;
     this.lefty = cfg.lefty ?? settings.leftyFlip;
     this.rules = cfg.rules || currentRules(); // judgement rules (a replay keeps the ones it was recorded with)
+    this.win = this.rules.pro ? PRO_WINDOWS : WINDOWS;
     this.replayer = cfg.replayer || null;
   }
 
@@ -139,8 +142,8 @@ export class Player {
     for (let k = p; k < list.length; k++) {
       const n = list[k];
       if (n.judged) continue;
-      if (n.t - t > WINDOWS.good) break;
-      if (t - n.t <= WINDOWS.good) { this.hit(n, t - n.t); return; }
+      if (n.t - t > this.win.good) break;
+      if (t - n.t <= this.win.good) { this.hit(n, t - n.t); return; }
     }
     this.ghost(lane, t);
   }
@@ -155,8 +158,8 @@ export class Player {
     for (let k = this.gptr; k < this.groups.length; k++) {
       const g = this.groups[k];
       if (g.judged) continue;
-      if (g.t - t > WINDOWS.good) return null;
-      if (t - g.t <= WINDOWS.good) return g;
+      if (g.t - t > this.win.good) return null;
+      if (t - g.t <= this.win.good) return g;
     }
     return null;
   }
@@ -213,7 +216,7 @@ export class Player {
   // ---------------------------------------------------------------- judgement
   hit(n, delta) {
     const ad = Math.abs(delta);
-    const j = ad <= WINDOWS.perfect ? 'perfect' : ad <= WINDOWS.great ? 'great' : 'good';
+    const j = ad <= this.win.perfect ? 'perfect' : ad <= this.win.great ? 'great' : 'good';
     n.hit = n.judged = true;
     if (n.group && n.group.notes.every((x) => x.judged)) n.group.judged = true;
     this.stats[j]++;
@@ -412,7 +415,7 @@ export class Player {
       for (let lane = 0; lane < 5; lane++) {
         const list = this.laneNotes[lane];
         let p = this.ptr[lane];
-        while (p < list.length && (list[p].judged || list[p].t < t - WINDOWS.good)) {
+        while (p < list.length && (list[p].judged || list[p].t < t - this.win.good)) {
           if (!list[p].judged) this.miss(list[p]);
           p++;
         }
@@ -468,7 +471,7 @@ export class Player {
     return {
       index: this.index, name: this.cfg.name, color: this.cfg.color || PLAYER_COLORS[this.index], device: this.cfg.device, profileId: this.cfg.profileId || null,
       instrument: this.inst, difficulty: this.diff, score: Math.floor(this.score), stars, gold, accuracy, hits, total,
-      maxStreak: this.maxStreak, ...this.stats, odActivations: this.odActivations, failed: this.failed, strum: this.strum, assist: this.assisted,
+      maxStreak: this.maxStreak, ...this.stats, odActivations: this.odActivations, failed: this.failed, strum: this.strum, assist: this.assisted, pro: !!this.rules.pro,
     };
   }
 }

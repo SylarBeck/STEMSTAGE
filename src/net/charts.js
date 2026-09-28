@@ -126,9 +126,10 @@ async function applyChart(song, inst, got, offset) {
   const part = song.charts[inst];
   // the player's chart stays in part.own; a download they edited counts as theirs now
   const untouched = part.world && (await partChart(inst, part)).downloaded;
-  const own = untouched ? part.own : { notes: part.notes, phrases: part.phrases, edited: part.edited, aiNotes: part.aiNotes, aiPhrases: part.aiPhrases };
+  const own = untouched ? part.own : { notes: part.notes, phrases: part.phrases, edited: part.edited, aiNotes: part.aiNotes, aiPhrases: part.aiPhrases, harmonies: part.harmonies };
   const { notes, phrases } = fromWire(got.chart, offset, song);
   const next = { available: notes.expert.length > 0 || DIFFICULTIES.some((d) => notes[d].length), reason: '', notes, phrases, own };
+  if (part.harmonies) next.harmonies = part.harmonies; // vocal harmonies come from this recording: they stay
   const hash = await chartId(canonicalChart(wireChart(inst, next)));
   next.world = { id: got.id, offset: +offset.toFixed(4), hash, uploader: got.uploader || null, edited: !!got.edited, at: Date.now() };
   song.charts[inst] = next;

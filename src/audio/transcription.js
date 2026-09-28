@@ -119,3 +119,48 @@ export function notesFromEvents(inst, events, grid, assignLanes, fps) {
   }
   return out;
 }
+
+/**
+ * Vocal harmonies from the AI's note events ([start, end, midi, amplitude]). The lead is the loudest voice at each
+ * onset (the vocal chart takes it the same way); a note sung with a lead note, a third to an octave away, is a
+ * harmony: above the lead it goes to part 2, below it to part 3 (one voice per part: overlaps keep the louder).
+ * A part with too few notes to be a real harmony line comes back empty.
+ * → [part2, part3], each [{ t, len, m }] in time order
+ */
+export function harmonyParts(events) {
+  const sorted = events.slice().sort((a, b) => a[0] - b[0] || b[3] - a[3]);
+  const lead = [];
+  for (const ev of sorted) {
+    const g = lead[lead.length - 1];
+    if (g && ev[0] - g.s < 0.035) { if (ev[3] > g.a) Object.assign(g, { s: ev[0], e: ev[1], p: ev[2], a: ev[3], ev }); continue; }
+    lead.push({ s: ev[0], e: ev[1], p: ev[2], a: ev[3], ev });
+  }
+  const isLead = new Set(lead.map((l) => l.ev));
+  const parts = [[], []];
+  let li = 0;
+  for (const ev of sorted) {
+    if (isLead.has(ev)) continue;
+    const [s, e, p, a] = ev;
+    if (e - s < 0.12 || a < 0.2) continue;
+    while (li < lead.length && lead[li].e < s) li++;
+    let best = null, bestOv = 0;
+    for (let k = li; k < lead.length && lead[k].s < e; k++) {
+      const ov = Math.min(e, lead[k].e) - Math.max(s, lead[k].s);
+      if (ov > bestOv) { bestOv = ov; best = lead[k]; }
+    }
+    if (!best || bestOv < 0.5 * Math.min(e - s, best.e - best.s)) continue;
+    const iv = p - best.p;
+    if (Math.abs(iv) < 3 || Math.abs(iv) > 12 || Math.abs(iv) === 12) continue; // unisons and octave doubling aren't harmonies
+    parts[iv > 0 ? 0 : 1].push({ t: +s.toFixed(3), len: +Math.max(0.1, e - s).toFixed(3), m: p, a });
+  }
+  const enough = (l) => l.length >= Math.max(12, lead.length * 0.06);
+  return parts.map((list) => {
+    const keep = [];
+    for (const n of list.sort((x, y) => x.t - y.t)) {
+      const prev = keep[keep.length - 1];
+      if (prev && n.t < prev.t + prev.len - 0.03) { if (n.a > prev.a) keep[keep.length - 1] = n; continue; }
+      keep.push(n);
+    }
+    return enough(keep) ? keep.map(({ t, len, m }) => ({ t, len, m })) : [];
+  });
+}

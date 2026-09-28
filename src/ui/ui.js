@@ -30,6 +30,7 @@ import { worldCharts, partChart, prepareRankedCharts, ensureFingerprint, useWorl
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const VOCAL_PARTS = [[0, 'Lead'], [1, 'Harmony 2'], [2, 'Harmony 3']];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
@@ -68,7 +69,8 @@ const DIFFS = ['easy', 'medium', 'hard', 'expert'];
 const SETTINGS_SCHEMA = [
   { group: 'Gameplay' },
   { key: 'noteSpeed', label: 'Note speed', desc: 'How fast the highway scrolls', type: 'range', min: 1, max: 10, step: 1 },
-  { key: 'noFail', label: 'No fail', desc: 'Keep playing when the crowd meter empties', type: 'toggle' },
+  { key: 'proMode', label: 'Pro mode', desc: 'Tighter timing (±80 ms to hit, ±25 ms for Perfect), overstrums and wrong frets break your streak, and no assists or no-fail. +25% XP and PRO on your results', type: 'toggle' },
+  { key: 'noFail', label: 'No fail', desc: 'Keep playing when the crowd meter empties (not in Pro mode)', type: 'toggle' },
   { key: 'ghostPenalty', label: 'Ghost-tap penalty', desc: 'Wrong-lane presses / overstrums near notes break your streak (not on drums)', type: 'toggle' },
   { key: 'strumMode', label: 'Strum mode', desc: 'Auto = each controller profile decides (on for guitars). On / Off override every profile', type: 'choice', options: ['auto', 'on', 'off'] },
   { key: 'ghost', label: 'Ghost race', desc: 'Race an earlier run in solo play: your own best, or the top run on this PC', type: 'choice', options: ['off', 'best', 'top'] },
@@ -968,7 +970,7 @@ export class UI {
         return `<div class="opt inst ${i.id === this.instrument ? 'sel' : ''} ${ok ? '' : 'disabled'}" data-val="${i.id}" title="${ok ? `${count} notes` : esc(ch?.reason || '')}"><span class="ico">${i.ico}</span><span>${i.label}</span>${ok ? ratingHtml(rating(ch.notes[this.difficulty])) : ''}</div>`;
       }).join('');
       const tier = s.charts[this.instrument]?.available ? rating(s.charts[this.instrument].notes[this.difficulty]) : 0;
-      $('#pick-tier').textContent = tier ? `— ${TIERS[tier]}` : '';
+      $('#pick-tier').textContent = `${tier ? `— ${TIERS[tier]}` : ''}${settings.proMode ? ' · PRO' : ''}`;
       $('#pick-tier').classList.toggle('max', tier >= 7);
       $('#pick-difficulty').innerHTML = DIFFS.map((df) => {
         const n = s.charts[this.instrument]?.notes?.[df]?.length ?? 0;
@@ -983,6 +985,12 @@ export class UI {
       vw.hidden = this.instrument !== 'vocals';
       $('#pick-vocal').innerHTML = [['mic', `${fa('microphone')} Sing`], ['buttons', `${fa('gamepad')} Buttons`]].map(([v, l]) => `<div class="opt ${settings.vocalMode === v ? 'sel' : ''}" data-val="${v}">${l}${v === 'mic' && !s.lyrics?.words?.length ? '<small>no lyrics yet</small>' : ''}</div>`).join('');
       $$('#pick-vocal .opt').forEach((o) => o.addEventListener('click', () => { settings.vocalMode = o.dataset.val; this.renderDetail(s); }));
+      // vocal harmonies (AI-charted songs): sing the lead or one of the harmony parts
+      const harm = s.charts?.vocals?.harmonies || [];
+      const pw = $('#pick-vpart-wrap');
+      pw.hidden = this.instrument !== 'vocals' || settings.vocalMode !== 'mic' || !harm.some((x) => x?.length);
+      $('#pick-vpart').innerHTML = VOCAL_PARTS.map(([v, l]) => `<div class="opt ${(settings.vocalPart || 0) === v ? 'sel' : ''} ${v && !harm[v - 1]?.length ? 'disabled' : ''}" data-val="${v}">${l}</div>`).join('');
+      $$('#pick-vpart .opt:not(.disabled)').forEach((o) => o.addEventListener('click', () => { settings.vocalPart = +o.dataset.val; this.renderDetail(s); }));
       $$('#pick-difficulty .opt').forEach((o) => o.addEventListener('click', () => { this.difficulty = o.dataset.val; settings.lastDifficulty = this.difficulty; this.renderDetail(s); }));
     }
     const lb = band || pickForRoom ? [] : profiles.leaderboard(s.id, this.instrument, this.difficulty, 3);
@@ -1026,6 +1034,13 @@ export class UI {
     if (this.pickerHooks.some((h) => h(which, d))) return;
     if (which === 'real-mode' && this.selected) { settings.realInstrument = !settings.realInstrument; this.renderDetail(this.selected); return; }
     if (which === 'vocal-mode' && this.selected) { settings.vocalMode = settings.vocalMode === 'mic' ? 'buttons' : 'mic'; this.renderDetail(this.selected); return; }
+    if (which === 'vocal-part' && this.selected) {
+      const harm = this.selected.charts?.vocals?.harmonies || [];
+      const ok = VOCAL_PARTS.map(([v]) => v).filter((v) => !v || harm[v - 1]?.length);
+      settings.vocalPart = ok[(ok.indexOf(settings.vocalPart || 0) + d + ok.length) % ok.length];
+      this.renderDetail(this.selected);
+      return;
+    }
     if (which === 'lib-sort') {
       const i = SORTS.findIndex(([v]) => v === this.sort);
       this.sort = SORTS[(i + d + SORTS.length) % SORTS.length][0];
@@ -1097,7 +1112,7 @@ export class UI {
     } else {
       if (!s.charts[this.instrument]?.available) { this.toast('That instrument has no chart for this song', 'err'); return; }
       const p = profiles.current;
-      cfgs = [{ name: p?.name || 'P1', color: p?.color, profileId: p?.id || null, device: 'any', instrument: this.instrument, difficulty: this.difficulty, strum: this.instrument !== 'drums' && this.strumFor('any'), ...this.deviceCfg('any'), mic: this.instrument === 'vocals' && settings.vocalMode === 'mic', real: this.realMode(this.instrument) }];
+      cfgs = [{ name: p?.name || 'P1', color: p?.color, profileId: p?.id || null, device: 'any', instrument: this.instrument, difficulty: this.difficulty, strum: this.instrument !== 'drums' && this.strumFor('any'), ...this.deviceCfg('any'), mic: this.instrument === 'vocals' && settings.vocalMode === 'mic', part: this.instrument === 'vocals' && settings.vocalMode === 'mic' ? settings.vocalPart || 0 : 0, real: this.realMode(this.instrument) }];
     }
     this.app.engine.unlock();
     this.toast(`Loading ${s.title}...`);
@@ -2038,7 +2053,7 @@ export class UI {
       ? `PRACTICE · ${Math.round(r.practice.speed * 100)}% speed · ${solo.instrument} · ${solo.difficulty}`
       : r.mode === 'online' ? `${r.song.artist} · online ${r.matchMode === 'band' ? 'band' : r.matchMode === 'battle' ? 'battle' : 'versus'} · ${everyone.length} players`
         : band ? `${r.song.artist} · ${r.players.length}-player band${r.failed ? ' · FAILED' : ''}`
-          : `${r.song.artist} · ${solo.instrument} · ${solo.difficulty}${solo.strum ? ' · strum' : ''}${solo.real ? ` · real ${solo.instrument}` : ''}${solo.assist ? ' · assists on (not on leaderboards)' : ''}${r.failed ? ' · FAILED' : ''}`;
+          : `${r.song.artist} · ${solo.instrument}${solo.part ? ` (harmony ${solo.part + 1})` : ''} · ${solo.difficulty}${solo.pro ? ' · PRO' : ''}${solo.strum ? ' · strum' : ''}${solo.real ? ` · real ${solo.instrument}` : ''}${solo.assist ? ' · assists on (not on leaderboards)' : ''}${r.failed ? ' · FAILED' : ''}`;
     const cv = coverUrl(r.song);
     $('#res-cover').style.background = cv ? `url('${cv}') center/cover` : this.art(r.song);
     $('[data-action="retry"]').textContent = r.mode === 'online' ? 'Back to lobby' : r.mode === 'replay' ? 'Watch again' : r.practice ? 'Practice again' : 'Play again';

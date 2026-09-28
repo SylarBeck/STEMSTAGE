@@ -69,7 +69,7 @@ export async function submitRuns(r) {
   if (settings.worldLeaderboard === false || r.practice || r.mode === 'replay') return [];
   const out = [];
   for (const res of r.players || []) {
-    if (!res.profileId || res.assist || res.failed) continue;
+    if (!res.profileId || res.assist || res.failed || res.part) continue; // harmony parts aren't the vocal chart the boards rank
     const p = profiles.byId(res.profileId);
     if (!p) continue;
     const cloud = await identityOf(p);

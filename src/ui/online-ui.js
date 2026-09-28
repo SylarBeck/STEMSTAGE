@@ -353,7 +353,8 @@ export function installOnline(ui) {
     ui.lastPlay = { online: true };
     ui.applyVenue(true);
     ui.applyLooks(msg.lineup.map((r) => ({ instrument: r.instrument, look: r.look, profileId: r.id === online.id ? profiles.current?.id : null })));
-    const cfg = { name: mine.name, color: mine.color, device: 'any', instrument: mine.instrument, difficulty: mine.difficulty, strum: mine.instrument !== 'drums' && ui.strumFor('any'), profileId: profiles.current?.id || null };
+    const mic = mine.instrument === 'vocals' && settings.vocalMode === 'mic';
+    const cfg = { name: mine.name, color: mine.color, device: 'any', instrument: mine.instrument, difficulty: mine.difficulty, strum: mine.instrument !== 'drums' && ui.strumFor('any'), profileId: profiles.current?.id || null, mic, part: mic ? settings.vocalPart || 0 : 0 };
     await app.game.start(song, audio, [cfg], { online: { client: online, lineup: msg.lineup, startAt: msg.startAt, matchId: msg.matchId, mode: msg.mode || 'versus' } });
   }
 
