@@ -59,6 +59,14 @@ canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block
 * { scrollbar-width: none; }
 *::-webkit-scrollbar { display: none; width: 0; height: 0; }
 #vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.7) 100%); }
+.player-debug { position: fixed; top: 14px; right: 18px; z-index: 35; pointer-events: none;
+  padding: 6px 11px; background: rgba(11,10,9,0.82); border-left: 3px solid var(--accent);
+  color: var(--ink); font-family: var(--body); font-size: 15px; font-weight: 800;
+  line-height: 1.45; letter-spacing: 0.04em; font-variant-numeric: tabular-nums;
+  text-align: right; text-shadow: 0 1px 2px #000; }
+body.chrome .player-debug { top: auto; bottom: calc(var(--foot) + 16px); }
+.player-debug .warn { color: var(--gold); }
+.player-debug .bad { color: var(--bad); }
 #scrim { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .4s;
   background: linear-gradient(90deg, rgba(11,10,9,0.93) 0%, rgba(11,10,9,0.7) 42%, rgba(11,10,9,0.28) 75%, rgba(11,10,9,0.45) 100%), linear-gradient(0deg, rgba(11,10,9,0.75), transparent 30%); }
 body.chrome #scrim { opacity: 1; }

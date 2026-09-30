@@ -20,6 +20,8 @@ export const DEFAULTS = {
   venue: 'auto',         // the stage: auto (the arena; tour gigs in their own venue) | garage | club | bar | theater | arena | stadium | festival
   bloom: true,
   cameraShake: true,
+  showFps: false,        // small player-facing performance display
+  showPing: false,       // online room round-trip time; offline otherwise
   fullscreen: true,      // start fullscreen (desktop app + browser)
   triggerIntensity: 1.0, // 0..1.5
   rumbleIntensity: 1.0,  // 0..1.5

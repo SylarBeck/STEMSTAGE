@@ -182,6 +182,7 @@ export class OnlineClient {
           clearTimeout(timer);
           this.id = msg.id; this.host = msg.host; this.room = msg.room;
           this.bestRtt = Infinity;
+          this.rtt = null;
           this._ping(); setTimeout(() => this._ping(), 300); setTimeout(() => this._ping(), 700);
           this.pingTimer = setInterval(() => this._ping(), 3000);
           resolve(this);
@@ -281,6 +282,7 @@ export class OnlineClient {
     clearInterval(this.pingTimer);
     if (this.ws) { const ws = this.ws; this.ws = null; try { ws.close(); } catch { /* closed */ } }
     this.room = null; this.id = null; this.host = false;
+    this.rtt = null;
   }
 }
 
