@@ -110,7 +110,8 @@ const SETTINGS_SCHEMA = [
   { key: 'rumbleIntensity', label: 'Haptic strength', desc: 'DualSense haptics and gamepad rumble', type: 'range', min: 0, max: 1.5, step: 0.1, fmt: 'pct' },
   { key: 'lightbar', label: 'Lightbar effects', type: 'toggle' },
   { key: 'dualsenseAudio', label: 'DualSense stem audio', desc: 'USB: play your stem through your controller speaker and drive its audio haptics', type: 'toggle' },
-  { action: 'chooseDualSenseAudio', label: 'Assign DualSense audio output', desc: 'Pick the USB audio device for each connected controller' },
+  { action: 'chooseDualSenseAudio', label: 'Assign DualSense audio output', desc: 'Pick the USB output for each controller. Your browser may ask for microphone permission to show audio device names; the mic is stopped immediately.' },
+  { action: 'testDualSenseAudio', label: 'Test DualSense speaker and haptics', desc: 'Play a short tone and audio pulse through the assigned USB controller' },
   { action: 'openControllers', label: 'Controller profiles & bindings', desc: 'Per-controller config profiles, rebinding and tests' },
   { key: 'bridgeUrl', label: 'Controller bridge URL', desc: 'The pydualsense bridge that drives DualSense triggers, haptics and lights (npm run bridge)', type: 'text' },
   { action: 'testBridge', label: 'Test controller bridge', desc: 'Show which DualSense controllers the bridge sees' },
@@ -2037,7 +2038,19 @@ export class UI {
       if (!navigator.mediaDevices?.enumerateDevices || !('setSinkId' in AudioContext.prototype)) {
         this.toast('This browser cannot route audio to a selected controller. Try the desktop app or Chromium.', 'err'); return;
       }
-      const outputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput' && d.deviceId && d.deviceId !== 'default');
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      if (!devices.some((d) => d.kind === 'audiooutput' && d.label)) {
+        try {
+          // Chromium hides output IDs and labels until this origin has media-device permission.
+          // Stop the microphone immediately: it is only used to reveal the controller output.
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach((track) => track.stop());
+          devices = await navigator.mediaDevices.enumerateDevices();
+        } catch (error) {
+          this.toast(`Audio outputs are hidden until microphone permission is granted: ${error.message}`, 'err'); return;
+        }
+      }
+      const outputs = devices.filter((d) => d.kind === 'audiooutput' && d.deviceId && d.deviceId !== 'default');
       if (!outputs.length) { this.toast('No USB audio outputs found. Check that the controller audio device is enabled in your system.', 'err'); return; }
       this.openSheet({ title: 'Controller audio', sub: 'Choose a wired controller', items: pads.map((pad) => ({
         label: `${pad.label} · player ${pad.slot + 1}`, icon: 'gamepad',
@@ -2046,6 +2059,19 @@ export class UI {
           ...outputs.map((output) => ({ label: output.label || `Audio output ${output.deviceId.slice(0, 8)}`, icon: settings.dualsenseAudioSinks?.[pad.slot] === output.deviceId ? 'check' : 'volume-high',
             run: () => { settings.dualsenseAudioSinks = { ...settings.dualsenseAudioSinks, [pad.slot]: output.deviceId }; this.toast(`Player ${pad.slot + 1} controller audio assigned`, 'ok'); } })),
         ] }),
+      })) });
+    }
+    if (a === 'testDualSenseAudio') {
+      const pads = this.app.ds.devices.filter((d) => d.connected && !d.bt);
+      if (!pads.length) { this.toast('Connect a DualSense by USB first', 'err'); return; }
+      this.openSheet({ title: 'Test controller audio', sub: 'Choose a wired controller', items: pads.map((pad) => ({
+        label: `${pad.label} · player ${pad.slot + 1}`, icon: 'gamepad',
+        run: async () => {
+          try {
+            await this.app.engine.testControllerAudio(pad, settings.dualsenseAudioSinks?.[pad.slot]);
+            this.toast('Controller audio test finished', 'ok');
+          } catch (error) { this.toast(`Controller audio test failed: ${error.message}`, 'err'); }
+        },
       })) });
     }
     if (a === 'testBridge') {

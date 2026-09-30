@@ -129,7 +129,7 @@ export class AudioEngine {
     }
   }
 
-  /** One four-channel USB output per local player: front pair = speaker, rear pair = voice-coil haptics. */
+  /** One four-channel USB output per local player: front-right = speaker, rear pair = voice-coil haptics. */
   async configureControllerAudio(players) {
     this.closeControllerAudio();
     if (!settings.dualsenseAudio || !('setSinkId' in AudioContext.prototype)) return;
@@ -158,9 +158,12 @@ export class AudioEngine {
         level.gain.value = 1;
         const split = ctx.createChannelSplitter(2);
         level.connect(split);
-        const speaker = ctx.createGain(); speaker.gain.value = 0.28;
-        split.connect(speaker, 0); split.connect(speaker, 1);
-        speaker.connect(merger, 0, 0); speaker.connect(merger, 0, 1);
+        // The DualSense's internal speaker takes front-right, so downmix both
+        // stem channels there. Front-left is the headset channel.
+        const monoL = ctx.createGain(); monoL.gain.value = 0.35;
+        const monoR = ctx.createGain(); monoR.gain.value = 0.35;
+        split.connect(monoL, 0); split.connect(monoR, 1);
+        monoL.connect(merger, 0, 1); monoR.connect(merger, 0, 1);
         const haptics = [];
         for (let channel = 0; channel < 2; channel++) {
           const highpass = ctx.createBiquadFilter(); highpass.type = 'highpass'; highpass.frequency.value = 35;
@@ -201,11 +204,42 @@ export class AudioEngine {
 
   closeControllerAudio() {
     for (const output of this.controllerOutputs || []) {
-      if (output.device.audioHapticPulse) output.device.audioHapticPulse = null;
+      if (output.device.audioHapticPulse) { output.device.audioHapticPulse = null; output.device.flush(true); }
       try { output.source?.stop(); } catch { /* already stopped */ }
       output.ctx.close().catch(() => {});
     }
     this.controllerOutputs = [];
+  }
+
+  /** Short speaker and audio-haptic check from Settings, before a song is loaded. */
+  async testControllerAudio(device, sinkId) {
+    if (!sinkId) throw new Error('Assign this controller an audio output first');
+    const ctx = new AudioContext({ latencyHint: 'interactive' });
+    const priorPulse = device.audioHapticPulse;
+    try {
+      await ctx.setSinkId(sinkId);
+      if (ctx.destination.maxChannelCount < 4) throw new Error('Selected output must expose four channels');
+      ctx.destination.channelCount = 4;
+      const merger = ctx.createChannelMerger(4);
+      merger.connect(ctx.destination);
+      const tone = ctx.createOscillator(); tone.frequency.value = 660;
+      const speaker = ctx.createGain(); speaker.gain.value = 0.14;
+      tone.connect(speaker).connect(merger, 0, 1);
+      const pulse = ctx.createOscillator(); pulse.frequency.value = 110;
+      const haptic = ctx.createGain(); haptic.gain.value = 0.13;
+      pulse.connect(haptic);
+      haptic.connect(merger, 0, 2); haptic.connect(merger, 0, 3);
+      device.audioHapticPulse = () => {};
+      device.flush(true);
+      await ctx.resume();
+      tone.start(); pulse.start();
+      tone.stop(ctx.currentTime + 0.7); pulse.stop(ctx.currentTime + 0.7);
+      await new Promise((resolve) => { tone.onended = resolve; });
+    } finally {
+      device.audioHapticPulse = priorPulse;
+      device.flush(true);
+      await ctx.close();
+    }
   }
 
   /** Start playback so that song time `fromTime` (may be negative = lead-in) is heard now. */

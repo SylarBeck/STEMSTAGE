@@ -56,6 +56,18 @@ log = logging.getLogger("bridge")
 APP_ORIGIN = re.compile(r"^(https?://(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?|tauri://localhost|https?://tauri\.localhost)$", re.I)
 
 
+def enable_controller_audio(report: list[int]) -> None:
+    """Enable the wired controller's mono speaker and native audio haptics."""
+    # pydualsense otherwise sends zero volume/path bytes on every keep-alive.
+    # Front-right drives the internal speaker; the rear pair drives the coils.
+    report[1] = 0xFC  # audio/haptic selection; no legacy motor override
+    report[2] = 0xD7  # initialize the controller audio path
+    report[5] = 0x00  # headset off
+    report[6] = 0x64  # internal speaker volume
+    report[7] = 0x40  # microphone volume (preserve a usable level)
+    report[8] = 0x7C  # right front channel -> internal speaker
+
+
 class Pad(pydualsense):
     """pydualsense for one specific controller (pydualsense itself always opens the last one it finds)."""
 
@@ -67,6 +79,7 @@ class Pad(pydualsense):
         self.input_ts = 0.0  # perf_counter() in ms when the newest button/trigger change arrived
         self._out_wake = threading.Event()
         self._writer = None
+        self.audio_enabled = False
         super().__init__()
 
     def readInput(self, inReport) -> None:  # noqa: N802  (pydualsense's name)
@@ -138,7 +151,10 @@ class Pad(pydualsense):
             self._out_wake.clear()
             if not (self.ds_thread and self.connected):
                 break
-            report = bytes(self.prepareReport())
+            report = self.prepareReport()
+            if self.conType == ConnectionType.USB and self.audio_enabled:
+                enable_controller_audio(report)
+            report = bytes(report)
             now = time.perf_counter()
             if report == last and now - last_at < 2.0:
                 continue
@@ -177,6 +193,8 @@ class Pad(pydualsense):
         if isinstance(motor, list) and len(motor) == 2:
             self.leftMotor = max(0, min(255, int(motor[0])))
             self.rightMotor = max(0, min(255, int(motor[1])))
+        if "audio" in msg:
+            self.audio_enabled = bool(msg["audio"]) and self.conType == ConnectionType.USB
         self.kick()
 
     def reset(self) -> None:
@@ -185,6 +203,7 @@ class Pad(pydualsense):
         self.triggerL.forces = [0] * 7
         self.triggerR.forces = [0] * 7
         self.leftMotor = self.rightMotor = 0
+        self.audio_enabled = False
         self.light.playerNumber = PlayerID(0)
         self.kick()
 

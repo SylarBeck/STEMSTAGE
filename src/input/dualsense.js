@@ -166,7 +166,7 @@ export class DualSenseDevice {
     if (!this.connected || (!this.dirty && !force)) return;
     this.dirty = false;
     this.lastSend = performance.now();
-    const ok = this.m.send({ t: 'out', id: this.id, l: this.left, r: this.right, rgb: this.rgb, leds: this.leds, motor: this.motor });
+    const ok = this.m.send({ t: 'out', id: this.id, l: this.left, r: this.right, rgb: this.rgb, leds: this.leds, motor: this.motor, audio: !!this.audioHapticPulse });
     if (ok) { this.sent++; this.lastError = null; } else { this.dirty = true; this.lastError = 'bridge not connected'; }
   }
 }

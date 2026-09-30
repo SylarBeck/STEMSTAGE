@@ -69,7 +69,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: STEMSTAGE v__VERSION__
           releaseBody: |
-            v1.8.8 adds a five-band equalizer with presets, per-player DualSense stem audio and USB audio haptics, and multiplayer ready checks, spectator reconnection, live scores and quick reactions.
+            v1.8.9 fixes wired DualSense speaker playback and USB audio haptics. Controller audio setup now reveals hidden output devices with temporary microphone permission, initializes the speaker path and volume, and provides a speaker/haptics test in Settings. This release also includes the five-band equalizer and multiplayer improvements from v1.8.8.
 
             **Windows:** download `STEMSTAGE_*_x64-setup.exe` and run it.
             **Linux:** `STEMSTAGE_*_amd64.AppImage` (any distro: `chmod +x` and run), or the `.deb` (Ubuntu / Debian) / `.rpm` (Fedora / openSUSE) package.
