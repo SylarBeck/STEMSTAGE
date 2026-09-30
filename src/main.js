@@ -6,6 +6,7 @@ import { Stage } from './game/stage.js';
 import { Renderer } from './game/renderer.js';
 import { Session } from './game/session.js';
 import { Hud } from './ui/hud.js';
+import { Diagnostics } from './ui/diagnostics.js';
 import { UI } from './ui/ui.js';
 import { input } from './input/input.js';
 import { dualsense } from './input/dualsense.js';
@@ -29,6 +30,7 @@ class App {
     this.renderer = new Renderer(document.getElementById('gl'), this.stage, null, settings.quality);
     this.renderer.setQuality(settings.quality, settings.bloom);
     this.hud = new Hud();
+    this.diagnostics = new Diagnostics();
     this.game = new Session({
       engine: this.engine, stage: this.stage, renderer: this.renderer, hud: this.hud, ds: this.ds, input: this.input,
       onEnd: (r) => { this.ui.showResults(r); this.menuMusic(true); },
@@ -164,6 +166,7 @@ class App {
     if (this.game.paused) {
       this.ds.tick(now);
       this.ui.frame();
+      this.diagnostics.frame(now, true);
       requestAnimationFrame((t) => this.frame(t));
       return;
     }
@@ -172,6 +175,7 @@ class App {
     this.ds.tick(now);
     this.ui.frame();
     this.renderer.render(dt);
+    this.diagnostics.frame(now);
     requestAnimationFrame((t) => this.frame(t));
   }
 }
