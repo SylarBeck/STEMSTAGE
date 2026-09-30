@@ -25,6 +25,7 @@ export const DEFAULTS = {
   rumbleIntensity: 1.0,  // 0..1.5
   lightbar: true,
   aiServer: 'http://127.0.0.1:8765',
+  aiEnabled: true,       // desktop: run the AI server; off uses DSP and survives relaunch
   bridgeUrl: 'ws://127.0.0.1:8766', // controller bridge (pydualsense)
   splitter: 'auto',      // auto | ai | dsp
   vocalMode: 'mic',      // mic (sing) | buttons (vocals as a 5-lane chart)

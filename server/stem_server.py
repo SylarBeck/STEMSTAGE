@@ -14,11 +14,13 @@ The browser decodes the audio itself and posts raw float32 PCM, so no ffmpeg is 
   GET    /jobs/<id>/stems/<source>  -> int16 LE planar PCM (channels x length)
   DELETE /jobs/<id>                 -> free the job
   POST   /lyrics                    -> body: float32 LE mono PCM @ 16 kHz (the vocal stem) -> {language, words}
+  POST   /shutdown                  -> stop the local splitter (launcher control only)
 
 If ../dist exists (after `npm run build`) it is also served at /, so this one
 process can host the whole game.
 """
 import json
+import gc
 import mimetypes
 import os
 import re
@@ -50,11 +52,13 @@ MODEL_NAME = os.environ.get("STEMSTAGE_MODEL", "htdemucs_6s")
 SHIFTS = int(os.environ.get("STEMSTAGE_SHIFTS", "1"))
 DIST_DIR = (Path(__file__).resolve().parent.parent / "dist")
 JOB_TTL_SECONDS = 15 * 60
+MODEL_IDLE_SECONDS = max(30, int(os.environ.get("STEMSTAGE_MODEL_IDLE_SECONDS", "180")))
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 GPU_NAME = torch.cuda.get_device_name(0) if DEVICE == "cuda" else None
 
 _model = None
+_model_used_at = None
 _model_lock = threading.Lock()
 _work_lock = threading.Lock()
 _jobs = {}
@@ -66,7 +70,7 @@ def log(*args):
 
 
 def load_model():
-    global _model
+    global _model, _model_used_at
     with _model_lock:
         if _model is None:
             log(f"Loading {MODEL_NAME} on {DEVICE}...")
@@ -74,6 +78,7 @@ def load_model():
             m.eval()
             _model = m
             log(f"Model ready. Sources: {list(m.sources)}")
+        _model_used_at = time.monotonic()
     return _model
 
 
@@ -102,6 +107,7 @@ demucs_apply.tqdm = types.SimpleNamespace(tqdm=_ProgressHook.tqdm)
 
 
 def run_job(job_id, audio, sample_rate):
+    global _model_used_at
     job = _jobs[job_id]
     try:
         with _work_lock:
@@ -173,20 +179,40 @@ def run_job(job_id, audio, sample_rate):
             job["status"] = "done"
             job["message"] = f"Separated in {elapsed:.1f}s" + (" + transcribed" if notes else "")
             log(f"Job {job_id[:8]} done in {elapsed:.1f}s ({audio.shape[1] / sample_rate:.0f}s of audio)")
+            _model_used_at = time.monotonic()
     except Exception as exc:  # report to client instead of dying
         traceback.print_exc()
         job["status"] = "error"
         job["message"] = str(exc)
         _ProgressHook.job = None
+        _model_used_at = time.monotonic()
 
 
 def reap_jobs():
+    global _model, _model_used_at
     while True:
-        time.sleep(60)
+        time.sleep(30)
         now = time.time()
         with _jobs_lock:
             for jid in [j for j, v in _jobs.items() if now - v["created"] > JOB_TTL_SECONDS]:
                 del _jobs[jid]
+        models_loaded = _model is not None or transcribe._model is not None or lyrics._model is not None
+        if models_loaded and _model_used_at is not None and time.monotonic() - _model_used_at >= MODEL_IDLE_SECONDS:
+            if _work_lock.acquire(blocking=False):
+                try:
+                    with _model_lock:
+                        if time.monotonic() - _model_used_at >= MODEL_IDLE_SECONDS:
+                            _model = None
+                            with transcribe._lock:
+                                transcribe._model = None
+                            with lyrics._lock:
+                                lyrics._model = None
+                            gc.collect()
+                            if DEVICE == "cuda":
+                                torch.cuda.empty_cache()
+                            log("Idle AI models unloaded")
+                finally:
+                    _work_lock.release()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -247,6 +273,7 @@ class Handler(BaseHTTPRequestHandler):
         if parts == ["health"]:
             return self._json({
                 "ok": True,
+                "service": "stemstage-ai",
                 "model": MODEL_NAME,
                 "device": DEVICE,
                 "gpu": GPU_NAME,
@@ -305,6 +332,13 @@ class Handler(BaseHTTPRequestHandler):
         why = self._refused()
         if why:
             return self._json({"error": why}, 403)
+        if route == "/shutdown":
+            # Browser pages cannot stop the service. The desktop launcher checks /health first.
+            if self.headers.get("Origin") is not None or self.headers.get("X-STEMSTAGE-Control") != "shutdown":
+                return self._json({"error": "launcher request required"}, 403)
+            self._json({"ok": True})
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            return
         if route == "/transcribe":
             return self._transcribe()
         if route == "/lyrics":
@@ -331,6 +365,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _transcribe(self):
         """POST /transcribe?stem=<name>  body: float32 LE mono PCM, header X-Sample-Rate -> {notes}"""
+        global _model_used_at
         if not transcribe.available():
             return self._json({"error": "basic-pitch is not installed"}, 501)
         try:
@@ -344,9 +379,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": f"bad payload: {exc}"}, 400)
         try:
             with _work_lock:
+                _model_used_at = time.monotonic()
                 transcribe.load()
                 t0 = time.time()
                 notes = transcribe.transcribe_array(mono, sr, stem)
+                _model_used_at = time.monotonic()
             log(f"Transcribed {stem}: {len(notes)} notes from {mono.size / sr:.0f}s in {time.time() - t0:.1f}s")
             return self._json({"notes": notes})
         except Exception as exc:
@@ -355,6 +392,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _lyrics(self):
         """POST /lyrics  body: float32 LE mono PCM at 16 kHz -> {language, words: [{t, e, w}]}"""
+        global _model_used_at
         if not lyrics.available():
             return self._json({"error": "faster-whisper is not installed (npm run ai:setup)"}, 501)
         try:
@@ -363,8 +401,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": f"bad payload: {exc}"}, 400)
         try:
             with _work_lock:
+                _model_used_at = time.monotonic()
                 t0 = time.time()
                 out = lyrics.transcribe_array(mono)
+                _model_used_at = time.monotonic()
             log(f"Lyrics: {len(out['words'])} words ({out['language']}) from {mono.size / 16000:.0f}s in {time.time() - t0:.1f}s")
             return self._json(out)
         except Exception as exc:
@@ -396,7 +436,9 @@ def main():
         log(f"Port {PORT} is already in use - the AI splitter is probably already running. Nothing to do.")
         return
     threading.Thread(target=reap_jobs, daemon=True).start()
-    if "--lazy" not in sys.argv:
+    # Loading at app startup can keep gigabytes in RAM before the player imports a song.
+    # Setup downloads the weights; load them on the first job unless explicitly asked to warm.
+    if "--warm" in sys.argv:
         def warm():
             load_model()
             if transcribe.available():

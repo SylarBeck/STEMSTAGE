@@ -4,7 +4,7 @@
 #
 #   setup-ai.sh [core|ai|full] [path/to/uv]
 #     core  Python 3.11 + the DualSense controller bridge + yt-dlp (small)
-#     ai    the AI splitter: PyTorch (CUDA with an NVIDIA GPU, CPU otherwise), Demucs, Whisper, basic-pitch
+#     ai    the AI splitter: CUDA PyTorch with a working NVIDIA GPU, Demucs, Whisper, basic-pitch
 #     full  both (default)
 #
 # The environment lives in ~/.local/share/stemstage/venv (where the desktop app looks for it). Finished steps
@@ -40,13 +40,13 @@ fi
 
 if { [ "$MODE" = ai ] || [ "$MODE" = full ]; } && [ ! -f "$VENV/stemstage-ai.ok" ]; then
   make_venv
-  if command -v nvidia-smi >/dev/null 2>&1; then
-    step "NVIDIA GPU found: downloading PyTorch with CUDA (about 3 GB)"
-    "$UV" pip install --python "$PY" torch torchaudio --index-url https://download.pytorch.org/whl/cu128
-  else
-    step "No NVIDIA GPU: downloading PyTorch for the CPU (splitting will be slower)"
-    "$UV" pip install --python "$PY" torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+  if ! command -v nvidia-smi >/dev/null 2>&1 || ! nvidia-smi --query-gpu=name --format=csv,noheader >/dev/null 2>&1; then
+    echo "NVIDIA GPU/driver unavailable; AI setup skipped. STEMSTAGE uses quick DSP." >&2
+    exit 1
   fi
+  step "NVIDIA GPU found: downloading PyTorch with CUDA (about 3 GB)"
+  "$UV" pip install --python "$PY" torch torchaudio --index-url https://download.pytorch.org/whl/cu128
+  "$PY" -c "import torch; assert torch.cuda.is_available(), 'CUDA unavailable: update the NVIDIA driver'; print('CUDA GPU:', torch.cuda.get_device_name(0))"
   step "Installing Demucs, Whisper and note transcription"
   "$UV" pip install --python "$PY" -r "$HERE/requirements-ai.txt"
   "$UV" pip install --python "$PY" --no-deps basic-pitch==0.4.0

@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -69,9 +71,15 @@ jobs:
           releaseBody: |
             **Windows:** download `STEMSTAGE_*_x64-setup.exe` and run it.
             **Linux:** `STEMSTAGE_*_amd64.AppImage` (any distro: `chmod +x` and run), or the `.deb` (Ubuntu / Debian) / `.rpm` (Fedora / openSUSE) package.
-            STEMSTAGE needs Node.js 20+; the AI splitter and DualSense bridge need Python (see the wiki: Installation).
+            The installer includes the game runtime and configures the controller bridge. The optional AI splitter is offered only when an NVIDIA GPU and working driver are detected; otherwise the game uses its built-in DSP splitter.
             Installed copies update themselves (Settings → Updates).
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
           args: --bundles ${{ matrix.bundles }} ${{ env.EXTRA_ARGS }}
+
+      - name: Attest Windows installer provenance
+        if: runner.os == 'Windows'
+        uses: actions/attest@v4
+        with:
+          subject-path: src-tauri/target/release/bundle/nsis/*.exe

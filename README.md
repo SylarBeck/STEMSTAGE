@@ -79,7 +79,7 @@
 
 ### Install
 
-**Players:** download `STEMSTAGE_x.y.z_x64-setup.exe` (Windows) or the `.AppImage` / `.deb` / `.rpm` (Linux) from [Releases](https://github.com/SylarBeck/STEMSTAGE/releases/latest) and run it. That's all: the app ships its own Node.js, and the setup wizard installs the DualSense controller bridge and offers the AI splitter (a 3–5 GB download). On Linux the first start does this in the background. The app updates itself when a new release is published. Details: [wiki → Installation](https://github.com/SylarBeck/STEMSTAGE/wiki/Installation).
+**Players:** download `STEMSTAGE_x.y.z_x64-setup.exe` (Windows) or the `.AppImage` / `.deb` / `.rpm` (Linux) from [Releases](https://github.com/SylarBeck/STEMSTAGE/releases/latest) and run it. The app ships its own Node.js. The setup wizard installs the DualSense controller bridge and offers the AI splitter only when a working NVIDIA GPU is detected (a 3–5 GB download). Otherwise it uses the built-in DSP splitter. If an NVIDIA driver is missing on Windows, the app opens NVIDIA's official driver page once; installing a system driver requires the player's confirmation and may require a restart. The app updates itself when a new release is published. Details: [wiki → Installation](https://github.com/SylarBeck/STEMSTAGE/wiki/Installation).
 
 **From source:**
 
@@ -91,7 +91,7 @@ npm run ai:setup        # Python env with Demucs, basic-pitch and the DualSense 
 npm run desktop:build   # builds the desktop app and its installer
 ```
 
-The installer lands in `src-tauri/target/release/bundle/nsis/`. Run it, then start **STEMSTAGE** from the Start menu or desktop. The app starts the game server, the AI splitter and the controller bridge for you and opens fullscreen (F11 / Alt+Enter toggles).
+The installer lands in `src-tauri/target/release/bundle/nsis/`. Run it, then start **STEMSTAGE** from the Start menu or desktop. The app starts the game server and controller bridge, and starts the AI splitter only with a working NVIDIA GPU. The window opens fullscreen (F11 / Alt+Enter toggles).
 
 ### Play in a browser instead
 
