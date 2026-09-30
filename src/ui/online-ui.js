@@ -134,11 +134,21 @@ export function installOnline(ui) {
     $('#ol-room').textContent = `Room ${room.code}`;
     $('#ol-status').textContent = online.host ? 'You are the host' : `Connected${inviteCode(online.baseUrl) ? ` to ${inviteCode(online.baseUrl)}` : ` to ${online.address}`}${online.rtt ? ` · ${Math.round(online.rtt)} ms` : ''}`;
     const song = room.song;
+    if (st.songProgress?.id !== song?.id) st.songProgress = null;
     const local = song && ui.songs.find((s) => s.id === song.id);
     const cv = local && coverUrl(local);
     $('#ol-song').innerHTML = song
       ? `<div class="cv" style="background:${cv ? `url('${cv}') center/cover` : ui.art(local || song)}"></div><div><b>${esc(song.title)}</b><div class="small-note">${esc(song.artist)}${song.duration ? ` · ${Math.floor(song.duration / 60)}:${String(Math.floor(song.duration % 60)).padStart(2, '0')}` : ''}</div></div>`
       : `<div class="small-note">${online.host ? 'Choose a song for the match.' : 'Waiting for the host to choose a song...'}</div>`;
+    const meInRoom = online.me;
+    const progress = Math.max(meInRoom?.loading || 0, st.songProgress?.value || 0);
+    const percent = Math.min(100, Math.max(0, Math.round(progress * 100)));
+    const waiting = song && online.host ? room.players.filter((p) => !p.host && !p.hasSong).length : 0;
+    const download = $('#ol-download');
+    download.hidden = !song || (meInRoom?.hasSong && !waiting);
+    download.innerHTML = !song ? '' : !meInRoom?.hasSong && !online.host
+      ? `<div>Getting “${esc(song.title)}” from the host · ${percent}%</div><small>Keep this room open. You can ready up when the song arrives.</small><div class="ol-progress" role="progressbar" aria-label="Song download" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="--progress:${percent}%"></i></div>`
+      : waiting ? `<div>Waiting for ${waiting} player${waiting === 1 ? '' : 's'} to get the song</div><small>The match can start after everyone has the song and is ready.</small>` : '';
     const myProfile = profiles.current?.id;
     $('#ol-players').innerHTML = room.players.map((p) => {
       const status = !song ? '' : p.hasSong ? (p.ready || p.host ? '<span class="rd ok">READY</span>' : '<span class="rd">NOT READY</span>') : `<span class="rd">DOWNLOADING ${Math.round((p.loading || 0) * 100)}%</span>`;
@@ -371,11 +381,12 @@ export function installOnline(ui) {
   });
   online.on('start', onStart);
   online.on('chat', (m) => log(`<b style="--pc:${esc(m.color)}">${esc(m.from)}:</b> ${esc(m.text)}`));
-  online.on('song-progress', () => { if (ui.screen === 'online') render(); });
-  online.on('song-ready', () => ui.reloadSongs().then(() => { if (ui.screen === 'online') render(); }));
+  online.on('song-progress', (value) => { st.songProgress = { id: online.room?.song?.id, value }; if (ui.screen === 'online') render(); });
+  online.on('song-ready', () => { st.songProgress = null; ui.reloadSongs().then(() => { if (ui.screen === 'online') render(); }); });
   online.on('error', (msg) => ui.toast(msg, 'err'));
   online.on('closed', (reason) => { st.closed = true; ui.toast(reason || 'Room closed', 'err'); });
   online.on('disconnected', () => {
+    st.songProgress = null;
     discord.menus();
     if (!st.closed) ui.toast('Disconnected from the room', 'err');
     st.closed = false;

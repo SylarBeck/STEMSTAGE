@@ -574,6 +574,10 @@ table.tbl tr.me td { background: rgba(240,180,41,0.1); }
 .lobby-head span { color: var(--dim); flex: 1; }
 .ol-song { display: flex; gap: 12px; align-items: center; padding: 10px; background: rgba(236,229,211,0.05); min-height: 64px; margin-bottom: 10px; border-left: 5px solid var(--accent); }
 .ol-song .cv { width: 56px; height: 56px; background-size: cover; background-position: center; flex: none; }
+.ol-download { padding: 8px 10px 12px; margin: -4px 0 10px; background: rgba(236,229,211,0.05); color: var(--ink); font-weight: 700; }
+.ol-download small { display: block; color: var(--dim); font-weight: 500; }
+.ol-progress { height: 8px; margin-top: 7px; background: rgba(236,229,211,0.16); overflow: hidden; }
+.ol-progress i { display: block; height: 100%; width: var(--progress); background: var(--accent); transition: width 160ms linear; }
 .ol-players { display: flex; flex-direction: column; gap: 0; margin-bottom: 8px; }
 .ol-player { display: grid; grid-template-columns: 12px 1fr auto auto auto; gap: 10px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--line); border-left: 5px solid var(--pc); font-weight: 700; }
 .ol-player i:not([class*="fa-"]) { width: 10px; height: 10px; border-radius: 50%; background: var(--pc); }
@@ -984,6 +988,8 @@ html[data-hud="huge"] #hud .hud-left, html[data-hud="huge"] #hud .hud-right, htm
 /* chart library */
 .chartlib { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; max-width: 1100px; }
 .cl-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 4px; }
+.cl-footer { display: flex; align-items: center; gap: 14px; min-height: 32px; }
+.cl-footer .nav-btn { min-height: 38px; padding: 6px 14px; }
 .cl-song { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) auto 150px 170px; gap: 14px; align-items: center; padding: 10px 16px; background: rgba(18,16,14,0.9); border-left: 5px solid var(--accent); cursor: pointer; }
 .cl-song.have { border-left-color: var(--good); }
 .cl-song .cl-t b { display: block; font-family: var(--display); font-weight: 400; font-size: 24px; line-height: 1.05; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

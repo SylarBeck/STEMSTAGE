@@ -7,6 +7,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
+import { settings } from '../settings.js';
 
 // The HDR composer stores two full-size half-float targets and bloom allocates more.
 // Keep the default at display resolution; reserve supersampling for Ultra.
@@ -149,8 +150,18 @@ export class Renderer {
     this.quality = q;
     this.bloom.enabled = bloom && q !== 'low';
     this.sanitize.enabled = this.bloom.enabled;
-    this.fxPass.uniforms.uGrain.value = q === 'low' ? 0 : 0.012;
+    this.fxPass.uniforms.uGrain.value = q === 'low' || !settings.filmGrain ? 0 : 0.012;
     this.resize();
+  }
+
+  setAntialiasing(mode) {
+    const requested = mode === 'off' ? 0 : mode === '4x' ? 4 : 2;
+    const samples = Math.min(requested, this.renderer.capabilities.maxSamples || 0);
+    for (const target of [this.composer.renderTarget1, this.composer.renderTarget2]) {
+      if (target.samples === samples) continue;
+      target.samples = samples;
+      target.dispose(); // recreate the multisample buffers on the next render
+    }
   }
 
   _layout() {
@@ -161,7 +172,9 @@ export class Renderer {
 
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
-    const pr = Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.quality] || 1.25);
+    const scale = Number(settings.renderScale);
+    const pr = Number.isFinite(scale) && scale >= 50 && scale <= 200
+      ? scale / 100 : Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.quality] || 1.25);
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
     this.composer.setPixelRatio(pr);

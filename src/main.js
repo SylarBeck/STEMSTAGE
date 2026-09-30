@@ -29,6 +29,7 @@ class App {
     this.stage = new Stage(settings.quality);
     this.renderer = new Renderer(document.getElementById('gl'), this.stage, null, settings.quality);
     this.renderer.setQuality(settings.quality, settings.bloom);
+    this.renderer.setAntialiasing(settings.antialiasing);
     this.hud = new Hud();
     this.diagnostics = new Diagnostics();
     this.game = new Session({
@@ -39,7 +40,9 @@ class App {
     this.ui = new UI(this);
     this.menuBeatIdx = -1;
     onSettingsChange((key) => {
-      if (key === 'quality' || key === 'bloom') this.renderer.setQuality(settings.quality, settings.bloom);
+      if (key === 'quality' || key === 'bloom' || key === 'filmGrain') this.renderer.setQuality(settings.quality, settings.bloom);
+      if (key === 'renderScale') this.renderer.resize();
+      if (key === 'antialiasing') this.renderer.setAntialiasing(settings.antialiasing);
       if (key === 'quality') this.ui.toast('Crowd size updates after a reload');
       if (key === 'menuMusicVolume' && this.menuGain) this.menuGain.gain.setTargetAtTime(settings.menuMusicVolume, this.engine.ctx.currentTime, 0.1);
       if (key === 'menuMusic' && !this.game.running) { this.menuMusic(false, true); setTimeout(() => this.menuMusic(true), 400); }
@@ -56,6 +59,7 @@ class App {
     this.ui.show('title');
     this.ds.autoConnect().then((ok) => { if (ok) this.ui.toast(`${this.ds.label} linked`, 'ok'); });
     this.last = performance.now();
+    this.lastRender = 0;
     requestAnimationFrame((t) => this.frame(t));
     await initScores();
     await profiles.load();
@@ -174,8 +178,10 @@ class App {
     this.stage.update(dt, f);
     this.ds.tick(now);
     this.ui.frame();
-    this.renderer.render(dt);
-    this.diagnostics.frame(now);
+    const cap = Number(settings.frameLimit);
+    const drawn = !Number.isFinite(cap) || cap < 1 || !this.lastRender || now - this.lastRender >= 1000 / cap - 1;
+    if (drawn) { this.renderer.render(this.lastRender ? Math.min(0.05, (now - this.lastRender) / 1000) : dt); this.lastRender = now; }
+    this.diagnostics.frame(now, false, drawn);
     requestAnimationFrame((t) => this.frame(t));
   }
 }

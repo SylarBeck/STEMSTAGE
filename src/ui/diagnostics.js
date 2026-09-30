@@ -35,7 +35,7 @@ export class Diagnostics {
     this.pingEl.className = ping == null ? '' : ping >= 200 ? 'bad' : ping >= 100 ? 'warn' : '';
   }
 
-  frame(now, paused = false) {
+  frame(now, paused = false, drawn = true) {
     if (this.el.hidden) return;
     if (settings.showFps) {
       if (paused) {
@@ -45,7 +45,7 @@ export class Diagnostics {
         this.frames = 0;
       } else {
         if (!this.started) this.started = now;
-        this.frames++;
+        if (drawn) this.frames++;
         const elapsed = now - this.started;
         if (elapsed >= 1000) {
           const fps = Math.round(this.frames * 1000 / elapsed);
