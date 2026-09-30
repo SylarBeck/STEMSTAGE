@@ -82,7 +82,7 @@ export const worldPlayers = (limit = 25) => get('/v1/players', { limit });
  * world doesn't have it: see charts.js). Returns [{ name, instrument, rank, newTop, personalBest, ranked,
  * rankedChart, firstChart }] for the runs that were accepted (errors are logged, never shown mid-results).
  */
-export async function submitRuns(r) {
+export async function submitRuns(r, onChartError = () => {}) {
   if (settings.worldLeaderboard === false || r.practice || r.mode === 'replay') return [];
   const out = [];
   for (const res of r.players || []) {
@@ -91,7 +91,10 @@ export async function submitRuns(r) {
     if (!p) continue;
     const cloud = await identityOf(p);
     let chart = null;
-    try { chart = await chartForRun(r.song, res.instrument, p); } catch (e) { console.warn('chart upload:', e.message); }
+    try { chart = await chartForRun(r.song, res.instrument, p); } catch (e) {
+      console.warn('chart upload:', e.message);
+      onChartError(e);
+    }
     const body = {
       player: playerOf(p, cloud),
       song: { title: r.song.title, artist: r.song.artist, duration: Math.round(r.song.duration || 0) },

@@ -17,7 +17,7 @@ import { API, songKey, identityOf, playerOf } from './leaderboard.js';
 import { profiles } from '../profile/profiles.js';
 import { canonicalChart, chartId, CHART_VERSION, DIFFICULTIES } from '../../cloud/src/chart.js';
 import { fingerprint, packFingerprint, unpackFingerprint, alignFingerprints } from '../audio/fingerprint.js';
-import { saveSongJson } from '../storage/library.js';
+import { getAudio, saveSongJson } from '../storage/library.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number(v) || 0)));
 const ms = (s) => clamp(s * 1000, 0, 3_600_000);
@@ -215,7 +215,8 @@ export async function chartForRun(song, inst, profile) {
   const part = song.charts?.[inst];
   if (!part?.available) return null;
   const c = await partChart(inst, part);
-  if (c.downloaded || uploaded.has(c.id) || !song.fp) return { id: c.id, first: false };
+  if (c.downloaded || uploaded.has(c.id)) return { id: c.id, first: false };
+  await ensureFingerprint(song, () => getAudio(song.id));
   const j = await postChart(song, inst, part, c, profile);
   return { id: j.chartId, first: !j.known && j.ranked };
 }

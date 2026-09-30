@@ -8,7 +8,45 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
 
-const PIXEL_RATIO = { low: 0.75, high: 1.25, ultra: 2 };
+// The HDR composer stores two full-size half-float targets and bloom allocates more.
+// Keep the default at display resolution; reserve supersampling for Ultra.
+const PIXEL_RATIO = { low: 0.75, high: 1, ultra: 1.5 };
+
+function drawHighways(renderer, highways, target, W, H) {
+  const n = highways.length;
+  if (!n) return;
+  const oldAutoClear = renderer.autoClear;
+  renderer.autoClear = false;
+  for (let i = 0; i < n; i++) {
+    const x = Math.floor((i * W) / n), w = Math.floor(((i + 1) * W) / n) - x;
+    if (target) {
+      // Render-target dimensions are already physical pixels. WebGLRenderer.setViewport()
+      // multiplies by pixelRatio again, which changes the highway size with quality.
+      target.viewport.set(x, 0, w, H);
+      target.scissor.set(x, 0, w, H);
+      target.scissorTest = true;
+      renderer.setRenderTarget(target);
+    } else {
+      // The default framebuffer's viewport API expects CSS pixels.
+      renderer.setRenderTarget(null);
+      renderer.setViewport(x, 0, w, H);
+      renderer.setScissor(x, 0, w, H);
+      renderer.setScissorTest(true);
+    }
+    renderer.clearDepth();
+    renderer.render(highways[i].scene, highways[i].camera);
+  }
+  if (target) {
+    target.viewport.set(0, 0, W, H);
+    target.scissor.set(0, 0, W, H);
+    target.scissorTest = false;
+    renderer.setRenderTarget(target);
+  } else {
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, W, H);
+  }
+  renderer.autoClear = oldAutoClear;
+}
 
 class HighwaysPass extends Pass {
   constructor() {
@@ -18,26 +56,8 @@ class HighwaysPass extends Pass {
   }
 
   render(renderer, writeBuffer, readBuffer) {
-    const n = this.highways.length;
-    if (!n) return;
-    const oldAutoClear = renderer.autoClear;
-    renderer.autoClear = false;
     const target = this.renderToScreen ? null : readBuffer;
-    const W = readBuffer.width, H = readBuffer.height;
-    for (let i = 0; i < n; i++) {
-      const x = Math.floor((i * W) / n), w = Math.floor(((i + 1) * W) / n) - x;
-      readBuffer.viewport.set(x, 0, w, H);
-      readBuffer.scissor.set(x, 0, w, H);
-      readBuffer.scissorTest = true;
-      renderer.setRenderTarget(target);
-      renderer.clearDepth();
-      renderer.render(this.highways[i].scene, this.highways[i].camera);
-    }
-    readBuffer.viewport.set(0, 0, W, H);
-    readBuffer.scissor.set(0, 0, W, H);
-    readBuffer.scissorTest = false;
-    renderer.setRenderTarget(target);
-    renderer.autoClear = oldAutoClear;
+    drawHighways(renderer, this.highways, target, readBuffer.width, readBuffer.height);
   }
 }
 
@@ -94,7 +114,7 @@ export class Renderer {
     this.renderer.toneMappingExposure = 0.92;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 2 });
     this.composer = new EffectComposer(this.renderer, rt);
     this.stagePass = new RenderPass(stage.scene, stage.camera);
     this.hwyPass = new HighwaysPass();
@@ -128,6 +148,7 @@ export class Renderer {
   setQuality(q, bloom = true) {
     this.quality = q;
     this.bloom.enabled = bloom && q !== 'low';
+    this.sanitize.enabled = this.bloom.enabled;
     this.fxPass.uniforms.uGrain.value = q === 'low' ? 0 : 0.012;
     this.resize();
   }

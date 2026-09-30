@@ -127,8 +127,9 @@ const SETTINGS_SCHEMA = [
   { key: 'updateFeed', label: 'Update source', desc: 'GitHub repository as owner/name — empty uses SylarBeck/STEMSTAGE', type: 'text' },
   { action: 'checkUpdate', label: 'Check for updates now', desc: 'See if a newer STEMSTAGE is available' },
   { group: 'AI splitter' },
+  { key: 'aiEnabled', label: 'AI server', desc: 'Desktop app: stop or start the AI splitter and remember this choice. Off uses quick DSP for imports.', type: 'toggle' },
   { key: 'aiServer', label: 'Server URL', desc: 'Where the Demucs splitter runs (npm run ai)', type: 'text' },
-  { action: 'installAi', label: 'Install AI splitter', desc: 'Download and set up Demucs, Whisper lyrics and note transcription (3-5 GB, runs in the background)' },
+  { action: 'installAi', label: 'Install AI splitter', desc: 'NVIDIA GPU and working driver required. Downloads Demucs, Whisper lyrics and note transcription (3-5 GB)' },
   { action: 'testServer', label: 'Test AI connection', desc: 'Check the splitter and show which model/GPU it uses' },
   { group: 'Library' },
   { action: 'clearCache', label: 'Songs folder', desc: 'Every song is a folder of WAV stems + song.json in Documents\\STEMSTAGE\\songs' },
@@ -721,6 +722,14 @@ export class UI {
 
   // ---------------------------------------------------------------- status (top bar + hero)
   async pollAI() {
+    const invoke = window.__TAURI__?.core?.invoke;
+    if (invoke && !this._aiTogglePending) {
+      const st = await invoke('launcher_status').catch(() => null);
+      if (st?.logs && typeof st.ai_enabled === 'boolean' && settings.aiEnabled !== st.ai_enabled) {
+        settings.aiEnabled = st.ai_enabled;
+        this._syncSettings();
+      }
+    }
     const h = await aiClient().health();
     this.aiStatus = h;
     this.refreshStatus();
@@ -767,7 +776,7 @@ export class UI {
     const devs = input.listDevices().filter((d) => d.kind !== 'key');
     const devArt = (list) => list.slice(0, 4).map((d) => { const det = detectController(d, bindings.baseOf(d.profileKey)); return `<div class="hero-dev"><div class="ctl-art">${controllerPicture(det.kind)}</div><span>${esc(det.name)}</span></div>`; }).join('');
     const status = `<div class="hero-status">
-      <span class="${h ? 'ok' : 'warn'}"><i></i>${h ? `AI · Demucs ${esc(h.model)} · ${esc(h.gpu || 'CPU')}` : 'AI splitter offline — DSP fallback'}</span>
+      <span class="${h ? 'ok' : 'warn'}"><i></i>${h ? `AI · Demucs ${esc(h.model)} · ${esc(h.gpu || 'CPU')}` : settings.aiEnabled ? 'AI splitter offline — DSP fallback' : 'AI server off — DSP fallback'}</span>
       <span class="ok"><i></i>${songs.length} song${songs.length === 1 ? '' : 's'}</span>
       <span class="${devs.length ? 'ok' : ''}"><i></i>${devs.length ? `${devs.length} controller${devs.length === 1 ? '' : 's'}` : 'Keyboard'}</span></div>`;
     let body = '';
@@ -1697,7 +1706,7 @@ export class UI {
     $$('#pick-splitter .opt').forEach((o) => o.addEventListener('click', () => { this.splitter = o.dataset.val; settings.splitter = this.splitter; this.renderSplitter(); }));
     $('#splitter-note').innerHTML = h
       ? `Demucs ${esc(h.model)} · ${esc(h.gpu || 'CPU')}`
-      : 'AI splitter offline — using the quick DSP splitter';
+      : settings.aiEnabled ? 'AI splitter offline — using the quick DSP splitter' : 'AI server off — imports use the quick DSP splitter';
   }
 
   renderImportTab() {
@@ -1853,7 +1862,10 @@ export class UI {
       const it = SETTINGS_SCHEMA.find((x) => x.key === key);
       const range = row.querySelector('input[type=range]');
       range?.addEventListener('input', () => { settings[key] = parseFloat(range.value); this._syncSettings(); });
-      row.querySelectorAll('[data-t]').forEach((o) => o.addEventListener('click', () => { settings[key] = o.dataset.t === 'on'; this._syncSettings(); }));
+      row.querySelectorAll('[data-t]').forEach((o) => o.addEventListener('click', () => {
+        if (key === 'aiEnabled') this.setAiEnabled(o.dataset.t === 'on');
+        else { settings[key] = o.dataset.t === 'on'; this._syncSettings(); }
+      }));
       row.querySelectorAll('[data-c]').forEach((o) => o.addEventListener('click', () => { settings[key] = o.dataset.c; this._syncSettings(); }));
       const text = row.querySelector('input[type=text]');
       text?.addEventListener('change', () => {
@@ -1894,10 +1906,35 @@ export class UI {
     const it = SETTINGS_SCHEMA.find((x) => x.key === key);
     if (!it) return;
     if (it.type === 'range') settings[key] = +Math.max(it.min, Math.min(it.max, settings[key] + d * it.step)).toFixed(3);
-    if (it.type === 'toggle') settings[key] = !settings[key];
+    if (it.type === 'toggle') {
+      if (key === 'aiEnabled') this.setAiEnabled(!settings.aiEnabled);
+      else settings[key] = !settings[key];
+    }
     if (it.type === 'choice') { const i = it.options.indexOf(settings[key]); settings[key] = it.options[(i + d + it.options.length) % it.options.length]; }
     if (it.type === 'text' && confirm) this.editText($(`[data-setting="${key}"] input`));
     this._syncSettings();
+  }
+
+  async setAiEnabled(enabled) {
+    // Clicking Off again should retry shutdown if an older server survived a previous toggle.
+    if (this._aiTogglePending || (enabled && settings.aiEnabled === enabled)) return;
+    this._aiTogglePending = true;
+    try {
+      const invoke = window.__TAURI__?.core?.invoke;
+      const status = invoke ? await invoke('set_ai_enabled', { enabled }) : null;
+      settings.aiEnabled = enabled;
+      this.aiStatus = null;
+      this._syncSettings();
+      this.refreshStatus();
+      if (this.screen === 'import') this.renderSplitter();
+      if (status?.startsWith('error:') || /NVIDIA|GPU check/.test(status || '')) this.toast(`AI server: ${status}`, 'err');
+      else this.toast(enabled ? (status?.startsWith('not installed') ? 'AI server enabled; install the AI splitter to use it' : invoke ? 'AI server starting' : 'AI use enabled; start npm run ai to run the server') : invoke ? 'AI server off; imports use quick DSP' : 'AI use off; stop npm run ai separately', 'ok');
+      if (enabled) this.pollAI();
+    } catch (e) {
+      this.toast(`Could not change AI server: ${e?.message || e}`, 'err');
+    } finally {
+      this._aiTogglePending = false;
+    }
   }
 
   /** Settings → Test microphone: a sheet that shows the note you sing, live. */
@@ -1971,6 +2008,7 @@ export class UI {
         : ds.devices.length ? `Controller bridge OK · ${ds.devices.map((d) => `${d.label}${d.pad.battery ? ` ${d.pad.battery.level}%` : ''}`).join(', ')}` : 'Controller bridge OK · no DualSense connected (turn it on or plug it in)', ds.online ? 'ok' : 'err');
     }
     if (a === 'testServer') {
+      if (!settings.aiEnabled) { this.toast('AI server is off in Settings', 'err'); return; }
       const h = await aiClient().health();
       this.aiStatus = h;
       this.refreshStatus();

@@ -141,11 +141,12 @@ class App {
   menuFeatures() {
     const lv = this.engine.levels();
     let beat = performance.now() / 500, beatHit = false;
-    if (this.menuSrc && this.menuBeats) {
+    if (this.menuSrc && this.menuBeats?.length > 1) {
       const ctx = this.engine.ctx;
       const t = (ctx.currentTime - this.menuStart - (ctx.outputLatency || 0)) % this.menuBuffer.duration;
       const b = this.menuBeats;
-      let i = 0;
+      let i = Math.max(0, Math.min(this.menuBeatIdx, b.length - 2));
+      if (t < b[i]) i = 0; // looped song or newly selected track
       while (i < b.length - 2 && b[i + 1] <= t) i++;
       beat = i + Math.max(0, Math.min(1, (t - b[i]) / (b[i + 1] - b[i])));
       if (i !== this.menuBeatIdx) { beatHit = this.menuBeatIdx !== -1; this.menuBeatIdx = i; if (i % 32 === 0 && beatHit) this.stage.nextPalette(); }
@@ -158,6 +159,14 @@ class App {
   frame(now) {
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
+    // The pause menu is HTML over a frozen game frame. Keep input/UI responsive without redrawing
+    // the whole HDR stage, crowd and bloom chain behind the dark overlay.
+    if (this.game.paused) {
+      this.ds.tick(now);
+      this.ui.frame();
+      requestAnimationFrame((t) => this.frame(t));
+      return;
+    }
     const f = this.game.update(dt) || this.menuFeatures();
     this.stage.update(dt, f);
     this.ds.tick(now);

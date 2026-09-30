@@ -390,7 +390,7 @@ export function installSocial(ui) {
         ${s.achievements.length ? `<div class="rp-ach">${s.achievements.map((a) => `<span>${achIcon(a.id)} ${esc(a.name)}</span>`).join('')}</div>` : ''}</div></div>`;
     }).join('');
     for (const s of summaries) for (const a of s.achievements) ui.toast(`${s.name}: ${a.name} — ${a.desc}`, 'ok', 'trophy');
-    ui.lastSubmit = submitRuns(r);
+    ui.lastSubmit = submitRuns(r, (e) => ui.toast(`World chart upload failed: ${e.message}`, 'err'));
     ui.lastSubmit.then((list) => {
       for (const w of list) {
         if (w.firstChart) ui.toast(`${w.name}: your ${w.instrument} chart is now the ranked chart for this song — everyone plays it`, 'ok', 'crown');

@@ -1,7 +1,7 @@
 # STEMSTAGE Python setup (Windows). The installer runs this; you can also run it by hand.
 #
 #   -Mode core   Python 3.11 + the DualSense controller bridge + yt-dlp (small, ~60 MB)
-#   -Mode ai     the AI splitter on top: PyTorch (CUDA when an NVIDIA GPU is present, CPU otherwise),
+#   -Mode ai     the AI splitter on top: CUDA PyTorch when an NVIDIA GPU and driver are ready,
 #                Demucs htdemucs_6s, Whisper lyrics and basic-pitch transcription (~3-5 GB)
 #   -Mode full   both (the default, and what `npm run ai:setup` does)
 #   -Uv <path>   the uv binary to use (the app ships one; otherwise uv from PATH or installed)
@@ -49,15 +49,16 @@ if (($Mode -eq "core" -or $Mode -eq "full") -and -not (Test-Path "$Venv\stemstag
 
 # ---- ai: PyTorch + Demucs + Whisper + basic-pitch
 if (($Mode -eq "ai" -or $Mode -eq "full") -and -not (Test-Path "$Venv\stemstage-ai.ok")) {
+    & "$Here\check-gpu.ps1"
+    $gpu = $LASTEXITCODE
+    if ($gpu -eq 3) { throw "No NVIDIA GPU found. The AI splitter is optional; STEMSTAGE uses quick DSP instead." }
+    if ($gpu -eq 2) { throw "NVIDIA GPU found but its driver is unavailable. Install the driver from https://www.nvidia.com/Download/index.aspx and try again." }
+    if ($gpu -ne 0) { throw "Could not check the NVIDIA GPU. AI setup was skipped; try again from Settings." }
     if (-not (Test-Path $Py)) { & $Uv venv $Venv --python 3.11 --python-preference only-managed; Check "Python install" }
-    $hasNvidia = $null -ne (Get-Command nvidia-smi -ErrorAction SilentlyContinue)
-    if ($hasNvidia) {
-        Step "NVIDIA GPU found: downloading PyTorch with CUDA (about 3 GB, this takes a while)"
-        & $Uv pip install --python $Py torch torchaudio --index-url https://download.pytorch.org/whl/cu128; Check "PyTorch install"
-    } else {
-        Step "No NVIDIA GPU: downloading PyTorch for the CPU (splitting will be slower)"
-        & $Uv pip install --python $Py torch torchaudio --index-url https://download.pytorch.org/whl/cpu; Check "PyTorch install"
-    }
+    Step "NVIDIA GPU found: downloading PyTorch with CUDA (about 3 GB, this takes a while)"
+    & $Uv pip install --python $Py torch torchaudio --index-url https://download.pytorch.org/whl/cu128; Check "PyTorch install"
+    & $Py -c "import torch; assert torch.cuda.is_available(), 'CUDA unavailable: update the NVIDIA driver from https://www.nvidia.com/Download/index.aspx'; print('CUDA GPU:', torch.cuda.get_device_name(0))"
+    Check "CUDA verification"
     Step "Installing Demucs, Whisper and note transcription"
     & $Uv pip install --python $Py -r "$Here\requirements-ai.txt"; Check "AI packages install"
     # basic-pitch (neural note transcription) through ONNX: without its TensorFlow dependency

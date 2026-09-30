@@ -15,6 +15,7 @@
 
 use serde::Serialize;
 use std::fs::{self, File};
+use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -31,6 +32,7 @@ const BRIDGE_PORT: u16 = 8766;
 struct Status {
     game: String,
     ai: String,
+    ai_enabled: bool,
     bridge: String,
     url: String,
     songs: String,
@@ -42,6 +44,7 @@ struct Launcher {
     children: Mutex<Vec<(String, Child)>>,
     status: Mutex<Status>,
     env: Mutex<Option<PyEnv>>,
+    ai_control: Mutex<()>,
 }
 
 fn listening(port: u16) -> bool {
@@ -69,18 +72,75 @@ fn spawn(l: &Launcher, name: &str, mut cmd: Command, logs: &Path) -> Result<(), 
 
 /// Stop everything we started, including grandchildren (the venv's python.exe is a launcher that starts the
 /// real interpreter, so killing only the direct child would leave the services running).
+fn stop_child(child: &mut Child) {
+    #[cfg(windows)]
+    {
+        let mut tk = Command::new("taskkill");
+        tk.args(["/PID", &child.id().to_string(), "/T", "/F"]).stdout(Stdio::null()).stderr(Stdio::null());
+        no_console(&mut tk);
+        let _ = tk.status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// Contact only the local STEMSTAGE AI service; never shut down an unrelated listener on its port.
+fn ai_request(path: &str, method: &str) -> Result<String, String> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], AI_PORT));
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(700)).map_err(|e| e.to_string())?;
+    stream.set_read_timeout(Some(Duration::from_secs(2))).map_err(|e| e.to_string())?;
+    stream.set_write_timeout(Some(Duration::from_secs(2))).map_err(|e| e.to_string())?;
+    let control = if method == "POST" { "X-STEMSTAGE-Control: shutdown\r\nContent-Length: 0\r\n" } else { "" };
+    let request = format!("{method} {path} HTTP/1.0\r\nHost: 127.0.0.1:{AI_PORT}\r\n{control}Connection: close\r\n\r\n");
+    stream.write_all(request.as_bytes()).map_err(|e| e.to_string())?;
+    let mut response = String::new();
+    stream.read_to_string(&mut response).map_err(|e| e.to_string())?;
+    if !response.starts_with("HTTP/1.0 200 ") && !response.starts_with("HTTP/1.1 200 ") {
+        return Err(format!("AI server rejected {path}"));
+    }
+    Ok(response.split_once("\r\n\r\n").map(|(_, body)| body).unwrap_or("").to_string())
+}
+
+#[cfg(windows)]
+fn stop_legacy_ai_server() -> Result<(), String> {
+    // Older splitters have no /shutdown route. Only stop the Python process that both owns :8765 and runs
+    // stem_server.py; never kill a process merely because it happens to use the port.
+    let script = r#"$ErrorActionPreference = 'Stop'; $found = $false; $owners = Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach ($ownerId in $owners) { $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $ownerId"; if ($proc.CommandLine -match '(^|[\\/\s])stem_server\.py(["''\s]|$)') { Stop-Process -Id $ownerId -Force; $found = $true } }; if (-not $found) { exit 1 }"#;
+    let mut cmd = Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", script]).stdout(Stdio::null()).stderr(Stdio::null());
+    no_console(&mut cmd);
+    if cmd.status().map_err(|e| e.to_string())?.success() { Ok(()) } else { Err("could not stop the older AI server on port 8765".into()) }
+}
+
+fn stop_ai_server() -> Result<(), String> {
+    if !listening(AI_PORT) { return Ok(()); }
+    let health = ai_request("/health", "GET")?;
+    let info: serde_json::Value = serde_json::from_str(&health).map_err(|_| "port 8765 is not a STEMSTAGE AI server".to_string())?;
+    if info.get("service").and_then(|v| v.as_str()) != Some("stemstage-ai") {
+        #[cfg(windows)]
+        if info.get("ok").and_then(|v| v.as_bool()) == Some(true) && info.get("model").and_then(|v| v.as_str()).is_some() && info.get("sources").is_some() {
+            stop_legacy_ai_server()?;
+            for _ in 0..30 {
+                if !listening(AI_PORT) { return Ok(()); }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
+        return Err("port 8765 is not a controllable STEMSTAGE AI server".into());
+    }
+    let reply = ai_request("/shutdown", "POST")?;
+    let ok = serde_json::from_str::<serde_json::Value>(&reply).ok().and_then(|v| v.get("ok").and_then(|x| x.as_bool()));
+    if ok != Some(true) { return Err("AI server did not confirm shutdown".into()); }
+    for _ in 0..30 {
+        if !listening(AI_PORT) { return Ok(()); }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    Err("AI server did not stop".into())
+}
+
 fn stop_all(l: &Launcher) {
     let mut kids = l.children.lock().unwrap();
     for (_, child) in kids.iter_mut() {
-        #[cfg(windows)]
-        {
-            let mut tk = Command::new("taskkill");
-            tk.args(["/PID", &child.id().to_string(), "/T", "/F"]).stdout(Stdio::null()).stderr(Stdio::null());
-            no_console(&mut tk);
-            let _ = tk.status();
-        }
-        let _ = child.kill();
-        let _ = child.wait();
+        stop_child(child);
     }
     kids.clear();
 }
@@ -152,15 +212,13 @@ fn join_code<I: IntoIterator<Item = String>>(args: I) -> Option<String> {
     })
 }
 
-/// Give the game every bit of CPU it asks for: this process and everything it started (the WebView2 renderer
-/// and GPU processes, the game server, the controller bridge) run at High priority, so a busy PC doesn't delay
-/// frames or controller input. The AI splitter goes the other way (Below normal): splitting or transcribing in
-/// the background must never take time from a song being played. Called a few times as processes appear.
+/// Favor the game and WebView2 without starving Windows audio, graphics, or input services. AI work runs below
+/// normal priority while the game is open. Called a few times as subprocesses appear.
 #[cfg(windows)]
 fn boost_priority(app: &tauri::AppHandle) {
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
-    use windows::Win32::System::Threading::{OpenProcess, SetPriorityClass, BELOW_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS, PROCESS_SET_INFORMATION};
+    use windows::Win32::System::Threading::{OpenProcess, SetPriorityClass, ABOVE_NORMAL_PRIORITY_CLASS, BELOW_NORMAL_PRIORITY_CLASS, PROCESS_SET_INFORMATION};
     let me = std::process::id();
     let ai_root = app.state::<Launcher>().children.lock().unwrap().iter().find(|(n, _)| n == "ai-splitter").map(|(_, c)| c.id());
     let mut parents: Vec<(u32, u32)> = Vec::new();
@@ -190,7 +248,7 @@ fn boost_priority(app: &tauri::AppHandle) {
     };
     let ai = ai_root.map(descendants).unwrap_or_default();
     for pid in descendants(me) {
-        let class = if ai.contains(&pid) { BELOW_NORMAL_PRIORITY_CLASS } else { HIGH_PRIORITY_CLASS };
+        let class = if ai.contains(&pid) { BELOW_NORMAL_PRIORITY_CLASS } else { ABOVE_NORMAL_PRIORITY_CLASS };
         unsafe {
             if let Ok(h) = OpenProcess(PROCESS_SET_INFORMATION, false, pid) {
                 let _ = SetPriorityClass(h, class);
@@ -294,6 +352,7 @@ fn launch(app: &tauri::AppHandle) {
         },
         songs: songs.display().to_string(),
         logs: logs.display().to_string(),
+        ai_enabled: !local.join("ai-disabled").exists(),
         ..Default::default()
     };
 
@@ -317,8 +376,10 @@ fn launch(app: &tauri::AppHandle) {
     // 2. Python services (DualSense bridge + AI splitter): the installer sets them up; whatever is missing (setup
     // was offline, or Linux, which has no setup wizard) is installed here in the background while the game runs
     let env = PyEnv { res: res.clone(), local: local.clone(), logs: logs.clone() };
+    #[cfg(windows)]
+    if matches!(env.gpu_status(), GpuStatus::DriverMissing) { offer_nvidia_driver(&env); }
     st.bridge = if env.has_core() { "starting".into() } else { "installing (first start)…".into() };
-    st.ai = if env.has_ai() { "starting".into() } else if env.ai_declined() { "not installed (Settings → AI splitter → Install)".into() } else { "installing (first start, large download)…".into() };
+    st.ai = if !st.ai_enabled { "disabled".into() } else if env.has_ai() { "starting".into() } else if env.ai_declined() { "not installed (Settings → AI splitter → Install)".into() } else { "installing (first start, large download)…".into() };
     *l.status.lock().unwrap() = st;
     *l.env.lock().unwrap() = Some(env.clone());
     python_services(app, &env, !env.ai_declined());
@@ -332,7 +393,53 @@ struct PyEnv {
     logs: PathBuf,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GpuStatus { Ready, DriverMissing, NoNvidia, Unknown }
+
+impl GpuStatus {
+    fn unavailable(self) -> Option<&'static str> {
+        match self {
+            Self::Ready => None,
+            Self::DriverMissing => Some("NVIDIA driver needed (nvidia.com/Download); AI is off until it works"),
+            Self::NoNvidia => Some("no NVIDIA GPU; using quick DSP instead of installing AI"),
+            Self::Unknown => Some("GPU check failed; AI setup skipped (retry from Settings)"),
+        }
+    }
+}
+
+#[cfg(windows)]
+fn offer_nvidia_driver(env: &PyEnv) {
+    let marker = env.local.join("nvidia-driver-page-shown");
+    if marker.exists() { return; }
+    let mut cmd = Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", "Start-Process 'https://www.nvidia.com/Download/index.aspx'"]);
+    no_console(&mut cmd);
+    if cmd.status().is_ok_and(|s| s.success()) { let _ = fs::write(marker, b""); }
+}
+
 impl PyEnv {
+    fn gpu_status(&self) -> GpuStatus {
+        #[cfg(windows)]
+        {
+            let mut cmd = Command::new("powershell");
+            cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
+                .arg(self.res.join("server").join("check-gpu.ps1"));
+            no_console(&mut cmd);
+            return match cmd.stdout(Stdio::null()).stderr(Stdio::null()).status().ok().and_then(|s| s.code()) {
+                Some(0) => GpuStatus::Ready,
+                Some(2) => GpuStatus::DriverMissing,
+                Some(3) => GpuStatus::NoNvidia,
+                _ => GpuStatus::Unknown,
+            };
+        }
+        #[cfg(not(windows))]
+        {
+            if Command::new("nvidia-smi").args(["--query-gpu=name", "--format=csv,noheader"])
+                .stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success()) {
+                GpuStatus::Ready
+            } else { GpuStatus::NoNvidia }
+        }
+    }
     fn venv(&self) -> PathBuf { self.local.join("venv") }
     fn python(&self) -> PathBuf {
         if cfg!(windows) { self.venv().join("Scripts").join("python.exe") } else { self.venv().join("bin").join("python") }
@@ -347,7 +454,16 @@ impl PyEnv {
     }
     fn has_core(&self) -> bool { self.python().exists() && (self.venv().join("stemstage-core.ok").exists() || self.has_pkg("pydualsense")) }
     fn has_ai(&self) -> bool { self.python().exists() && (self.venv().join("stemstage-ai.ok").exists() || self.has_pkg("demucs")) }
+    fn cuda_ready(&self) -> bool {
+        if !self.python().exists() { return false; }
+        let mut cmd = Command::new(self.python());
+        cmd.args(["-c", "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)"])
+            .stdout(Stdio::null()).stderr(Stdio::null());
+        no_console(&mut cmd);
+        cmd.status().is_ok_and(|s| s.success())
+    }
     fn ai_declined(&self) -> bool { self.local.join("ai-declined").exists() }
+    fn ai_enabled(&self) -> bool { !self.local.join("ai-disabled").exists() }
 
     /// Run the setup script ("core" or "ai") with the bundled uv and wait; output goes to logs/setup.log.
     fn setup(&self, mode: &str) -> Result<(), String> {
@@ -372,6 +488,78 @@ impl PyEnv {
 
 fn set_status(app: &tauri::AppHandle, f: impl FnOnce(&mut Status)) { f(&mut app.state::<Launcher>().status.lock().unwrap()); }
 
+fn start_ai(app: &tauri::AppHandle, env: &PyEnv) -> String {
+    let l = app.state::<Launcher>();
+    let _control = l.ai_control.lock().unwrap();
+    if !env.ai_enabled() {
+        if let Err(e) = stop_ai_server() { return format!("error: AI server is still running ({e})"); }
+        let mut kids = l.children.lock().unwrap();
+        if let Some(i) = kids.iter().position(|(name, _)| name == "ai-splitter") {
+            let (_, mut child) = kids.remove(i);
+            if child.try_wait().ok().flatten().is_none() { stop_child(&mut child); } else { let _ = child.wait(); }
+        }
+        return "disabled".into();
+    }
+    if let Some(why) = env.gpu_status().unavailable() { return why.into(); }
+    if !env.has_ai() { return "not installed (Settings → AI splitter → Install)".into(); }
+    if !env.cuda_ready() { return "CUDA PyTorch unavailable; reinstall the AI splitter from Settings".into(); }
+    let child_running = l.children.lock().unwrap().iter_mut().find(|(name, _)| name == "ai-splitter")
+        .is_some_and(|(_, child)| child.try_wait().ok().flatten().is_none());
+    if child_running && !listening(AI_PORT) { return "starting".into(); }
+    if listening(AI_PORT) {
+        if ai_request("/health", "GET").ok().and_then(|body| serde_json::from_str::<serde_json::Value>(&body).ok())
+            .and_then(|h| h.get("device").and_then(|v| v.as_str()).map(str::to_owned)).as_deref() == Some("cuda") {
+            return "running".into();
+        }
+        if let Err(e) = stop_ai_server() { return format!("error: CPU AI server is still running ({e})"); }
+    }
+    {
+        let mut kids = l.children.lock().unwrap();
+        if let Some(i) = kids.iter().position(|(name, _)| name == "ai-splitter") {
+            let (_, mut old) = kids.remove(i);
+            if old.try_wait().ok().flatten().is_none() { stop_child(&mut old); } else { let _ = old.wait(); }
+        }
+    }
+    let mut cmd = Command::new(env.python());
+    cmd.arg(env.res.join("server").join("stem_server.py")).current_dir(env.res.join("server"));
+    match spawn(&l, "ai-splitter", cmd, &env.logs) {
+        Ok(()) => "starting".into(),
+        Err(e) => format!("error: {e}"),
+    }
+}
+
+/// Persist the desktop preference and stop the local AI server, even when launched separately.
+#[tauri::command]
+fn set_ai_enabled(app: tauri::AppHandle, enabled: bool) -> Result<String, String> {
+    let env = app.state::<Launcher>().env.lock().unwrap().clone().ok_or("the launcher isn't ready yet")?;
+    let marker = env.local.join("ai-disabled");
+    if enabled {
+        if marker.exists() { fs::remove_file(&marker).map_err(|e| e.to_string())?; }
+        let status = start_ai(&app, &env);
+        set_status(&app, |s| { s.ai_enabled = true; s.ai = status.clone(); });
+        Ok(status)
+    } else {
+        fs::write(&marker, b"").map_err(|e| e.to_string())?;
+        let l = app.state::<Launcher>();
+        let _control = l.ai_control.lock().unwrap();
+        let shutdown = stop_ai_server();
+        let mut kids = l.children.lock().unwrap();
+        if let Some(i) = kids.iter().position(|(name, _)| name == "ai-splitter") {
+            let (_, mut child) = kids.remove(i);
+            if child.try_wait().ok().flatten().is_none() { stop_child(&mut child); } else { let _ = child.wait(); }
+        }
+        drop(kids);
+        if listening(AI_PORT) {
+            let _ = fs::remove_file(&marker);
+            let err = shutdown.err().unwrap_or_else(|| "AI server is still running".into());
+            set_status(&app, |s| { s.ai_enabled = true; s.ai = format!("error: {err}"); });
+            return Err(err);
+        }
+        set_status(&app, |s| { s.ai_enabled = false; s.ai = "disabled".into(); });
+        Ok("disabled".into())
+    }
+}
+
 /// Start the bridge and the AI splitter, installing what's missing first (install_ai: the AI too).
 fn python_services(app: &tauri::AppHandle, env: &PyEnv, install_ai: bool) {
     let l = app.state::<Launcher>();
@@ -394,14 +582,16 @@ fn python_services(app: &tauri::AppHandle, env: &PyEnv, install_ai: bool) {
     }
     let bridge = start("controller-bridge", "controller_bridge.py", BRIDGE_PORT);
     set_status(app, |s| s.bridge = bridge);
-    if !env.has_ai() && install_ai {
+    if install_ai && env.ai_enabled() && env.gpu_status() == GpuStatus::Ready && (!env.has_ai() || !env.cuda_ready()) {
         set_status(app, |s| s.ai = "installing (large download)…".into());
+        // An older setup may have installed CPU-only PyTorch. Replace it with the CUDA wheel.
+        let _ = fs::remove_file(env.venv().join("stemstage-ai.ok"));
         if let Err(e) = env.setup("ai") {
             set_status(app, |s| s.ai = format!("error: {e}"));
             return;
         }
     }
-    let ai = if env.has_ai() { start("ai-splitter", "stem_server.py", AI_PORT) } else { "not installed (Settings → AI splitter → Install)".into() };
+    let ai = start_ai(app, env);
     set_status(app, |s| s.ai = ai);
 }
 
@@ -409,7 +599,9 @@ fn python_services(app: &tauri::AppHandle, env: &PyEnv, install_ai: bool) {
 #[tauri::command]
 fn install_ai(app: tauri::AppHandle) -> Result<(), String> {
     let env = app.state::<Launcher>().env.lock().unwrap().clone().ok_or("the launcher isn't ready yet")?;
-    if env.has_ai() {
+    if !env.ai_enabled() { return Err("turn on the AI server before installing it".into()); }
+    if let Some(why) = env.gpu_status().unavailable() { return Err(why.into()); }
+    if env.has_ai() && env.cuda_ready() {
         return Err("the AI splitter is already installed".into());
     }
     let _ = fs::remove_file(env.local.join("ai-declined"));
@@ -422,6 +614,7 @@ fn install_ai(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn launcher_status(l: tauri::State<'_, Launcher>) -> Status {
     let mut st = l.status.lock().unwrap().clone();
+    if let Some(env) = l.env.lock().unwrap().as_ref() { st.ai_enabled = env.ai_enabled(); }
     // a service that already exited: report it with the last line of its log instead of "starting" forever
     for (name, child) in l.children.lock().unwrap().iter_mut() {
         if let Ok(Some(code)) = child.try_wait() {
@@ -446,6 +639,7 @@ fn launcher_status(l: tauri::State<'_, Launcher>) -> Status {
             }
         }
     }
+    if !st.ai_enabled { st.ai = if listening(AI_PORT) { "error: AI server is still running".into() } else { "disabled".into() }; }
     st
 }
 
@@ -592,12 +786,12 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Launcher::default())
-        .invoke_handler(tauri::generate_handler![launcher_status, check_update, install_update, install_ai, exit_app])
+        .invoke_handler(tauri::generate_handler![launcher_status, check_update, install_update, install_ai, set_ai_enabled, exit_app])
         .setup(|app| {
             create_main_window(app.handle())?;
             let handle = app.handle().clone();
             std::thread::spawn(move || launch(&handle));
-            // High priority for the game and everything it starts (webview processes and services come up over time)
+            // Favor the game as its WebView2 processes and services come up over time.
             let h2 = app.handle().clone();
             std::thread::spawn(move || {
                 for secs in [1, 4, 10, 25, 60] {

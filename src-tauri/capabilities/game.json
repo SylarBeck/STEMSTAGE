@@ -17,6 +17,7 @@
     "allow-check-update",
     "allow-install-update",
     "allow-install-ai",
+    "allow-set-ai-enabled",
     "allow-exit-app",
     "allow-launcher-status"
   ]

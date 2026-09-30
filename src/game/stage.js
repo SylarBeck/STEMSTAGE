@@ -42,6 +42,7 @@ export const DEFAULT_LOOKS = {
 const GOLD = new THREE.Color(1, 0.8, 0.3);
 const WHITE = new THREE.Color(1, 1, 1);
 const CROWD_COUNT = { low: 350, high: 950, ultra: 1700 };
+const SPEC_LOOKUP = Array.from({ length: 128 }, (_, i) => Math.pow(i / 128, 1.6) * 0.7);
 
 const ledVertex = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
 const ledFragment = /* glsl */`
@@ -124,7 +125,7 @@ function makePoints(N, additive, map) {
   const pts = new THREE.Points(geo, mat);
   pts.frustumCulled = false;
   return {
-    pts, N, pos, col, size, head: 0,
+    pts, N, pos, col, size, head: 0, active: false,
     vel: new Float32Array(N * 3), life: new Float32Array(N), max: new Float32Array(N).fill(1),
     c0: new Float32Array(N * 3), c1: new Float32Array(N * 3), s0: new Float32Array(N),
   };
@@ -152,6 +153,8 @@ export class Stage {
     this.camPos = new THREE.Vector3(0, 5, 18);
     this.camTarget = new THREE.Vector3(0, 3, -2);
     this.curTarget = this.camTarget.clone();
+    this._camPos = new THREE.Vector3();
+    this._camAim = new THREE.Vector3();
     this.camera.position.copy(this.camPos);
     this.time = 0;
     this.pulse = 0;
@@ -511,6 +514,7 @@ export class Stage {
 
   // ---------------------------------------------------------------- particle helpers
   _spawn(sys, x, y, z, vx, vy, vz, life, size, c0, c1) {
+    sys.active = true;
     const i = sys.head; sys.head = (sys.head + 1) % sys.N;
     sys.pos[i * 3] = x; sys.pos[i * 3 + 1] = y; sys.pos[i * 3 + 2] = z;
     sys.vel[i * 3] = vx; sys.vel[i * 3 + 1] = vy; sys.vel[i * 3 + 2] = vz;
@@ -552,12 +556,15 @@ export class Stage {
   }
 
   _updateSys(sys, dt, gravity, drag, flutter = 0) {
+    if (!sys.active) return;
+    const d = Math.exp(-drag * dt);
+    let active = false;
     for (let i = 0; i < sys.N; i++) {
       if (sys.life[i] <= 0) { sys.size[i] = 0; continue; }
+      active = true;
       sys.life[i] -= dt;
       const k = Math.max(0, sys.life[i] / sys.max[i]);
       sys.vel[i * 3 + 1] += gravity * dt;
-      const d = Math.exp(-drag * dt);
       sys.vel[i * 3] *= d; sys.vel[i * 3 + 1] *= d; sys.vel[i * 3 + 2] *= d;
       sys.pos[i * 3] += (sys.vel[i * 3] + (flutter ? Math.sin(this.time * 3 + i) * flutter : 0)) * dt;
       sys.pos[i * 3 + 1] += sys.vel[i * 3 + 1] * dt;
@@ -566,6 +573,7 @@ export class Stage {
       for (let c = 0; c < 3; c++) sys.col[i * 3 + c] = sys.c1[i * 3 + c] + (sys.c0[i * 3 + c] - sys.c1[i * 3 + c]) * k;
       sys.size[i] = sys.s0[i] * (flutter ? 1 : 0.4 + 0.6 * k);
     }
+    sys.active = active;
     const g = sys.pts.geometry;
     g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true; g.attributes.aSize.needsUpdate = true;
   }
@@ -645,7 +653,7 @@ export class Stage {
     // spectrum texture
     if (f.spectrum) {
       const d = this.specTex.image.data, s = f.spectrum;
-      for (let i = 0; i < 128; i++) d[i * 4] = s[Math.min(s.length - 1, Math.floor(Math.pow(i / 128, 1.6) * s.length * 0.7))];
+      for (let i = 0; i < 128; i++) d[i * 4] = s[Math.min(s.length - 1, Math.floor(SPEC_LOOKUP[i] * s.length))];
       this.specTex.needsUpdate = true;
     }
     const U = this.ledUniforms;
@@ -724,8 +732,12 @@ export class Stage {
       this.phones.pos[i * 3] = d.x + 0.2; this.phones.pos[i * 3 + 1] = 1.95 * d.scale; this.phones.pos[i * 3 + 2] = d.z;
       this.phones.size[i] = (0.06 + 0.03 * Math.sin(t * 2 + i)) * (0.25 + calm);
     }
-    const pg = this.phones.pts.geometry;
-    pg.attributes.position.needsUpdate = true; pg.attributes.aSize.needsUpdate = true; pg.attributes.color.needsUpdate = true;
+    if (this.phones.pts.visible) {
+      const pg = this.phones.pts.geometry;
+      pg.attributes.position.needsUpdate = true;
+      pg.attributes.aSize.needsUpdate = true;
+      // Phone colours are set once in _crowd(); uploading them every frame changes nothing.
+    }
 
     // particles
     this._updateSys(this.fire, dt, -5, 0.6);
@@ -745,30 +757,30 @@ export class Stage {
 
   _camera(dt, f, pulse, beat) {
     const t = this.time;
-    let pos, tgt;
+    const pos = this._camPos, tgt = this._camAim;
     if (f.mode !== 'game' && this.previewInst) {
       // the character editor: the band member on the right half of the screen, turning slowly
       const focus = this.focusPos[this.previewInst];
       const a = Math.sin(t * 0.25) * 0.35;
-      pos = focus.clone().add(new THREE.Vector3(-0.9 + Math.sin(a) * 3.6, 0.3, Math.cos(a) * 4.2));
-      tgt = focus.clone().add(new THREE.Vector3(-0.72, -0.4, 0));
+      pos.set(focus.x - 0.9 + Math.sin(a) * 3.6, focus.y + 0.3, focus.z + Math.cos(a) * 4.2);
+      tgt.set(focus.x - 0.72, focus.y - 0.4, focus.z);
     } else if (f.mode !== 'game') {
-      pos = new THREE.Vector3(Math.sin(t * 0.06) * 13, 4.6 + Math.sin(t * 0.13) * 0.8, 13 + Math.cos(t * 0.06) * 4);
-      tgt = new THREE.Vector3(0, 3.6, -3);
+      pos.set(Math.sin(t * 0.06) * 13, 4.6 + Math.sin(t * 0.13) * 0.8, 13 + Math.cos(t * 0.06) * 4);
+      tgt.set(0, 3.6, -3);
     } else {
       this.shotTimer += dt;
       const focus = this.focusPos[f.focus] || this.focusPos.guitar;
-      const shots = {
-        wide: [new THREE.Vector3(0, 5.2, 17), new THREE.Vector3(0, 3.8, -3)],
-        left: [new THREE.Vector3(-10, 4, 11), new THREE.Vector3(-1, 3.2, -3)],
-        right: [new THREE.Vector3(10, 4, 11), new THREE.Vector3(1, 3.2, -3)],
-        low: [new THREE.Vector3(0, 1.8, 10), new THREE.Vector3(0, 4.2, -4)],
-        player: [focus.clone().add(new THREE.Vector3(focus.x > 0 ? -3.5 : 3.5, 2.2, 10.5)), focus.clone()],
-        drums: [new THREE.Vector3(3, 4.5, 4), this.focusPos.drums.clone()],
-      };
-      const s = shots[this.shot] || shots.wide;
-      pos = s[0].clone().add(new THREE.Vector3(Math.sin(t * 0.3) * 1.2, Math.sin(t * 0.47) * 0.4, Math.cos(t * 0.21) * 0.8));
-      tgt = s[1];
+      switch (this.shot) {
+        case 'left': pos.set(-10, 4, 11); tgt.set(-1, 3.2, -3); break;
+        case 'right': pos.set(10, 4, 11); tgt.set(1, 3.2, -3); break;
+        case 'low': pos.set(0, 1.8, 10); tgt.set(0, 4.2, -4); break;
+        case 'player': pos.set(focus.x + (focus.x > 0 ? -3.5 : 3.5), focus.y + 2.2, focus.z + 10.5); tgt.copy(focus); break;
+        case 'drums': pos.set(3, 4.5, 4); tgt.copy(this.focusPos.drums); break;
+        default: pos.set(0, 5.2, 17); tgt.set(0, 3.8, -3);
+      }
+      pos.x += Math.sin(t * 0.3) * 1.2;
+      pos.y += Math.sin(t * 0.47) * 0.4;
+      pos.z += Math.cos(t * 0.21) * 0.8;
     }
     const k = Math.min(1, dt * (f.mode === 'game' ? 1.1 : 0.6));
     this.camera.position.lerp(pos, k);

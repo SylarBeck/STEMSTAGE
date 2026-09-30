@@ -37,7 +37,17 @@
   ${If} $R7 == "interactive"
   ${AndIfNot} ${FileExists} "$LOCALAPPDATA\stemstage\venv\stemstage-ai.ok"
   ${AndIfNot} ${FileExists} "$LOCALAPPDATA\stemstage\ai-declined"
-    MessageBox MB_YESNO|MB_ICONQUESTION "Install the AI splitter now?$\r$\n$\r$\nIt splits any song into instrument stems (Demucs), transcribes the notes and writes the lyrics. It's a large download (about 3-5 GB, a few minutes to half an hour) and uses your NVIDIA GPU if you have one.$\r$\n$\r$\nWithout it STEMSTAGE uses a simpler built-in splitter. You can install it later from Settings -> AI splitter." IDYES stemstage_ai
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\app\server\check-gpu.ps1"'
+    Pop $R6
+    ${If} $R6 == 2
+      MessageBox MB_YESNO|MB_ICONINFORMATION "An NVIDIA GPU was found, but its driver is not working. Open NVIDIA's official driver download page now? STEMSTAGE will use quick DSP until the driver is installed." IDNO stemstage_done
+      ExecShell "open" "https://www.nvidia.com/Download/index.aspx"
+      Goto stemstage_done
+    ${ElseIf} $R6 != 0
+      DetailPrint "No working NVIDIA GPU was found; skipping the AI download. STEMSTAGE uses quick DSP."
+      Goto stemstage_done
+    ${EndIf}
+    MessageBox MB_YESNO|MB_ICONQUESTION "Install the AI splitter now?$\r$\n$\r$\nIt splits any song into instrument stems (Demucs), transcribes the notes and writes the lyrics. It requires a working NVIDIA driver and downloads about 3-5 GB.$\r$\n$\r$\nWithout it STEMSTAGE uses the built-in DSP splitter. You can install it later from Settings -> AI splitter." IDYES stemstage_ai
       FileOpen $R5 "$LOCALAPPDATA\stemstage\ai-declined" w
       FileWrite $R5 "declined in the installer"
       FileClose $R5

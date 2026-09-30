@@ -45,6 +45,7 @@ export class AIClient {
   constructor(url) { this.url = url.replace(/\/$/, ''); }
 
   async health() {
+    if (!settings.aiEnabled) return null;
     try {
       const r = await fetch(`${this.url}/health`, { signal: AbortSignal.timeout(1500) });
       if (!r.ok) return null;
@@ -217,9 +218,10 @@ export async function importFile(file, mode, engine, report, extra = {}) {
   report('decode', 1, `${duration.toFixed(1)}s of audio at ${STEM_RATE / 1000} kHz`);
 
   let method = 'dsp', model = 'Spectral HPSS (in-browser)', stems, remarks = [], aiNotes = null;
-  let useAI = mode === 'ai';
+  let useAI = settings.aiEnabled && mode === 'ai';
   const client = aiClient();
-  if (mode === 'auto') useAI = !!(await client.health());
+  // Auto never starts a CPU splitter: that can monopolize a smaller laptop during imports.
+  if (mode === 'auto') useAI = (await client.health())?.device === 'cuda';
   if (useAI) {
     const h = await client.health();
     if (!h) throw new Error(`AI splitter not reachable at ${settings.aiServer}. Start it with: npm run ai`);
@@ -361,6 +363,7 @@ export async function createDemo(report) {
  * words, stored in song.json as song.lyrics = { language, words: [{ t, e, w }], source }.
  */
 export async function fetchLyrics(song, onStatus = () => {}) {
+  if (!settings.aiEnabled) throw new Error('Turn on the AI server in Settings to generate lyrics');
   const audio = await getAudio(song.id);
   const v = audio?.stems?.vocals;
   if (!v) throw new Error('This song has no vocal stem');
