@@ -1993,7 +1993,7 @@ export class UI {
     if (a === 'testDiscord') {
       try {
         const u = await discord.currentUser();
-        this.toast(`Discord connected · signed in as ${u.globalName || u.username}${settings.discordPresence ? ' · your status will show what you play' : ''}`, 'ok');
+        this.toast(`Discord connected · signed in as ${u.globalName || u.username}${settings.discordPresence ? ' · game status accepted' : ' · game status is off in Settings'}`, 'ok');
       } catch (e) { this.toast(e.message, 'err'); }
     }
     if (a === 'testInstrument') this.testMic({ instrument: true });

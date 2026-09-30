@@ -459,8 +459,42 @@ export class Stage {
     const armR = armL.clone().translate(0.52, 0, 0);
     const geo = mergeGeometries([body, head, armL, armR]);
     const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0.05 });
+    this.crowdUniforms = {
+      uCrowdTime: { value: 0 }, uCrowdBeat: { value: 0 },
+      uCrowdJump: { value: 0 }, uCrowdOD: { value: 0 },
+    };
+    mat.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, this.crowdUniforms);
+      shader.vertexShader = /* glsl */`
+        attribute float aCrowdPhase, aCrowdAmp, aCrowdJumper;
+        uniform float uCrowdTime, uCrowdBeat, uCrowdJump, uCrowdOD;
+        vec3 animateCrowd(vec3 p, bool isNormal) {
+          float ph = uCrowdBeat + aCrowdPhase * 0.25;
+          float tilt = sin(ph * 0.5) * 0.05;
+          float yaw = sin(uCrowdTime * 0.8 + aCrowdPhase) * 0.1;
+          if (isNormal) p.y /= 1.0 + uCrowdOD * 0.05;
+          else p.y *= 1.0 + uCrowdOD * 0.05;
+          float ct = cos(tilt), st = sin(tilt);
+          p.xy = vec2(ct * p.x - st * p.y, st * p.x + ct * p.y);
+          float cy = cos(yaw), sy = sin(yaw);
+          p.xz = vec2(cy * p.x + sy * p.z, -sy * p.x + cy * p.z);
+          return p;
+        }
+      ` + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nobjectNormal = animateCrowd(objectNormal, true);')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = animateCrowd(transformed, false);');
+      // Keep the small sway and jump in world units, independent of each person's scale.
+      shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', THREE.ShaderChunk.project_vertex.replace(
+        'mvPosition = instanceMatrix * mvPosition;',
+        `mvPosition = instanceMatrix * mvPosition;
+         float ph = uCrowdBeat + aCrowdPhase * 0.25;
+         float jump = mix(sin(ph) * 0.04, max(0.0, sin(ph)) * uCrowdJump * aCrowdAmp, aCrowdJumper);
+         mvPosition.xyz += vec3(sin(uCrowdTime * 0.5 + aCrowdPhase) * 0.05, jump, 0.0);`,
+      ));
+    };
+    mat.customProgramCacheKey = () => 'crowd-gpu-animation-v1';
     this.crowd = new THREE.InstancedMesh(geo, mat, n);
-    this.crowd.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.crowdData = [];
     const c = new THREE.Color();
     for (let i = 0; i < n; i++) {
@@ -472,12 +506,26 @@ export class Stage {
     }
     // front rows first: a small venue shows only the first part of the crowd (see setVenue)
     this.crowdData.sort((a, b) => a.z + Math.abs(a.x) * 0.35 - (b.z + Math.abs(b.x) * 0.35));
+    const phases = new Float32Array(n), amps = new Float32Array(n), jumpers = new Float32Array(n);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+    const pos = new THREE.Vector3(), scale = new THREE.Vector3();
     for (let i = 0; i < n; i++) {
+      const d = this.crowdData[i];
+      phases[i] = d.phase; amps[i] = d.amp; jumpers[i] = d.jumper ? 1 : 0;
+      pos.set(d.x, 0, d.z);
+      q.setFromEuler(e.set(0, d.rot, 0));
+      scale.setScalar(d.scale);
+      this.crowd.setMatrixAt(i, m.compose(pos, q, scale));
       c.setHSL(0.02 + Math.random() * 0.08, 0.15, 0.04 + Math.random() * 0.07);
       this.crowd.setColorAt(i, c);
     }
+    geo.setAttribute('aCrowdPhase', new THREE.InstancedBufferAttribute(phases, 1));
+    geo.setAttribute('aCrowdAmp', new THREE.InstancedBufferAttribute(amps, 1));
+    geo.setAttribute('aCrowdJumper', new THREE.InstancedBufferAttribute(jumpers, 1));
+    this.crowd.instanceMatrix.needsUpdate = true;
+    this.crowd.computeBoundingSphere();
+    this.crowd.boundingSphere.radius += 1; // allow for the animated jump and sway during culling
     this.scene.add(this.crowd);
-    this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._v = new THREE.Vector3(); this._s = new THREE.Vector3(); this._e = new THREE.Euler();
 
     // phone lights
     const lightsN = Math.floor(n * 0.12);
@@ -713,18 +761,9 @@ export class Stage {
     // crowd
     const jumpAmp = (0.1 + intensity * 0.45 + od * 0.35) * (f.mode === 'game' ? 1 : 0.4);
     const n = this.crowd.count;
-    for (let i = 0; i < n; i++) {
-      const d = this.crowdData[i];
-      const ph = bp + d.phase * 0.25;
-      const jump = d.jumper ? Math.max(0, Math.sin(ph)) * jumpAmp * d.amp : Math.sin(ph) * 0.04;
-      this._v.set(d.x + Math.sin(t * 0.5 + d.phase) * 0.05, jump, d.z);
-      this._e.set(0, d.rot + Math.sin(t * 0.8 + d.phase) * 0.1, Math.sin(ph * 0.5) * 0.05);
-      this._q.setFromEuler(this._e);
-      this._s.set(d.scale, d.scale * (1 + (od ? 0.05 : 0)), d.scale);
-      this._m.compose(this._v, this._q, this._s);
-      this.crowd.setMatrixAt(i, this._m);
-    }
-    this.crowd.instanceMatrix.needsUpdate = true;
+    const CU = this.crowdUniforms;
+    CU.uCrowdTime.value = t; CU.uCrowdBeat.value = bp;
+    CU.uCrowdJump.value = jumpAmp; CU.uCrowdOD.value = od;
     const calm = 1 - Math.min(1, intensity * 1.6);
     for (let i = 0; i < this.phoneIdx.length && this.phones.pts.visible; i++) {
       if (this.phoneIdx[i] >= n) { this.phones.size[i] = 0; continue; } // nobody standing there in this venue

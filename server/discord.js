@@ -48,8 +48,15 @@ class DiscordIpc {
     this.connecting = null;
     this.lastTry = 0;
     this.activity = null; // re-sent after a reconnect
+    this.activityError = null;
+    this.pendingAcks = new Map();
     this.events = []; // join events waiting for the game (Discord may start the game to deliver one)
     this.listeners = new Set();
+    // Discord may be launched after the game, or restarted while it is open.
+    this.retryTimer = setInterval(() => {
+      if (this.activity && this.clientId && !this.connected && !this.connecting) void this.connect(this.clientId).catch(() => {});
+    }, 15000);
+    this.retryTimer.unref();
   }
 
   /** A Discord event for the game: straight to connected games, or kept until one connects. */
@@ -68,12 +75,14 @@ class DiscordIpc {
   }
 
   get connected() { return !!(this.sock && this.user); }
-  state() { return { connected: this.connected, user: this.user, error: this.error, clientId: this.clientId }; }
+  state() { return { connected: this.connected, user: this.user, error: this.error, activityError: this.activityError, clientId: this.clientId }; }
 
   close() {
     try { this.sock?.destroy(); } catch { /* gone */ }
     this.sock = null;
     this.user = null;
+    for (const done of this.pendingAcks.values()) done(false);
+    this.pendingAcks.clear();
   }
 
   async connect(clientId, { force = false } = {}) {
@@ -127,8 +136,12 @@ class DiscordIpc {
             this.user = { id: u.id, username: u.username, globalName: u.global_name || null, avatar: u.avatar || null };
             // friends pressing Join / Ask to Join on our status
             for (const evt of ['ACTIVITY_JOIN', 'ACTIVITY_JOIN_REQUEST']) sock.write(encode(OP.FRAME, { cmd: 'SUBSCRIBE', evt, args: {}, nonce: randomUUID() }));
-            if (this.activity) this._send(this.activity);
+            if (this.activity) void this._send(this.activity);
             finish(true);
+          } else if (msg?.cmd === 'SET_ACTIVITY' && this.pendingAcks.has(msg.nonce)) {
+            this.activityError = msg.evt === 'ERROR' ? (msg.data?.message || 'Discord rejected the activity') : null;
+            this.pendingAcks.get(msg.nonce)(!this.activityError);
+            this.pendingAcks.delete(msg.nonce);
           } else if (msg?.cmd === 'DISPATCH' && msg.evt === 'ACTIVITY_JOIN' && msg.data?.secret) {
             this.emit({ type: 'join', secret: msg.data.secret });
           } else if (msg?.cmd === 'DISPATCH' && msg.evt === 'ACTIVITY_JOIN_REQUEST' && msg.data?.user?.id) {
@@ -141,7 +154,10 @@ class DiscordIpc {
           }
         }
       });
-      sock.on('close', () => { if (this.sock === sock) { this.sock = null; this.user = null; } finish(false); });
+      sock.on('close', () => {
+        if (this.sock === sock) { this.close(); this.error = 'Discord disconnected'; }
+        finish(false);
+      });
       sock.on('error', () => {});
       sock.write(encode(OP.HANDSHAKE, { v: 1, client_id: clientId }));
       setTimeout(() => { if (!done) { this.error = 'Discord did not answer'; sock.destroy(); finish(false); } }, 4000);
@@ -149,15 +165,21 @@ class DiscordIpc {
   }
 
   _send(activity) {
-    if (!this.sock) return false;
-    this.sock.write(encode(OP.FRAME, { cmd: 'SET_ACTIVITY', args: { pid: process.pid, ...(activity ? { activity } : {}) }, nonce: randomUUID() }));
-    return true;
+    if (!this.sock) return Promise.resolve(false);
+    const nonce = randomUUID();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => { this.pendingAcks.delete(nonce); this.activityError = 'Discord did not confirm the status'; resolve(false); }, 4000);
+      timer.unref();
+      this.pendingAcks.set(nonce, (ok) => { clearTimeout(timer); resolve(ok); });
+      try { this.sock.write(encode(OP.FRAME, { cmd: 'SET_ACTIVITY', args: { pid: process.pid, ...(activity ? { activity } : {}) }, nonce })); }
+      catch { this.pendingAcks.get(nonce)(false); this.pendingAcks.delete(nonce); }
+    });
   }
 
   async setActivity(clientId, a) {
     this.activity = a ? toActivity(a) : null;
     await this.connect(clientId);
-    return this._send(this.activity);
+    return await this._send(this.activity);
   }
 }
 

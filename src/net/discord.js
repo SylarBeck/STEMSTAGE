@@ -46,7 +46,13 @@ class Discord {
   /** The Discord account signed in to the Discord app on this PC. Throws a readable error. */
   async currentUser() {
     const s = await this.connect();
-    if (s.user) return s.user;
+    if (s.user) {
+      if (settings.discordPresence) {
+        const sent = await api('activity', { clientId: appId(), activity: this.pending || { details: 'STEMSTAGE', state: 'In the menus' } });
+        if (!sent.ok) throw new Error(sent.activityError || sent.error || 'Discord did not accept the game status');
+      }
+      return s.user;
+    }
     const e = s.error || '';
     if (/application ID|Invalid Client ID/i.test(e)) throw new Error('Discord isn’t set up in this build of STEMSTAGE');
     throw new Error(e || 'Discord is not running on this PC');
