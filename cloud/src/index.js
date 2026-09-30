@@ -3,7 +3,7 @@
 //   POST /v1/scores                 the game submits a finished run (see submit() for the body)
 //   GET  /v1/leaderboard?song=<key>&instrument=&difficulty=&limit=   best runs on one chart
 //   GET  /v1/players?limit=         overall: every player's best scores added up
-//   GET  /v1/songs?limit=&q=        songs with scores (key, title, artist, runs)
+//   GET  /v1/songs?limit=&q=&before=  paged songs with scores
 //   GET  /v1/recent?limit=          newest runs
 //   POST /v1/profile                the game shares a profile card (level, achievements, stats)
 //   POST /v1/link                   link (or unlink) a Discord account: the game passes the Discord login's token,
@@ -15,7 +15,7 @@
 //   GET  /v1/charts?song=&instrument=   the charts players uploaded for a song part, ranked one first, with votes
 //   GET  /v1/chart?id=              one chart in full (the game downloads it and lines it up with its own audio)
 //   POST /v1/charts/vote            vote for the chart a song part should be ranked on
-//   GET  /v1/library?q=&limit=&offset=   the chart library: songs with uploaded charts, their parts and players
+//   GET  /v1/library?q=&limit=&before=  paged chart library: songs with uploaded charts, their parts and players
 //   GET  /v1/challenge?player=      this week's challenge (a ranked song part) and its board
 //   GET  /v1/season?player=         this season's standings (points from the weekly challenges)
 //   GET  /v1/rooms                  public online rooms (hosts re-announce every 30 s; listed for 90 s)
@@ -421,22 +421,47 @@ async function rooms(url, env) {
   return reply(url, { rows: results.map((r) => ({ ...r, playing: !!r.playing })) }, 5);
 }
 
+// Search returns bounded pages of song keys first. FTS handles title/artist words; the separate detail query only
+// calculates chart/score counts for the page, instead of aggregating the entire catalog on every request.
+async function songPage(url, env, kind, max = 200) {
+  const raw = String(url.searchParams.get('q') || '').slice(0, 120);
+  const terms = raw.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u).filter((t) => t.length >= 2).slice(0, 8);
+  const limit = limitOf(url, 30, max);
+  if (raw.trim() && !terms.length) return { rows: [], next: null };
+  const before = clampInt(url.searchParams.get('before') ?? Number.MAX_SAFE_INTEGER, 1, Number.MAX_SAFE_INTEGER);
+  const offset = clampInt(url.searchParams.get('offset') ?? 0, 0, 1000); // compatibility; new clients use before
+  const searched = terms.length > 0;
+  const sql = `SELECT g.rowid AS cursor, g.key, g.title, g.artist, g.duration
+    FROM ${searched ? 'song_search JOIN songs g ON g.rowid = song_search.rowid' : 'songs g'}
+    WHERE ${searched ? 'song_search MATCH ? AND ' : ''}g.rowid < ?
+      AND EXISTS (SELECT 1 FROM ${kind} x WHERE x.song_key = g.key)
+    ORDER BY g.rowid DESC LIMIT ? OFFSET ?`;
+  const match = terms.map((t) => `"${t}"*`).join(' AND ');
+  const { results } = await env.DB.prepare(sql).bind(...(searched ? [match] : []), before, limit + 1, offset).all();
+  const hasMore = results.length > limit;
+  const rows = results.slice(0, limit);
+  return { rows, next: hasMore ? rows.at(-1).cursor : null };
+}
+
 // ---------------------------------------------------------------- chart library
-/** Songs that have charts, most played first: the parts with a ranked chart, how many charts, how many players. */
+/** Songs with charts; each result page is bounded even when the catalog has millions of songs. */
 async function library(url, env) {
-  const q = norm(url.searchParams.get('q') || '');
-  const limit = limitOf(url, 50, 200), offset = clampInt(url.searchParams.get('offset') ?? 0, 0, 100000);
-  const { results } = await env.DB.prepare(`SELECT g.key, g.title, g.artist, g.duration,
+  const page = await songPage(url, env, 'charts');
+  if (!page.rows.length) return reply(url, { rows: [], next: null }, 60);
+  const keys = page.rows.map((r) => r.key);
+  const { results } = await env.DB.prepare(`SELECT g.key,
       (SELECT COUNT(*) FROM charts c WHERE c.song_key = g.key) AS charts,
       (SELECT GROUP_CONCAT(rc.instrument) FROM ranked_charts rc WHERE rc.song_key = g.key) AS parts,
       (SELECT COUNT(DISTINCT r.player_id) FROM runs r WHERE r.song_key = g.key) AS players,
       (SELECT MAX(c.created) FROM charts c WHERE c.song_key = g.key) AS updated
-    FROM songs g WHERE EXISTS (SELECT 1 FROM charts c WHERE c.song_key = g.key) ${q ? "AND lower(g.title || ' ' || COALESCE(g.artist, '')) LIKE ?" : ''}
-    ORDER BY players DESC, updated DESC LIMIT ? OFFSET ?`).bind(...(q ? [`%${q}%`] : []), limit, offset).all();
+    FROM songs g WHERE g.key IN (${keys.map(() => '?').join(',')})`).bind(...keys).all();
+  const details = new Map(results.map((r) => [r.key, r]));
   const order = Object.fromEntries(INSTRUMENTS.map((i, k) => [i, k]));
   return reply(url, {
-    rows: results.map((r) => ({ key: r.key, title: r.title, artist: r.artist, duration: r.duration, charts: r.charts, players: r.players, updated: r.updated,
-      parts: String(r.parts || '').split(',').filter(Boolean).sort((a, b) => order[a] - order[b]) })),
+    rows: page.rows.map((g) => { const r = details.get(g.key); return { key: g.key, title: g.title, artist: g.artist, duration: g.duration, charts: r.charts, players: r.players, updated: r.updated,
+      parts: String(r.parts || '').split(',').filter(Boolean).sort((a, b) => order[a] - order[b]) }; }),
+    next: page.next,
   }, 60);
 }
 
@@ -561,12 +586,17 @@ async function players(url, env) {
 }
 
 async function songs(url, env) {
-  const q = norm(url.searchParams.get('q') || '');
-  const { results } = await env.DB.prepare(`SELECT g.key, g.title, g.artist, COUNT(DISTINCT s.player_id) AS entries, MAX(s.score) AS best, MAX(s.created) AS last,
+  const page = await songPage(url, env, 'scores', 500);
+  if (!page.rows.length) return reply(url, { rows: [], next: null }, 60);
+  const keys = page.rows.map((r) => r.key);
+  const { results } = await env.DB.prepare(`SELECT g.key,
+      (SELECT COUNT(DISTINCT s.player_id) FROM scores s WHERE s.song_key = g.key) AS entries,
+      (SELECT MAX(s.score) FROM scores s WHERE s.song_key = g.key) AS best,
+      (SELECT MAX(s.created) FROM scores s WHERE s.song_key = g.key) AS last,
       (SELECT COUNT(*) FROM ranked_charts r WHERE r.song_key = g.key) AS ranked
-    FROM songs g JOIN scores s ON s.song_key = g.key ${q ? 'WHERE lower(g.title || \' \' || g.artist) LIKE ?' : ''}
-    GROUP BY g.key ORDER BY entries DESC, last DESC LIMIT ?`).bind(...(q ? [`%${q}%`] : []), limitOf(url, 100, 500)).all();
-  return reply(url, { rows: results }, 60);
+    FROM songs g WHERE g.key IN (${keys.map(() => '?').join(',')})`).bind(...keys).all();
+  const details = new Map(results.map((r) => [r.key, r]));
+  return reply(url, { rows: page.rows.map((g) => ({ key: g.key, title: g.title, artist: g.artist, ...details.get(g.key) })), next: page.next }, 60);
 }
 
 async function recent(url, env) {

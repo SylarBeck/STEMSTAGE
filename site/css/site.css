@@ -60,6 +60,7 @@ h2.h-display { font-size: clamp(38px, 9vw, 64px); }
 /* ---------- buttons ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 10px 20px; border: 2px solid rgba(236, 229, 211, 0.4); border-radius: 2px; background: transparent;
   color: var(--ink); font-family: var(--body); font-weight: 800; font-size: 18px; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; cursor: pointer; line-height: 1.1; transition: background .1s, color .1s, box-shadow .1s, border-color .1s; }
+[hidden] { display: none !important; }
 .btn small { font-weight: 600; letter-spacing: 0.02em; text-transform: none; font-size: 16px; opacity: 0.85; }
 .btn.primary { background: var(--red); border-color: var(--red); color: #fff5ea; }
 .btn.block { display: flex; width: 100%; }
