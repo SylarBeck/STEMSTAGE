@@ -14,6 +14,18 @@ CREATE TABLE IF NOT EXISTS songs (
   title TEXT NOT NULL, artist TEXT, duration INTEGER,
   created INTEGER NOT NULL
 );
+-- Indexed title/artist search. Keep it in sync as songs arrive from score and chart uploads.
+CREATE VIRTUAL TABLE IF NOT EXISTS song_search USING fts5(title, artist, content='songs', content_rowid='rowid', tokenize='unicode61 remove_diacritics 2', prefix='2 3');
+CREATE TRIGGER IF NOT EXISTS songs_search_ai AFTER INSERT ON songs BEGIN
+  INSERT INTO song_search(rowid, title, artist) VALUES (new.rowid, new.title, new.artist);
+END;
+CREATE TRIGGER IF NOT EXISTS songs_search_ad AFTER DELETE ON songs BEGIN
+  INSERT INTO song_search(song_search, rowid, title, artist) VALUES ('delete', old.rowid, old.title, old.artist);
+END;
+CREATE TRIGGER IF NOT EXISTS songs_search_au AFTER UPDATE ON songs BEGIN
+  INSERT INTO song_search(song_search, rowid, title, artist) VALUES ('delete', old.rowid, old.title, old.artist);
+  INSERT INTO song_search(rowid, title, artist) VALUES (new.rowid, new.title, new.artist);
+END;
 -- charts players uploaded: the notes (no audio) + a fingerprint of the uploader's recording for lining it up
 CREATE TABLE IF NOT EXISTS charts (
   id TEXT PRIMARY KEY,            -- sha256 of the canonical chart, first 16 hex
@@ -51,6 +63,7 @@ CREATE TABLE IF NOT EXISTS runs (
   score INTEGER NOT NULL, created INTEGER NOT NULL, chart_id TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS runs_chart ON runs (chart_id, player_id);
+CREATE INDEX IF NOT EXISTS runs_song ON runs (song_key, player_id);
 -- public online rooms: re-announced by the host every 30 s, listed while fresh (90 s), pruned after 10 minutes
 CREATE TABLE IF NOT EXISTS rooms (
   code TEXT PRIMARY KEY,          -- the room's invite code (the words of its Cloudflare tunnel)

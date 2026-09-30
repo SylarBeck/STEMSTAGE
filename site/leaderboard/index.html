@@ -33,8 +33,19 @@
     .filters { display: grid; gap: 8px; margin-bottom: 14px; }
     .filters select { width: 100%; min-width: 0; }
     .filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    .filters #song, .filters #chart { grid-column: 1 / -1; }
+    .filters #chart { grid-column: 1 / -1; }
     @media (min-width: 760px) { .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } .filters #chart { grid-column: auto; } }
+    .song-finder { display: flex; gap: 8px; margin-bottom: 8px; }
+    .song-finder input { flex: 1; min-width: 0; }
+    .song-results { display: grid; gap: 2px; max-height: 280px; overflow-y: auto; border: 1px solid var(--line); margin-bottom: 8px; }
+    .song-results button { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: rgba(236,229,211,0.035); color: var(--ink); padding: 9px 12px; cursor: pointer; font: inherit; }
+    .song-results button:hover, .song-results button:focus-visible { background: rgba(236,229,211,0.12); }
+    .song-results b { display: block; line-height: 1.15; }
+    .song-results small { display: block; color: var(--dim); font-size: 15px; }
+    .song-results .muted { padding: 10px 12px; margin: 0; }
+    .selected-song { margin: 8px 0 14px; color: var(--dim); font-size: 16px; }
+    .selected-song b { color: var(--ink); }
+    .song-more { margin-bottom: 12px; }
     .board-note { color: var(--dim); font-size: 16px; margin: 12px 0 0; }
     .charts { list-style: none; margin: 14px 0 0; padding: 0; }
     .charts li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
@@ -87,13 +98,16 @@
   <main class="wrap boards">
     <section class="panel">
       <h2><i class="fa-solid fa-ranking-star"></i> Song boards</h2>
+      <div class="song-finder"><input type="search" id="song-q" placeholder="Search song or artist" aria-label="Search song or artist" autocomplete="off" /><button class="btn primary" id="song-go" type="button">Search</button></div>
+      <div class="song-results" id="song-results" aria-live="polite"><p class="muted">Loading songs…</p></div>
+      <button class="btn song-more" id="song-more" type="button" hidden>More songs</button>
+      <p class="selected-song" id="selected-song">Choose a song to see its board.</p>
       <div class="filters">
-        <select id="song" aria-label="Song"><option>Loading songs…</option></select>
         <select id="inst" aria-label="Instrument"><option value="guitar">Guitar</option><option value="bass">Bass</option><option value="drums">Drums</option><option value="keys">Keys</option><option value="vocals">Vocals</option></select>
         <select id="diff" aria-label="Difficulty"><option value="expert">Expert</option><option value="hard">Hard</option><option value="medium">Medium</option><option value="easy">Easy</option></select>
         <select id="chart" aria-label="Chart"><option value="ranked">Ranked chart</option><option value="all">All charts (for fun: charts differ)</option></select>
       </div>
-      <table class="table" id="board"><tr><td class="muted">Loading…</td></tr></table>
+      <table class="table" id="board"><tr><td class="muted">Choose a song to see its board.</td></tr></table>
       <p class="board-note" id="board-note"></p>
       <div id="charts"></div>
     </section>
@@ -131,6 +145,7 @@
     if (params.get('inst')) $('inst').value = params.get('inst');
     if (params.get('diff')) $('diff').value = params.get('diff');
     const wantChart = params.get('chart');
+    let selectedSongKey = /^[0-9a-f]{16}$/.test(params.get('song') || '') ? params.get('song') : '';
     const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
     const NOTES = {
       ranked: 'Runs on the ranked chart: everyone here played the same notes.',
@@ -145,6 +160,7 @@
       box.innerHTML = '';
       let c;
       try { c = await get('charts', { song, instrument: inst }); } catch { return; }
+      if (song !== selectedSongKey || inst !== $('inst').value) return;
       const keep = $('chart').value;
       $('chart').innerHTML = '<option value="ranked">Ranked chart</option><option value="all">All charts (for fun: charts differ)</option>'
         + c.rows.filter((r) => !r.ranked).map((r) => `<option value="${esc(r.id)}">Chart by ${esc(r.uploader || 'a player')} (${plural(r.players, 'player')})</option>`).join('');
@@ -158,8 +174,8 @@
 
     // on a phone the accuracy and streak columns fold away and the stars sit under the score
     async function board(reloadCharts = true) {
-      const song = $('song').value;
-      if (!song) { $('board').innerHTML = '<tr><td class="muted">No scores yet — play a song in STEMSTAGE while signed in to a profile.</td></tr>'; return; }
+      const song = selectedSongKey;
+      if (!song) { $('board').innerHTML = '<tr><td class="muted">Choose a song to see its board.</td></tr>'; return; }
       const chart = $('chart').value;
       history.replaceState(null, '', `?${new URLSearchParams({ song, inst: $('inst').value, diff: $('diff').value, ...(chart !== 'ranked' ? { chart } : {}), ...(API === localApi ? { api: localApi } : {}) })}`);
       $('board').innerHTML = '<tr><td class="muted">Loading…</td></tr>';
@@ -167,22 +183,55 @@
       if (reloadCharts) charts(song, $('inst').value);
       try {
         const b = await get('leaderboard', { song, instrument: $('inst').value, difficulty: $('diff').value, limit: 100, chart });
+        if (song !== selectedSongKey) return;
+        if (b.song) $('selected-song').innerHTML = `Board for <b>${esc(b.song.title)}${b.song.artist ? ` — ${esc(b.song.artist)}` : ''}</b>`;
         $('board-note').textContent = NOTES[b.mode] || '';
         $('board').innerHTML = '<tr><th>#</th><th>Player</th><th class="num">Score</th><th class="wide-only">Stars</th><th class="num wide-only">Acc.</th><th class="num wide-only">Streak</th></tr>' + (b.rows.map((r, i) => `
           <tr class="${i === 0 ? 'top1' : ''}" data-player="${esc(r.playerId)}"><td class="pos">${i + 1}</td><td class="name"><a class="pl" href="../player/?id=${encodeURIComponent(r.playerId)}">${av(r)}${esc(r.player)}</a>${b.mode === 'all' && r.ranked ? '<span class="stamp mini">Ranked</span>' : ''}</td>
           <td class="num">${r.score.toLocaleString()}<small class="narrow-only">${stars(r.stars)}${r.fc ? '<i class="fa-solid fa-gem gem" title="Full combo"></i>' : ''}</small></td>
           <td class="wide-only">${stars(r.stars)}${r.fc ? '<i class="fa-solid fa-gem gem" title="Full combo"></i>' : ''}</td><td class="num wide-only">${Math.round(r.accuracy * 100)}%</td><td class="num wide-only">${r.maxStreak}</td></tr>`).join('')
           || '<tr><td colspan="6" class="muted">Nobody has played this part yet. Be the first!</td></tr>');
-      } catch { fail($('board'), 'This board'); }
+      } catch { if (song === selectedSongKey) fail($('board'), 'This board'); }
     }
 
-    get('songs', { limit: 500 }).then((s) => {
-      $('song').innerHTML = s.rows.map((x) => `<option value="${esc(x.key)}">${esc(x.title)}${x.artist ? ` — ${esc(x.artist)}` : ''} (${x.entries})</option>`).join('') || '<option value="">No songs yet</option>';
-      if (params.get('song') && s.rows.some((x) => x.key === params.get('song'))) $('song').value = params.get('song');
-      if (wantChart) { if (![...$('chart').options].some((o) => o.value === wantChart)) $('chart').add(new Option('Chart', wantChart)); $('chart').value = wantChart; }
-      board();
-    }).catch(() => { $('song').innerHTML = '<option value="">Unavailable</option>'; fail($('board'), 'The leaderboard'); });
-    ['song', 'inst'].forEach((id) => $(id).addEventListener('change', () => { $('chart').value = 'ranked'; board(); }));
+    // Search the API in small pages. A deep link can open a board even when that song is not in the search page.
+    let searchTicket = 0, nextSong = null, searchQuery = '';
+    async function findSongs(more = false) {
+      const q = $('song-q').value.trim();
+      if (q && q.length < 2) {
+        ++searchTicket;
+        nextSong = null;
+        $('song-results').innerHTML = '<p class="muted">Type at least 2 letters.</p>';
+        $('song-more').hidden = true;
+        return;
+      }
+      if (!more) { searchQuery = q; nextSong = null; $('song-results').innerHTML = '<p class="muted">Searching…</p>'; }
+      const ticket = ++searchTicket;
+      $('song-more').hidden = true;
+      try {
+        const s = await get('songs', { limit: 20, ...(searchQuery ? { q: searchQuery } : {}), ...(more && nextSong ? { before: nextSong } : {}) });
+        if (ticket !== searchTicket) return;
+        const html = s.rows.map((x) => `<button type="button" data-song="${esc(x.key)}"><b>${esc(x.title)}</b><small>${esc(x.artist || 'Unknown artist')} · ${x.entries} player${x.entries === 1 ? '' : 's'}</small></button>`).join('');
+        $('song-results').innerHTML = more ? $('song-results').innerHTML + html : html || `<p class="muted">${searchQuery ? 'No songs match that search.' : 'No scored songs yet.'}</p>`;
+        nextSong = s.next || null;
+        $('song-more').hidden = !nextSong;
+        $('song-results').querySelectorAll('[data-song]').forEach((button) => { button.onclick = () => {
+          selectedSongKey = button.dataset.song;
+          $('selected-song').innerHTML = `Board for <b>${esc(button.querySelector('b').textContent)}</b>`;
+          $('chart').value = 'ranked';
+          board();
+        }; });
+      } catch { if (ticket === searchTicket) $('song-results').innerHTML = '<p class="muted">Song search is unavailable right now.</p>'; }
+    }
+    let searchTimer;
+    $('song-q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => findSongs(), 250); });
+    $('song-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(searchTimer); findSongs(); } });
+    $('song-go').addEventListener('click', () => { clearTimeout(searchTimer); findSongs(); });
+    $('song-more').addEventListener('click', () => findSongs(true));
+    if (wantChart) { if (![...$('chart').options].some((o) => o.value === wantChart)) $('chart').add(new Option('Chart', wantChart)); $('chart').value = wantChart; }
+    if (selectedSongKey) board();
+    findSongs();
+    $('inst').addEventListener('change', () => { $('chart').value = 'ranked'; board(); });
     $('diff').addEventListener('change', () => board(false));
     $('chart').addEventListener('change', () => board(false));
 

@@ -29,6 +29,7 @@ npx wrangler d1 execute stemstage --remote --file migrations/0003_ranked_charts.
 npx wrangler d1 execute stemstage --remote --file migrations/0004_rooms.sql          # 1.7.0: public online rooms
 npx wrangler d1 execute stemstage --remote --file migrations/0005_challenges.sql     # 1.8.0: weekly challenges
 npx wrangler d1 execute stemstage --remote --file migrations/0006_security.sql       # 1.8.1: verified Discord links, vote + score checks
+npx wrangler d1 execute stemstage --remote --file migrations/0007_song_search.sql    # indexed title/artist search
 npx wrangler deploy
 ```
 
