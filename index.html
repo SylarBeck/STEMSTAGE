@@ -227,6 +227,7 @@
       <div class="chartlib">
         <div class="yt-search"><input type="text" id="cl-q" placeholder="Search charted songs" spellcheck="false" data-osk="Search charted songs" data-osk-submit="cl-search" /><button class="nav-btn primary" data-nav data-action="cl-search">Search</button></div>
         <div class="cl-list" id="cl-list"></div>
+        <div class="cl-footer"><button class="nav-btn" id="cl-more" data-nav data-action="cl-more" hidden>More songs</button><span class="small-note" id="cl-status" aria-live="polite"></span></div>
       </div>
     </section>
 
@@ -269,6 +270,7 @@
         <div class="online-lobby panel" id="online-lobby" data-nav-group="lobby" hidden>
           <div class="lobby-head"><b id="ol-room">Room</b><span id="ol-status"></span><button class="nav-btn danger" data-nav data-action="ol-leave">Leave</button></div>
           <div class="ol-song" id="ol-song"></div>
+          <div class="ol-download" id="ol-download" aria-live="polite" hidden></div>
           <div class="ol-players" id="ol-players"></div>
           <div class="picker" data-nav data-picker="ol-mode"><label>Match <span class="lbl-note" id="ol-mode-note"></span></label><div class="picker-options" id="ol-pick-mode"></div></div>
           <div class="picker" data-nav data-picker="ol-inst"><label>Your instrument</label><div class="picker-options" id="ol-pick-inst"></div></div>

@@ -11,7 +11,8 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function installChartLibrary(ui) {
-  const st = { q: '', rows: null, err: null, ticket: 0, keys: new Map() };
+  const st = { q: '', rows: null, next: null, err: null, short: false, loading: false, loadingMore: false, ticket: 0, keys: new Map(), controller: null };
+  let searchTimer;
 
   /** The library's songs by world key (artist + title, as the leaderboards match them). */
   async function localByKey() {
@@ -24,24 +25,51 @@ export function installChartLibrary(ui) {
     return out;
   }
 
-  async function load() {
+  async function load(more = false) {
+    if (settings.worldLeaderboard === false) return;
+    if (more && (!st.next || st.loading)) return;
+    if (!more) { st.rows = null; st.next = null; }
+    st.short = false;
     const ticket = ++st.ticket;
+    st.controller?.abort();
+    const controller = st.controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
     st.err = null;
+    st.loading = true;
+    st.loadingMore = more;
+    render();
     try {
-      const r = await fetch(`${API}/v1/library?${new URLSearchParams({ limit: 150, ...(st.q ? { q: st.q } : {}) })}`, { signal: AbortSignal.timeout(8000) });
+      const r = await fetch(`${API}/v1/library?${new URLSearchParams({ limit: 30, ...(st.q ? { q: st.q } : {}), ...(more ? { before: st.next } : {}) })}`,
+        { signal: controller.signal });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || `library ${r.status}`);
-      if (ticket === st.ticket) st.rows = cleanApi(Array.isArray(j.rows) ? j.rows : [], 'rows');
-    } catch (e) { if (ticket === st.ticket) { st.err = e.message; st.rows = null; } }
-    if (ticket === st.ticket && ui.screen === 'chartlib') render();
+      if (ticket === st.ticket) {
+        const rows = cleanApi(Array.isArray(j.rows) ? j.rows : [], 'rows');
+        st.rows = more ? [...(st.rows || []), ...rows] : rows;
+        st.next = Number.isSafeInteger(j.next) && j.next > 0 ? j.next : null;
+      }
+    } catch (e) { if (ticket === st.ticket) st.err = controller.signal.aborted ? 'Timed out' : e.message || 'Request failed'; }
+    clearTimeout(timeout);
+    if (ticket === st.ticket) { st.loading = false; st.loadingMore = false; if (ui.screen === 'chartlib') render(); }
   }
 
   async function render() {
     const el = $('#cl-list');
-    if (settings.worldLeaderboard === false) { el.innerHTML = '<div class="small-note">The chart library is part of the world leaderboard, which is off in Settings.</div>'; ui.applyFocus(false); return; }
-    if (st.err) { el.innerHTML = `<div class="small-note">The chart library can’t be reached right now (${esc(st.err)}).</div>`; ui.applyFocus(false); return; }
+    const more = $('#cl-more'), status = $('#cl-status');
+    more.hidden = !st.rows || !st.next;
+    more.disabled = st.loading;
+    more.textContent = st.loadingMore ? 'Loading…' : 'More songs';
+    status.textContent = st.err && st.rows ? 'Could not load more songs. Try again.' : st.loadingMore ? 'Loading more songs…' : st.loading ? 'Searching…' : st.rows?.length ? `Showing ${st.rows.length} songs` : '';
+    if (settings.worldLeaderboard === false) { el.innerHTML = '<div class="small-note">The chart library is part of the world leaderboard, which is off in Settings.</div>'; more.hidden = true; ui.applyFocus(false); return; }
+    if (st.short) { el.innerHTML = '<div class="small-note">Type at least 2 letters to search.</div>'; more.hidden = true; ui.applyFocus(false); return; }
+    if (st.err && !st.rows) { el.innerHTML = `<div class="small-note">The chart library can’t be reached right now (${esc(st.err)}).</div>`; more.hidden = true; ui.applyFocus(false); return; }
     if (!st.rows) { el.innerHTML = '<div class="small-note">Loading the chart library…</div>'; return; }
+    if (st.loadingMore) return;
+    const ticket = st.ticket;
     const mine = await localByKey();
+    if (ticket !== st.ticket || ui.screen !== 'chartlib') return;
+    const scrollTop = el.scrollTop;
+    const focusedKey = ui.navItems()[ui.focus]?.dataset.key;
     el.innerHTML = st.rows.map((r) => {
       const have = mine.get(r.key);
       return `<button class="cl-song ${have ? 'have' : ''}" data-nav data-key="${esc(r.key)}">
@@ -51,6 +79,8 @@ export function installChartLibrary(ui) {
         <div class="cl-act">${have ? `${fa('check')} In your library` : `${fa('magnifying-glass')} Get it`}</div></button>`;
     }).join('') || `<div class="small-note">${st.q ? 'No charted songs match that search.' : 'No charts yet: finish a song while signed in and yours is the first.'}</div>`;
     $$('[data-key]', el).forEach((b) => b.addEventListener('click', () => open(b.dataset.key, mine)));
+    el.scrollTop = scrollTop;
+    if (focusedKey) { const i = ui.navItems().findIndex((item) => item.dataset.key === focusedKey); if (i >= 0) ui.focus = i; }
     ui.applyFocus(false);
   }
 
@@ -68,10 +98,29 @@ export function installChartLibrary(ui) {
     ui.findOnYouTube(r.artist, r.title);
   }
 
-  $('#cl-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ui.action('cl-search'); } });
-  ui.screenHooks.chartlib = async () => { if (!ui.songs.length) await ui.reloadSongs(); render(); load(); };
+  function search() {
+    clearTimeout(searchTimer);
+    const q = $('#cl-q').value.trim();
+    st.q = q;
+    ++st.ticket;
+    st.controller?.abort();
+    if (q && q.length < 2) {
+      st.rows = null;
+      st.next = null;
+      st.err = null;
+      st.short = true;
+      st.loading = false;
+      render();
+      return;
+    }
+    load();
+  }
+  $('#cl-q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(search, 250); });
+  $('#cl-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
+  ui.screenHooks.chartlib = async () => { if (!ui.songs.length) await ui.reloadSongs(); render(); if (!st.short) load(); };
   Object.assign(ui.actionHooks, {
     chartlib: () => ui.show('chartlib'),
-    'cl-search': () => { st.q = $('#cl-q').value.trim(); st.rows = null; render(); load(); },
+    'cl-search': search,
+    'cl-more': () => load(true),
   });
 }
