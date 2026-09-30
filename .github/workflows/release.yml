@@ -69,9 +69,12 @@ jobs:
           tagName: v__VERSION__
           releaseName: STEMSTAGE v__VERSION__
           releaseBody: |
+            v1.8.8 adds a five-band equalizer with presets, per-player DualSense stem audio and USB audio haptics, and multiplayer ready checks, spectator reconnection, live scores and quick reactions.
+
             **Windows:** download `STEMSTAGE_*_x64-setup.exe` and run it.
             **Linux:** `STEMSTAGE_*_amd64.AppImage` (any distro: `chmod +x` and run), or the `.deb` (Ubuntu / Debian) / `.rpm` (Fedora / openSUSE) package.
             The installer includes the game runtime and configures the controller bridge. The optional AI splitter is offered only when an NVIDIA GPU and working driver are detected; otherwise the game uses its built-in DSP splitter.
+            DualSense speaker audio and native audio haptics require a wired USB controller and a four-channel audio output. Bluetooth controller input remains supported. For multiple wired controllers, assign each output in Settings → Controllers.
             Installed copies update themselves (Settings → Updates).
           releaseDraft: false
           prerelease: false

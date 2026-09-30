@@ -80,6 +80,7 @@ export class Session {
     const insts = new Set(cfgs.map((c) => c.instrument));
     if (this.online) for (const r of this.online.lineup) if (r.id !== this.online.client.id) insts.add(r.instrument);
     this.engine.prepare(song, audio, [...insts]);
+    await this.engine.configureControllerAudio(this.players);
     if (this.practice && Math.abs(this.practice.speed - 1) > 1e-3) {
       opts.onStatus?.(`Preparing ${Math.round(this.practice.speed * 100)}% speed audio (pitch preserved)...`);
       await this.engine.stretchTo(this.practice.speed, stretchInWorker, (p) => opts.onStatus?.(`Time-stretching audio ${Math.round(p * 100)}%`));

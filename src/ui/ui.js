@@ -2,6 +2,7 @@
 // prompts, top bar, contextual menu hero, option sheets, on-screen keyboard, and a band lobby where
 // every player drives their own slot with their own controller.
 import { settings } from '../settings.js';
+import { EQ_KEYS, equalizerGains } from '../audio/equalizer.js';
 import { listSongs, getSong, getAudio, deleteSong, getBest, storageEstimate, openSongsFolder, songsFolder, coverUrl, previewUrl, saveSongJson, coverFromUrl } from '../storage/library.js';
 import { importFile, aiClient, importFromYouTube, ytSearch, ytStatus, rechartSong, ensurePreview, fetchLyrics, checkLyrics } from '../audio/pipeline.js';
 import { discord } from '../net/discord.js';
@@ -81,6 +82,12 @@ const SETTINGS_SCHEMA = [
   { key: 'bandVolume', label: 'Band', type: 'range', min: 0, max: 1.5, step: 0.05, fmt: 'pct' },
   { key: 'sfxVolume', label: 'Sound effects', type: 'range', min: 0, max: 1, step: 0.05, fmt: 'pct' },
   { key: 'crowdVolume', label: 'Crowd', type: 'range', min: 0, max: 1, step: 0.05, fmt: 'pct' },
+  { key: 'eqPreset', label: 'Equalizer preset', desc: 'Shape the full game mix, including songs and menus', type: 'choice', options: ['flat', 'bass', 'rock', 'electronic', 'vocal', 'acoustic', 'custom'], labels: { flat: 'Flat', bass: 'Bass boost', rock: 'Rock', electronic: 'Electronic', vocal: 'Vocal clarity', acoustic: 'Acoustic', custom: 'Custom' } },
+  { key: 'eq80', label: 'EQ · 80 Hz', type: 'range', min: -12, max: 12, step: 1, fmt: 'db' },
+  { key: 'eq250', label: 'EQ · 250 Hz', type: 'range', min: -12, max: 12, step: 1, fmt: 'db' },
+  { key: 'eq1000', label: 'EQ · 1 kHz', type: 'range', min: -12, max: 12, step: 1, fmt: 'db' },
+  { key: 'eq4000', label: 'EQ · 4 kHz', type: 'range', min: -12, max: 12, step: 1, fmt: 'db' },
+  { key: 'eq12000', label: 'EQ · 12 kHz', type: 'range', min: -12, max: 12, step: 1, fmt: 'db' },
   { key: 'menuMusic', label: 'Background music', desc: 'Music in the menus: off, the demo track, or a random song from your setlist', type: 'choice', options: ['off', 'demo', 'shuffle'] },
   { key: 'menuMusicVolume', label: 'Background music volume', type: 'range', min: 0, max: 1, step: 0.05, fmt: 'pct' },
   { key: 'audioOffset', label: 'Audio offset', desc: 'Raise it if you hit late (e.g. Bluetooth audio)', type: 'range', min: -150, max: 350, step: 5, fmt: 'ms' },
@@ -102,6 +109,8 @@ const SETTINGS_SCHEMA = [
   { key: 'triggerIntensity', label: 'Adaptive trigger strength', desc: 'DualSense trigger effects. 0% turns them off everywhere', type: 'range', min: 0, max: 1.5, step: 0.1, fmt: 'pct' },
   { key: 'rumbleIntensity', label: 'Haptic strength', desc: 'DualSense haptics and gamepad rumble', type: 'range', min: 0, max: 1.5, step: 0.1, fmt: 'pct' },
   { key: 'lightbar', label: 'Lightbar effects', type: 'toggle' },
+  { key: 'dualsenseAudio', label: 'DualSense stem audio', desc: 'USB: play your stem through your controller speaker and drive its audio haptics', type: 'toggle' },
+  { action: 'chooseDualSenseAudio', label: 'Assign DualSense audio output', desc: 'Pick the USB audio device for each connected controller' },
   { action: 'openControllers', label: 'Controller profiles & bindings', desc: 'Per-controller config profiles, rebinding and tests' },
   { key: 'bridgeUrl', label: 'Controller bridge URL', desc: 'The pydualsense bridge that drives DualSense triggers, haptics and lights (npm run bridge)', type: 'text' },
   { action: 'testBridge', label: 'Test controller bridge', desc: 'Show which DualSense controllers the bridge sees' },
@@ -1868,7 +1877,7 @@ export class UI {
       if (key.startsWith('@')) { row.addEventListener('click', () => this.settingAction(key.slice(1))); return; }
       const it = SETTINGS_SCHEMA.find((x) => x.key === key);
       const range = row.querySelector('input[type=range]');
-      range?.addEventListener('input', () => { settings[key] = parseFloat(range.value); this._syncSettings(); });
+      range?.addEventListener('input', () => { this.setEqBand(key, parseFloat(range.value)); this._syncSettings(); });
       row.querySelectorAll('[data-t]').forEach((o) => o.addEventListener('click', () => {
         if (key === 'aiEnabled') this.setAiEnabled(o.dataset.t === 'on');
         else { settings[key] = o.dataset.t === 'on'; this._syncSettings(); }
@@ -1899,8 +1908,9 @@ export class UI {
       if (!it) return;
       const v = settings[key];
       if (it.type === 'range') {
-        row.querySelector('input').value = v;
-        row.querySelector('.val').textContent = it.fmt === 'pct' ? `${Math.round(v * 100)}%` : it.fmt === 'ms' ? `${v > 0 ? '+' : ''}${v} ms` : v;
+        const shown = EQ_KEYS.includes(key) ? equalizerGains(settings)[EQ_KEYS.indexOf(key)] : v;
+        row.querySelector('input').value = shown;
+        row.querySelector('.val').textContent = it.fmt === 'pct' ? `${Math.round(shown * 100)}%` : it.fmt === 'ms' ? `${shown > 0 ? '+' : ''}${shown} ms` : it.fmt === 'db' ? `${shown > 0 ? '+' : ''}${shown} dB` : shown;
       }
       if (it.type === 'toggle') row.querySelectorAll('[data-t]').forEach((o) => o.classList.toggle('sel', (o.dataset.t === 'on') === !!v));
       if (it.type === 'choice') row.querySelectorAll('[data-c]').forEach((o) => o.classList.toggle('sel', o.dataset.c === v));
@@ -1908,11 +1918,24 @@ export class UI {
     });
   }
 
+  setEqBand(key, value) {
+    if (!EQ_KEYS.includes(key)) { settings[key] = value; return; }
+    if (settings.eqPreset !== 'custom') {
+      const gains = equalizerGains(settings);
+      EQ_KEYS.forEach((band, i) => { settings[band] = gains[i]; });
+      settings.eqPreset = 'custom';
+    }
+    settings[key] = value;
+  }
+
   adjustSetting(key, d, confirm = false) {
     if (key.startsWith('@')) { if (confirm) this.settingAction(key.slice(1)); return; }
     const it = SETTINGS_SCHEMA.find((x) => x.key === key);
     if (!it) return;
-    if (it.type === 'range') settings[key] = +Math.max(it.min, Math.min(it.max, settings[key] + d * it.step)).toFixed(3);
+    if (it.type === 'range') {
+      const value = EQ_KEYS.includes(key) ? equalizerGains(settings)[EQ_KEYS.indexOf(key)] : settings[key];
+      this.setEqBand(key, +Math.max(it.min, Math.min(it.max, value + d * it.step)).toFixed(3));
+    }
     if (it.type === 'toggle') {
       if (key === 'aiEnabled') this.setAiEnabled(!settings.aiEnabled);
       else settings[key] = !settings[key];
@@ -2008,6 +2031,23 @@ export class UI {
     }
     if (a === 'checkUpdate') checkForUpdates(this);
     if (a === 'openControllers') this.show('controller');
+    if (a === 'chooseDualSenseAudio') {
+      const pads = this.app.ds.devices.filter((d) => d.connected && !d.bt);
+      if (!pads.length) { this.toast('Connect a DualSense by USB, then try again', 'err'); return; }
+      if (!navigator.mediaDevices?.enumerateDevices || !('setSinkId' in AudioContext.prototype)) {
+        this.toast('This browser cannot route audio to a selected controller. Try the desktop app or Chromium.', 'err'); return;
+      }
+      const outputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput' && d.deviceId && d.deviceId !== 'default');
+      if (!outputs.length) { this.toast('No USB audio outputs found. Check that the controller audio device is enabled in your system.', 'err'); return; }
+      this.openSheet({ title: 'Controller audio', sub: 'Choose a wired controller', items: pads.map((pad) => ({
+        label: `${pad.label} · player ${pad.slot + 1}`, icon: 'gamepad',
+        run: () => this.openSheet({ title: `Player ${pad.slot + 1} audio`, sub: 'Choose this controller’s USB audio output', items: [
+          { label: 'Off', icon: !settings.dualsenseAudioSinks?.[pad.slot] ? 'check' : 'volume-xmark', run: () => { settings.dualsenseAudioSinks = { ...settings.dualsenseAudioSinks, [pad.slot]: '' }; } },
+          ...outputs.map((output) => ({ label: output.label || `Audio output ${output.deviceId.slice(0, 8)}`, icon: settings.dualsenseAudioSinks?.[pad.slot] === output.deviceId ? 'check' : 'volume-high',
+            run: () => { settings.dualsenseAudioSinks = { ...settings.dualsenseAudioSinks, [pad.slot]: output.deviceId }; this.toast(`Player ${pad.slot + 1} controller audio assigned`, 'ok'); } })),
+        ] }),
+      })) });
+    }
     if (a === 'testBridge') {
       const ds = this.app.ds;
       if (!ds.online) { await ds.autoConnect(); }

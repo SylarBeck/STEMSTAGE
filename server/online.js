@@ -30,6 +30,7 @@ const HISTORY = 20;
 const HAIRS = ['short', 'long', 'mohawk', 'bun', 'shaved'], PARTS = ['guitar', 'bass', 'drums', 'keys'];
 const INSTRUMENTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'], DIFFICULTIES = ['easy', 'medium', 'hard', 'expert'];
 const EVENTS = ['od', 'fail', 'attack'];
+const REACTIONS = ['👏', '🔥', '🎸', '💜', '😂'];
 // what one connection may send: a steady 40 messages a second (the game sends ~10), bursts of 120
 const RATE = { perSecond: 40, burst: 120, dropLimit: 600 };
 const MAX_CONNECTIONS = 24, HELLO_MS = 10000;
@@ -83,7 +84,8 @@ export function createOnline(library) {
     history: room.history, rematch: [...room.rematch],
     players: [...room.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, profileId: p.profileId, host: p.host, instrument: p.instrument,
-      difficulty: p.difficulty, ready: p.ready, hasSong: p.hasSong, loading: p.loading, connected: p.connected,
+      difficulty: p.difficulty, ready: p.ready, hasSong: p.hasSong, loading: p.loading, connected: p.connected, spectator: !!p.spectator,
+      score: Math.max(0, Number(p.lastLive?.score) || Number(p.result?.score) || 0),
     })),
   };
   const sendTo = (p, msg) => { if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg)); };
@@ -121,20 +123,22 @@ export function createOnline(library) {
     broadcast({ t: 'results', matchId: room.matchId, mode: room.matchMode, results, ...v });
     room.phase = 'lobby';
     room.rematch.clear();
-    for (const p of room.players.values()) { p.ready = false; p.result = null; }
+    for (const p of room.players.values()) { p.ready = false; p.result = null; p.spectator = false; }
+    for (const [id, p] of room.players) if (!p.connected) room.players.delete(id);
     pushRoom();
   }
 
   /** Start a match with everyone who has the song. */
   function startMatch() {
     const lineup = [...room.players.values()].filter((q) => q.connected && q.hasSong);
+    if (!lineup.length || [...room.players.values()].some((q) => q.connected && (!q.hasSong || !q.ready || q.spectator))) return;
     room.phase = 'playing';
     room.startAt = Date.now() + 5000;
     room.matchId = `m${Date.now().toString(36)}`;
     room.matchMode = room.mode;
     room.lastResults = null;
     room.rematch.clear();
-    for (const q of room.players.values()) { q.result = null; q.playing = lineup.includes(q); }
+    for (const q of room.players.values()) { q.result = null; q.playing = lineup.includes(q); q.lastLive = null; }
     broadcast({ t: 'start', matchId: room.matchId, startAt: room.startAt, song: room.song, mode: room.mode, lineup: lineup.map((q) => ({ id: q.id, name: q.name, color: q.color, profileId: q.profileId, instrument: q.instrument, difficulty: q.difficulty, look: q.look })) });
     pushRoom();
   }
@@ -180,13 +184,17 @@ export function createOnline(library) {
         // the same song again: it starts by itself once everyone who has the song wants it
         if (room.phase !== 'lobby' || !room.song || !room.history.length || !p.hasSong) break;
         if (msg.want === false) room.rematch.delete(p.id); else room.rematch.add(p.id);
-        const everyone = [...room.players.values()].filter((q) => q.connected && q.hasSong);
-        if (everyone.length && everyone.every((q) => room.rematch.has(q.id))) startMatch();
+        const everyone = [...room.players.values()].filter((q) => q.connected);
+        if (everyone.length && everyone.every((q) => q.hasSong && room.rematch.has(q.id))) {
+          for (const q of everyone) q.ready = true;
+          startMatch();
+        }
         else pushRoom();
         break;
       }
-      case 'live': if (room.phase === 'playing') broadcast({ ...cleanStats(msg, 16), t: 'live', id: p.id }, p); break;
+      case 'live': if (room.phase === 'playing' && p.playing && !p.spectator) { p.lastLive = cleanStats(msg, 16); broadcast({ ...p.lastLive, t: 'live', id: p.id }, p); } break;
       case 'event': {
+        if (room.phase !== 'playing' || !p.playing || p.spectator) break;
         const kind = msg.kind;
         if (!EVENTS.includes(kind)) break;
         // a battle attack names its target and what it does; anything else carries no payload
@@ -208,6 +216,7 @@ export function createOnline(library) {
           }
           break;
         }
+        if (!p.playing || p.spectator) break;
         p.result = cleanStats(msg.result);
         if ([...room.players.values()].filter((q) => q.playing && q.connected).every((q) => q.result)) finishResults();
         else { clearTimeout(resultsTimer); resultsTimer = setTimeout(finishResults, 20000); }
@@ -217,6 +226,12 @@ export function createOnline(library) {
         if (text) broadcast({ t: 'chat', from: p.name, color: p.color, text });
         break;
       }
+      case 'react':
+        if (REACTIONS.includes(msg.emoji) && Date.now() - (p.lastReaction || 0) >= 500) {
+          p.lastReaction = Date.now();
+          broadcast({ t: 'react', from: p.name, color: p.color, emoji: msg.emoji });
+        }
+        break;
       default: break;
     }
   }
@@ -270,12 +285,18 @@ export function createOnline(library) {
           if (msg.t !== 'hello') return;
           // the host proves itself with the key it got from the local control API (tunnel visitors also look "local")
           const host = !!msg.hostKey && msg.hostKey === hostKey && ![...room.players.values()].some((q) => q.host && q.connected);
-          if (!host && room.players.size >= MAX_PLAYERS) { try { ws.send(JSON.stringify({ t: 'closed', reason: `This room is full (${MAX_PLAYERS} players)` })); ws.close(); } catch { /* gone */ } return; }
-          p = {
+          const sessionId = typeof msg.sessionId === 'string' && /^[a-f0-9-]{36}$/i.test(msg.sessionId) ? msg.sessionId : null;
+          const returning = sessionId && [...room.players.values()].find((q) => q.sessionId === sessionId && !q.connected);
+          if (!returning && !host && [...room.players.values()].filter((q) => q.connected).length >= MAX_PLAYERS) { try { ws.send(JSON.stringify({ t: 'closed', reason: `This room is full (${MAX_PLAYERS} players)` })); ws.close(); } catch { /* gone */ } return; }
+          p = returning || {
             id: `p${++seq}`, ws, host, connected: true, name: cleanText(msg.name, 24) || 'Player', profileId: cleanProfileId(msg.profileId), look: cleanLook(msg.look),
             color: /^#[0-9a-f]{6}$/i.test(msg.color || '') ? msg.color : COLORS[(seq - 1) % COLORS.length],
-            instrument: 'guitar', difficulty: 'medium', ready: false, hasSong: false, loading: 0, result: null,
+            instrument: 'guitar', difficulty: 'medium', ready: false, hasSong: false, loading: 0, result: null, sessionId,
           };
+          p.ws = ws; p.connected = true;
+          p.spectator = room.phase === 'playing';
+          if (p.spectator) p.playing = false;
+          if (host) p.host = true;
           clearTimeout(helloTimer);
           room.players.set(p.id, p);
           sendTo(p, { t: 'welcome', id: p.id, host, room: summary(), serverTime: Date.now() });
@@ -288,12 +309,16 @@ export function createOnline(library) {
         clearTimeout(helloTimer);
         if (!p || !room) return;
         p.connected = false;
-        room.players.delete(p.id);
+        if (room.phase === 'playing' && p.playing && !p.result) p.result = p.lastLive || { score: 0, failed: true };
+        if (room.phase !== 'playing') room.players.delete(p.id);
         room.rematch.delete(p.id);
         broadcast({ t: 'event', id: p.id, kind: 'left' });
         if (room.phase === 'playing' && [...room.players.values()].filter((q) => q.playing).every((q) => q.result)) finishResults();
-        const rest = [...room.players.values()].filter((q) => q.connected && q.hasSong);
-        if (room.phase === 'lobby' && room.rematch.size && rest.length && rest.every((q) => room.rematch.has(q.id))) { startMatch(); return; }
+        const rest = [...room.players.values()].filter((q) => q.connected);
+        if (room.phase === 'lobby' && room.rematch.size && rest.length && rest.every((q) => q.hasSong && room.rematch.has(q.id))) {
+          for (const q of rest) q.ready = true;
+          startMatch(); return;
+        }
         pushRoom();
       });
     });

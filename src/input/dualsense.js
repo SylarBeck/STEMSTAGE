@@ -135,6 +135,7 @@ export class DualSenseDevice {
 
   /** Haptic pulse. strong/weak 0..255, duration ms. */
   rumble(strong, weak, ms = 80) {
+    if (this.audioHapticPulse) { this.audioHapticPulse(strong, weak, ms); return; }
     const k = settings.rumbleIntensity;
     if (k <= 0.01) return;
     const now = performance.now();

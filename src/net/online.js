@@ -10,6 +10,7 @@ import { cleanLook } from '../profile/looks.js';
 const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'], DIFFS = ['easy', 'medium', 'hard', 'expert'];
 const MODES = ['versus', 'battle', 'band'], PHASES = ['lobby', 'playing'], ATTACKS = ['mirror', 'fog', 'shake', 'drain'];
 const EVENTS = ['od', 'fail', 'attack', 'left'];
+const REACTIONS = ['👏', '🔥', '🎸', '💜', '😂'];
 const str = (v, n) => (typeof v === 'string' ? v : v == null ? '' : String(v)).slice(0, n);
 const num = (v, lo = -1e12, hi = 1e12) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : 0);
 const hex = (v, fallback = '#df3a2c') => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : fallback);
@@ -51,7 +52,8 @@ export function cleanRoom(room) {
     rematch: (Array.isArray(room.rematch) ? room.rematch : []).map(idOf).filter(Boolean),
     players: (Array.isArray(room.players) ? room.players : []).slice(0, 16).map((p) => ({
       ...person(p), host: !!p?.host, instrument: oneOf(INSTS, p?.instrument), difficulty: oneOf(DIFFS, p?.difficulty, 'medium'),
-      ready: !!p?.ready, hasSong: !!p?.hasSong, loading: num(p?.loading, 0, 1), connected: p?.connected !== false,
+      ready: !!p?.ready, hasSong: !!p?.hasSong, loading: num(p?.loading, 0, 1), connected: p?.connected !== false, spectator: !!p?.spectator,
+      score: num(p?.score, 0),
     })),
   };
 }
@@ -77,6 +79,7 @@ export function cleanMessage(msg) {
       results: (Array.isArray(msg.results) ? msg.results : []).slice(0, 16).map(resultRow),
     };
     case 'chat': return { t: 'chat', from: str(msg.from, 24), color: hex(msg.color), text: str(msg.text, 200) };
+    case 'react': return REACTIONS.includes(msg.emoji) ? { t: 'react', from: str(msg.from, 24), color: hex(msg.color), emoji: msg.emoji } : null;
     case 'closed': return { t: 'closed', reason: str(msg.reason, 200) };
     default: return null;
   }
@@ -123,6 +126,10 @@ export class OnlineClient {
     this.listeners = new Map();
     this.remoteLive = new Map();
     this.syncing = null;
+    this.sessionId = crypto.randomUUID?.() || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const n = crypto.getRandomValues(new Uint8Array(1))[0] & 15;
+      return (c === 'x' ? n : (n & 3) | 8).toString(16);
+    });
   }
 
   on(type, fn) {
@@ -145,6 +152,7 @@ export class OnlineClient {
     const base = roomUrl(address);
     if (!base) throw new Error('Enter an invite code');
     const remote = base.startsWith('https://');
+    this.credentials = { name, color, profileId, look, hostKey };
     const deadline = performance.now() + (remote ? 30000 : 4000);
     let lastErr;
     for (let attempt = 0; performance.now() < deadline; attempt++) {
@@ -165,13 +173,23 @@ export class OnlineClient {
       const ws = new WebSocket(base.replace(/^http/, 'ws'));
       this.ws = ws;
       const timer = setTimeout(() => { ws.close(); reject(new Error(`No STEMSTAGE room answered at ${this.address}`)); }, 8000);
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', name, color, profileId, look, hostKey }));
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', name, color, profileId, look, hostKey, sessionId: this.sessionId }));
       ws.onerror = () => { clearTimeout(timer); reject(new Error(`Could not connect to ${this.address}`)); };
       ws.onclose = () => {
         clearTimeout(timer);
         clearInterval(this.pingTimer);
         // only a room we were actually in counts as a disconnect (not a failed join attempt)
-        if (this.ws === ws) { const was = !!this.id; this.ws = null; this.room = null; this.id = null; if (was) this.emit('disconnected'); }
+        if (this.ws === ws) {
+          const was = !!this.id;
+          this.ws = null; this.room = null; this.id = null;
+          if (was) {
+            this.emit('disconnected');
+            this.reconnecting = true;
+            this.reconnectTimer = setTimeout(() => this.connect(base, this.credentials).then(() => {
+              this.reconnecting = false; this.emit('reconnected');
+            }).catch((error) => { this.reconnecting = false; this.emit('reconnect-failed', error.message); }), 1200);
+          }
+        }
       };
       ws.onmessage = (e) => {
         let msg;
@@ -183,6 +201,7 @@ export class OnlineClient {
           this.id = msg.id; this.host = msg.host; this.room = msg.room;
           this.bestRtt = Infinity;
           this.rtt = null;
+          this.offsetInit = false;
           this._ping(); setTimeout(() => this._ping(), 300); setTimeout(() => this._ping(), 700);
           this.pingTimer = setInterval(() => this._ping(), 3000);
           resolve(this);
@@ -219,7 +238,13 @@ export class OnlineClient {
         break;
       }
       case 'start': this.remoteLive.clear(); this.matchId = msg.matchId; this.lastResults = null; this.emit('start', msg); break;
-      case 'live': this.remoteLive.set(msg.id, msg); this.emit('live', msg); break;
+      case 'live': {
+        this.remoteLive.set(msg.id, msg);
+        const player = this.room?.players.find((p) => p.id === msg.id);
+        if (player && Number.isFinite(msg.score)) player.score = msg.score;
+        this.emit('live', msg);
+        break;
+      }
       case 'event': this.emit('event', msg); break;
       case 'results': this.lastResults = { matchId: msg.matchId, results: msg.results, mode: msg.mode, winnerId: msg.winnerId || null, draw: !!msg.draw }; this.emit('results', msg.results, msg); break;
       case 'chat': this.emit('chat', msg); break;
@@ -276,9 +301,11 @@ export class OnlineClient {
   event(kind, target) { this.send({ t: 'event', kind, target }); }
   result(result) { this.send({ t: 'result', result }); }
   chat(text) { this.send({ t: 'chat', text }); }
+  react(emoji) { if (REACTIONS.includes(emoji)) this.send({ t: 'react', emoji }); }
 
   close() {
     this.cancelled = true;
+    clearTimeout(this.reconnectTimer);
     clearInterval(this.pingTimer);
     if (this.ws) { const ws = this.ws; this.ws = null; try { ws.close(); } catch { /* closed */ } }
     this.room = null; this.id = null; this.host = false;

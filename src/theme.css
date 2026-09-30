@@ -676,6 +676,8 @@ table.tbl tr.me td { background: rgba(240,180,41,0.1); }
 .res-verdict.loss b { color: #f19b8e; }
 .res-verdict.band b { font-size: 30px; color: var(--ink); }
 /* online lobby: match type, versus record, rematch, room history, public rooms */
+.ol-reactions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.ol-reactions .nav-btn { min-width: 44px; padding: 5px 10px; font-size: 20px; }
 .lbl-note { text-transform: none; letter-spacing: 0.02em; font-weight: 600; color: var(--dim); }
 .ol-player .vs { color: var(--gold); font-weight: 700; margin-left: 6px; font-size: 14px; letter-spacing: 0.04em; }
 .nav-btn.on { box-shadow: inset 0 0 0 2px var(--gold); color: var(--gold); }

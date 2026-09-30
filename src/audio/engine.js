@@ -1,5 +1,6 @@
 // Playback engine: sample-accurate song clock, player stem vs band mix, miss muffling, crowd bed and SFX.
 import { settings, onSettingsChange } from '../settings.js';
+import { EQ_FREQUENCIES, equalizerGains } from './equalizer.js';
 
 export const STEM_RATE = 44100;
 export const STEM_FOR = { guitar: 'guitar', bass: 'bass', drums: 'drums', keys: 'keys', vocals: 'vocals' };
@@ -32,7 +33,16 @@ export class AudioEngine {
     this.analyser.fftSize = 1024;
     this.analyser.smoothingTimeConstant = 0.6;
     this.freq = new Uint8Array(this.analyser.frequencyBinCount);
-    this.master.connect(this.comp).connect(this.analyser).connect(ctx.destination);
+    this.eq = EQ_FREQUENCIES.map((frequency, i) => {
+      const node = ctx.createBiquadFilter();
+      node.type = i === 0 ? 'lowshelf' : i === EQ_FREQUENCIES.length - 1 ? 'highshelf' : 'peaking';
+      node.frequency.value = frequency;
+      if (node.type === 'peaking') node.Q.value = 0.8;
+      return node;
+    });
+    this.master.connect(this.eq[0]);
+    for (let i = 1; i < this.eq.length; i++) this.eq[i - 1].connect(this.eq[i]);
+    this.eq.at(-1).connect(this.comp).connect(this.analyser).connect(ctx.destination);
 
     this.bandGain = ctx.createGain();
     this.playerGain = ctx.createGain();
@@ -47,6 +57,7 @@ export class AudioEngine {
     this.noise = noiseBuffer(ctx, 2, 'white');
     this.pink = noiseBuffer(ctx, 4, 'pink');
     this.sources = [];
+    this.controllerOutputs = [];
     this.playing = false;
     this.startCtx = 0;
     this.pausedSongTime = 0;
@@ -63,6 +74,7 @@ export class AudioEngine {
     this.bandGain.gain.setTargetAtTime(settings.bandVolume, t, 0.02);
     this.playerGain.gain.setTargetAtTime(settings.playerVolume, t, 0.02);
     this.sfxGain.gain.setTargetAtTime(settings.sfxVolume, t, 0.02);
+    equalizerGains(settings).forEach((gain, i) => this.eq[i].gain.setTargetAtTime(gain, t, 0.03));
   }
 
   async unlock() {
@@ -117,6 +129,85 @@ export class AudioEngine {
     }
   }
 
+  /** One four-channel USB output per local player: front pair = speaker, rear pair = voice-coil haptics. */
+  async configureControllerAudio(players) {
+    this.closeControllerAudio();
+    if (!settings.dualsenseAudio || !('setSinkId' in AudioContext.prototype)) return;
+    const used = new Set();
+    const wired = players.filter((player) => player._ds && !player._ds.bt);
+    let automaticSink = '';
+    if (wired.length === 1 && !settings.dualsenseAudioSinks?.[wired[0]._ds.slot] && navigator.mediaDevices?.enumerateDevices) {
+      const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+      const matches = devices.filter((device) => device.kind === 'audiooutput' && device.deviceId !== 'default' && /dualsense|wireless controller/i.test(device.label));
+      if (matches.length === 1) automaticSink = matches[0].deviceId;
+    }
+    for (const player of players) {
+      const device = player._ds;
+      const sinkId = settings.dualsenseAudioSinks?.[device?.slot] || (wired.length === 1 ? automaticSink : '');
+      const stem = STEM_FOR[player.cfg.instrument];
+      if (!device || device.bt || !sinkId || !this.buffers?.[stem] || used.has(sinkId)) continue;
+      let ctx;
+      try {
+        ctx = new AudioContext({ latencyHint: 'interactive' });
+        await ctx.setSinkId(sinkId);
+        if (ctx.destination.maxChannelCount < 4) throw new Error('This audio output does not expose four channels');
+        ctx.destination.channelCount = 4;
+        const merger = ctx.createChannelMerger(4);
+        merger.connect(ctx.destination);
+        const level = ctx.createGain();
+        level.gain.value = 1;
+        const split = ctx.createChannelSplitter(2);
+        level.connect(split);
+        const speaker = ctx.createGain(); speaker.gain.value = 0.28;
+        split.connect(speaker, 0); split.connect(speaker, 1);
+        speaker.connect(merger, 0, 0); speaker.connect(merger, 0, 1);
+        const haptics = [];
+        for (let channel = 0; channel < 2; channel++) {
+          const highpass = ctx.createBiquadFilter(); highpass.type = 'highpass'; highpass.frequency.value = 35;
+          const lowpass = ctx.createBiquadFilter(); lowpass.type = 'lowpass'; lowpass.frequency.value = 450;
+          const gain = ctx.createGain(); gain.gain.value = Math.min(0.65, 0.28 * settings.rumbleIntensity);
+          split.connect(highpass, channel); highpass.connect(lowpass).connect(gain).connect(merger, 0, channel + 2);
+          haptics.push(gain);
+        }
+        const output = { ctx, sinkId, device, stem, level, merger, haptics, source: null };
+        device.audioHapticPulse = (strong, weak, ms) => this.playControllerHaptic(output, strong, weak, ms);
+        device.pulses = []; device.motor = [0, 0]; device.dirty = true;
+        this.controllerOutputs.push(output);
+        used.add(sinkId);
+        ctx.resume().catch(() => {});
+      } catch (error) {
+        ctx?.close().catch(() => {});
+        console.warn('[audio] DualSense audio output unavailable:', error);
+      }
+    }
+  }
+
+  playControllerHaptic(output, strong, weak, ms) {
+    const { ctx, merger } = output;
+    if (ctx.state === 'closed') return;
+    for (const [channel, amount, frequency] of [[2, strong, 95], [3, weak, 165]]) {
+      if (!amount) continue;
+      const osc = ctx.createOscillator(); osc.frequency.value = frequency; osc.type = 'sine';
+      const gain = ctx.createGain();
+      const start = ctx.currentTime, end = start + Math.min(0.3, Math.max(0.01, ms / 1000));
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(Math.min(0.3, amount / 255 * 0.22 * settings.rumbleIntensity), start + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.001, end);
+      osc.connect(gain).connect(merger, 0, channel);
+      osc.start(start); osc.stop(end + 0.01);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+    }
+  }
+
+  closeControllerAudio() {
+    for (const output of this.controllerOutputs || []) {
+      if (output.device.audioHapticPulse) output.device.audioHapticPulse = null;
+      try { output.source?.stop(); } catch { /* already stopped */ }
+      output.ctx.close().catch(() => {});
+    }
+    this.controllerOutputs = [];
+  }
+
   /** Start playback so that song time `fromTime` (may be negative = lead-in) is heard now. */
   start(fromTime = -2.5) {
     clearTimeout(this._fadeTimer);
@@ -134,6 +225,14 @@ export class AudioEngine {
       src.connect(key === 'band' ? this.bandGain : this.stemChains.get(key).filter);
       src.start(when, offset);
       this.sources.push(src);
+    }
+    for (const output of this.controllerOutputs) {
+      const src = output.ctx.createBufferSource();
+      src.buffer = this.buffers[output.stem];
+      src.connect(output.level);
+      const delay = Math.max(0, when - ctx.currentTime);
+      src.start(output.ctx.currentTime + delay, offset);
+      output.source = src;
     }
     for (const stem of this.stemChains.keys()) this.setStemAudible(stem, true, true);
     this.playing = true;
@@ -159,6 +258,7 @@ export class AudioEngine {
     if (!this.playing) return;
     this.pausedSongTime = this.songTime;
     await this.ctx.suspend();
+    await Promise.all(this.controllerOutputs.map((output) => output.ctx.suspend().catch(() => {})));
     this.paused = true;
   }
 
@@ -166,15 +266,18 @@ export class AudioEngine {
     if (!this.paused) return;
     this.paused = false;
     await this.ctx.resume();
+    await Promise.all(this.controllerOutputs.map((output) => output.ctx.resume().catch(() => {})));
   }
 
   stopSources() {
     for (const s of this.sources) { try { s.stop(); } catch { /* already stopped */ } s.disconnect(); }
     this.sources = [];
+    for (const output of this.controllerOutputs) { try { output.source?.stop(); } catch { /* already stopped */ } output.source?.disconnect(); output.source = null; }
   }
 
   stop() {
     this.stopSources();
+    this.closeControllerAudio();
     this.playing = false;
     if (this.paused) { this.paused = false; this.ctx.resume(); }
   }
@@ -183,6 +286,7 @@ export class AudioEngine {
     const t = this.ctx.currentTime;
     this.bandGain.gain.setTargetAtTime(0, t, seconds / 4);
     this.playerGain.gain.setTargetAtTime(0, t, seconds / 4);
+    for (const output of this.controllerOutputs) output.level.gain.setTargetAtTime(0, output.ctx.currentTime, seconds / 4);
     clearTimeout(this._fadeTimer);
     this._fadeTimer = setTimeout(() => { this.stop(); this.applyVolumes(); }, seconds * 1000);
   }
@@ -195,6 +299,7 @@ export class AudioEngine {
     const tc = instant ? 0.001 : on ? 0.02 : 0.05;
     ch.mute.gain.setTargetAtTime(on ? 1 : 0.1, t, tc);
     ch.filter.frequency.setTargetAtTime(on ? 20000 : 650, t, tc);
+    for (const output of this.controllerOutputs) if (output.stem === stem) output.level.gain.setTargetAtTime(on ? 1 : 0.1, output.ctx.currentTime, tc);
   }
 
   /** Band energy for visuals: returns {bass, mid, high, level} in 0..1 */

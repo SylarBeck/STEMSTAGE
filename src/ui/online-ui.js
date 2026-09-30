@@ -132,7 +132,7 @@ export function installOnline(ui) {
     const room = online.room;
     presence();
     $('#ol-room').textContent = `Room ${room.code}`;
-    $('#ol-status').textContent = online.host ? 'You are the host' : `Connected${inviteCode(online.baseUrl) ? ` to ${inviteCode(online.baseUrl)}` : ` to ${online.address}`}${online.rtt ? ` · ${Math.round(online.rtt)} ms` : ''}`;
+    $('#ol-status').textContent = room.phase === 'playing' && online.me?.spectator ? 'Spectating until the next song' : online.host ? 'You are the host' : `Connected${inviteCode(online.baseUrl) ? ` to ${inviteCode(online.baseUrl)}` : ` to ${online.address}`}${online.rtt ? ` · ${Math.round(online.rtt)} ms` : ''}`;
     const song = room.song;
     if (st.songProgress?.id !== song?.id) st.songProgress = null;
     const local = song && ui.songs.find((s) => s.id === song.id);
@@ -151,7 +151,7 @@ export function installOnline(ui) {
       : waiting ? `<div>Waiting for ${waiting} player${waiting === 1 ? '' : 's'} to get the song</div><small>The match can start after everyone has the song and is ready.</small>` : '';
     const myProfile = profiles.current?.id;
     $('#ol-players').innerHTML = room.players.map((p) => {
-      const status = !song ? '' : p.hasSong ? (p.ready || p.host ? '<span class="rd ok">READY</span>' : '<span class="rd">NOT READY</span>') : `<span class="rd">DOWNLOADING ${Math.round((p.loading || 0) * 100)}%</span>`;
+      const status = p.spectator ? '<span class="rd">SPECTATING</span>' : !p.connected ? '<span class="rd">DISCONNECTED</span>' : room.phase === 'playing' ? `<span class="rd ok">${Math.round(p.score || 0).toLocaleString()}</span>` : !song ? '' : p.hasSong ? (p.ready ? '<span class="rd ok">READY</span>' : '<span class="rd">NOT READY</span>') : `<span class="rd">DOWNLOADING ${Math.round((p.loading || 0) * 100)}%</span>`;
       const rec = myProfile && p.id !== online.id ? profiles.versusAgainst(myProfile, p.name) : null;
       const vs = rec ? ` <small class="vs" title="Your versus record against ${esc(p.name)}">you ${rec.w}–${rec.l}${rec.d ? `–${rec.d}` : ''}</small>` : '';
       return `<div class="ol-player" style="--pc:${p.color}"><i></i><span>${esc(p.name)}${p.host ? ` ${fa('crown', 'host')}` : ''}${p.id === online.id ? ' (you)' : ''}${vs}</span><span>${ICON[p.instrument] || ''} ${p.instrument}</span><span>${p.difficulty}</span>${status || '<span></span>'}</div>`;
@@ -168,11 +168,11 @@ export function installOnline(ui) {
     $$('#ol-pick-diff [data-d]').forEach((o) => o.addEventListener('click', () => setMine({ difficulty: o.dataset.d })));
     const m = me();
     $('#ol-ready').textContent = m?.ready ? 'Not ready' : 'Ready';
-    $('#ol-ready').style.display = online.host ? 'none' : '';
+    $('#ol-ready').style.display = room.phase === 'playing' ? 'none' : '';
     $('#ol-choose').style.display = online.host ? '' : 'none';
     $('#ol-start').style.display = online.host ? '' : 'none';
-    const others = room.players.filter((p) => !p.host);
-    $('#ol-start').disabled = !song || !others.every((p) => p.ready && p.hasSong);
+    $('#ol-start').disabled = room.phase !== 'lobby' || !song || !room.players.every((p) => p.ready && p.hasSong);
+    $('#ol-start').textContent = !song ? 'Choose a song' : room.players.every((p) => p.ready && p.hasSong) ? 'Start match' : `Waiting for ready (${room.players.filter((p) => p.ready && p.hasSong).length}/${room.players.length})`;
     rematchButtons();
     renderHistory(room);
     publicSync();
@@ -353,7 +353,7 @@ export function installOnline(ui) {
   // match start (everyone in the lineup gets this at the same moment)
   async function onStart(msg) {
     const mine = msg.lineup.find((p) => p.id === online.id);
-    if (!mine) { ui.toast('Match started without you (song still downloading?)', 'err'); return; }
+    if (!mine) { if (online.me?.spectator) render(); else ui.toast('Match started without you (song still downloading?)', 'err'); return; }
     const [song, audio] = await Promise.all([getSong(msg.song.id), getAudio(msg.song.id)]);
     if (!song || !audio) { ui.toast('The song is missing locally', 'err'); return; }
     if (!song.charts[mine.instrument]?.available) { ui.toast(`No ${mine.instrument} chart in this song`, 'err'); return; }
@@ -380,7 +380,16 @@ export function installOnline(ui) {
     ui.showResults(r, { rerender: true });
   });
   online.on('start', onStart);
+  online.on('live', () => {
+    if (!online.me?.spectator || ui.screen !== 'online') return;
+    const now = performance.now();
+    if (now - (st.lastSpectatorRender || 0) > 250) { st.lastSpectatorRender = now; render(); }
+  });
   online.on('chat', (m) => log(`<b style="--pc:${esc(m.color)}">${esc(m.from)}:</b> ${esc(m.text)}`));
+  online.on('react', (m) => {
+    log(`<b style="--pc:${esc(m.color)}">${esc(m.from)}</b> ${m.emoji}`);
+    if (app.game.running) ui.toast(`${m.from} ${m.emoji}`);
+  });
   online.on('song-progress', (value) => { st.songProgress = { id: online.room?.song?.id, value }; if (ui.screen === 'online') render(); });
   online.on('song-ready', () => { st.songProgress = null; ui.reloadSongs().then(() => { if (ui.screen === 'online') render(); }); });
   online.on('error', (msg) => ui.toast(msg, 'err'));
@@ -388,10 +397,17 @@ export function installOnline(ui) {
   online.on('disconnected', () => {
     st.songProgress = null;
     discord.menus();
-    if (!st.closed) ui.toast('Disconnected from the room', 'err');
+    if (!st.closed) ui.toast('Disconnected from the room · reconnecting…', 'err');
     st.closed = false;
     if (ui.screen === 'online') render();
   });
+  online.on('reconnected', () => {
+    if (online.me?.spectator && app.game.running && app.game.online) { app.game.stop(); ui.show('online'); }
+    ui.toast(online.me?.spectator ? 'Reconnected · spectating this song' : 'Reconnected to the room', 'ok');
+    if (ui.screen === 'online') render();
+  });
+  online.on('reconnect-failed', (reason) => ui.toast(`Could not reconnect: ${reason}`, 'err'));
+  $$('[data-reaction]').forEach((button) => button.addEventListener('click', () => online.react(button.dataset.reaction)));
 
   $('#ol-chat-input').addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;

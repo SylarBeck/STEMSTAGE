@@ -12,6 +12,8 @@ export const DEFAULTS = {
   playerVolume: 1.0,
   sfxVolume: 0.6,
   crowdVolume: 0.35,
+  eqPreset: 'flat',     // flat | bass | rock | electronic | vocal | acoustic | custom
+  eq80: 0, eq250: 0, eq1000: 0, eq4000: 0, eq12000: 0,
   menuMusic: 'demo',     // off | demo | shuffle (random song from your setlist)
   menuMusicVolume: 0.35,
   quality: 'high',       // low | high | ultra
@@ -30,6 +32,8 @@ export const DEFAULTS = {
   triggerIntensity: 1.0, // 0..1.5
   rumbleIntensity: 1.0,  // 0..1.5
   lightbar: true,
+  dualsenseAudio: true, // route each wired player's stem to the USB speaker + audio haptic channels
+  dualsenseAudioSinks: {}, // controller slot -> selected four-channel audio output device ID
   aiServer: 'http://127.0.0.1:8765',
   aiEnabled: true,       // desktop: run the AI server; off uses DSP and survives relaunch
   bridgeUrl: 'ws://127.0.0.1:8766', // controller bridge (pydualsense)
