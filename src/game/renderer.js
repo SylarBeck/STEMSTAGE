@@ -134,6 +134,13 @@ export class Renderer {
     this.resize();
   }
 
+  /** Draw another scene (the backstage creator) instead of the stage; null goes back to the stage. */
+  setView(view) {
+    this.view = view || null;
+    this.stagePass.scene = view ? view.scene : this.stage.scene;
+    this.stagePass.camera = view ? view.camera : this.stage.camera;
+  }
+
   setHighways(list) {
     this.hwyPass.highways = list;
     this._layout();
@@ -188,6 +195,7 @@ export class Renderer {
     this.time += dt;
     this.fxPass.uniforms.uTime.value = this.time;
     if (!this.hwyPass.highways.length) this.setFx({ aberration: 0, shock: -1, od: 0 });
+    this.view?.renderThumbs?.();
     this.composer.render();
   }
 }

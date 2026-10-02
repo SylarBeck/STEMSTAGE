@@ -47,6 +47,11 @@ export const ACHIEVEMENTS = [
   { id: 'stars_100', name: 'Star Collector', desc: 'Earn 100 stars in total', icon: '✨' },
   { id: 'band_4', name: 'Full House', desc: 'Play a song as a 4-player band', icon: '👨‍👩‍👧‍👦' },
   { id: 'night_owl', name: 'Night Owl', desc: 'Finish a song between midnight and 4 AM', icon: '🦉' },
+  { id: 'gear_max', name: 'Gearhead', desc: 'Max out an instrument upgrade', icon: '🔧' },
+  { id: 'stage_builder', name: 'Set Designer', desc: 'Build a stage in the stage creator', icon: '🏗️' },
+  { id: 'boss_first', name: 'Monster Hunter', desc: 'Defeat a world boss', icon: '🐉' },
+  { id: 'boss_flawless', name: 'Untouchable', desc: 'Defeat a boss without missing a note during the fight', icon: '🛡️' },
+  { id: 'boss_all', name: 'Slayer of Worlds', desc: 'Defeat all five world bosses', icon: '🌌' },
 ];
 
 export const xpForLevel = (lvl) => Math.round(350 * Math.pow(Math.max(0, lvl - 1), 1.55));

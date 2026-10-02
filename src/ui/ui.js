@@ -16,6 +16,9 @@ import { installTour } from './tour-ui.js';
 import { installChartLibrary } from './chartlib-ui.js';
 import { installEditor } from './editor-ui.js';
 import { installStream } from './stream-ui.js';
+import { installCreator } from './creator-ui.js';
+import { rigPart } from '../profile/rig.js';
+import { fmtCash } from '../profile/economy.js';
 import { tourStars, TOUR_MAX, dailyDone, VENUES, unlocked } from '../profile/career.js';
 import { Osk } from './osk.js';
 import { controllerPicture, detectController, glyph } from './controller-art.js';
@@ -47,7 +50,7 @@ const SPEEDS = [0.5, 0.6, 0.7, 0.8, 0.9, 1];
 const SCREEN_LABEL = {
   menu: 'Main menu', library: 'Setlist', import: 'Import song', settings: 'Settings', band: 'Band', controller: 'Controllers', howto: 'How to play',
   profiles: 'Profiles', career: 'Career', leaderboard: 'Leaderboards', chartlib: 'Chart library', setlists: 'Setlists', marathon: 'Marathon', tour: 'Tour', editor: 'Chart editor', stream: 'Stream', online: 'Online', practice: 'Practice', songinfo: 'Song info', results: 'Results',
-  calibrate: 'Calibration', pause: 'Paused',
+  calibrate: 'Calibration', pause: 'Paused', creator: 'Backstage',
 };
 const CHROME_OFF = new Set(['title', 'hud', 'calibrate']);
 
@@ -216,6 +219,7 @@ export class UI {
     installChartLibrary(this);
     this.editor = installEditor(this);
     this.stream = installStream(this);
+    this.creator = installCreator(this);
     autoCheck(this);
     this._setupLibraryTools();
     this._setupInputs();
@@ -284,6 +288,7 @@ export class UI {
     if (name !== 'career') this.app.stage.preview(null);
     $('#tb-crumb').textContent = SCREEN_LABEL[name] || '';
     if (name !== 'controller' && prev === 'controller') this.controllers.stopCapture();
+    if (name !== 'creator' && prev === 'creator') this.creator.leave();
     if (name !== 'library' && name !== 'practice' && name !== 'songinfo') this.stopPreview();
     if (name === 'menu') { this.refreshStatus(); this.app.menuMusic(true); if (this.mode === 'online-pick') this.mode = 'solo'; }
     if (name === 'title') this._titleDevices();
@@ -490,7 +495,7 @@ export class UI {
       eng.sfxUi('back');
       const back = {
         library: this.mode === 'band' ? 'band' : this.mode === 'online-pick' ? 'online' : this.mode === 'setlist-add' ? 'setlists' : 'menu', import: 'menu', setlists: 'menu', tour: 'menu', stream: 'menu', settings: 'menu', controller: 'menu',
-        howto: 'menu', band: 'menu', results: this.lastPlay?.online ? 'online' : 'library', menu: 'title', profiles: 'menu',
+        howto: 'menu', band: 'menu', creator: 'menu', results: this.lastPlay?.online ? 'online' : 'library', menu: 'title', profiles: 'menu',
         career: 'menu', leaderboard: 'menu', chartlib: 'menu', online: 'menu', practice: 'library', songinfo: 'library',
       };
       if (this.screen === 'library' && this.mode === 'online-pick') this.mode = 'solo';
@@ -820,6 +825,14 @@ export class UI {
         if (!p) { body = '<div class="hero-k">Career</div><h2>Sign in</h2><p>Earn XP, levels and achievements.</p>'; break; }
         const lv = levelInfo(p.xp);
         body = `<div class="hero-k">Career</div><div class="hero-prof">${avatarHtml(p, 72)}<div><h2>${esc(p.name)}</h2><p>Level ${lv.level} · ${esc(lv.rank)}</p></div></div><div class="xpbar"><div style="width:${Math.round(lv.progress * 100)}%"></div></div><p class="dim">${lv.into.toLocaleString()} / ${lv.span.toLocaleString()} XP to level ${lv.level + 1}</p>`;
+        break;
+      }
+      case 'creator': {
+        if (!p) { body = '<div class="hero-k">Backstage</div><h2>Make your rock star</h2><p>Sign in to build your character and instruments.</p>'; break; }
+        const lk = p.look;
+        body = `<div class="hero-k">Backstage</div><h2>Dressing room</h2><p>Hair, faces, clothes and stage moves. Instrument models, paint, LED glow, upgrades and pedals.</p>
+          <div class="hero-row"><b>${fa('coins')}</b><span>Cash</span><em>${fmtCash(p.cash || 0)}</em></div>
+          <div class="hero-row"><b>${instIcon(lk?.part || 'guitar')}</b><span>On stage at</span><em>${esc(lk?.part || 'guitar')}</em></div>`;
         break;
       }
       case 'chartlib': body = '<div class="hero-k">Chart library</div><h2>Every charted song</h2><p>Songs players have charted, with their ranked parts. Get one you don\u2019t have from YouTube and play its ranked chart.</p>'; break;
@@ -1187,11 +1200,16 @@ export class UI {
     const stage = this.app.stage;
     stage.resetLooks();
     if (cfgs) {
-      for (const c of cfgs) { const look = (c.profileId && profiles.byId(c.profileId)?.look) || c.look; if (look) stage.setLook(c.instrument, look); }
+      for (const c of cfgs) {
+        const prof = c.profileId && profiles.byId(c.profileId);
+        const look = prof?.look || c.look;
+        const rig = prof ? rigPart(prof, c.instrument) : c.rig?.[c.instrument] || null;
+        if (look || rig) stage.setLook(c.instrument, look, rig);
+      }
       return;
     }
     const p = profiles.current;
-    if (p?.look) stage.setLook(p.look.part || 'guitar', p.look);
+    if (p?.look) { const part = p.look.part || 'guitar'; stage.setLook(part, p.look, rigPart(p, part)); }
   }
 
   // ---------------------------------------------------------------- ranked charts (see net/charts.js)

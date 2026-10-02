@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="/icon.png" />
   <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
   <link rel="stylesheet" href="/src/theme.css" />
+  <link rel="stylesheet" href="/src/creator.css" />
 </head>
 <body data-family="keyboard">
   <canvas id="gl"></canvas>
@@ -49,6 +50,7 @@
           <button class="menu-item big" data-nav data-action="solo" data-hero="play"><b>Play</b><em>Pick a song and an instrument</em></button>
           <button class="menu-item big" data-nav data-action="tour" data-hero="tour"><b>Tour</b><em>Gigs, stars and daily challenges</em></button>
           <button class="menu-item big" data-nav data-action="band" data-hero="band"><b>Band</b><em>Local multiplayer · up to 4 players</em></button>
+          <button class="menu-item big" data-nav data-action="creator" data-hero="creator"><b>Backstage</b><em>Dress your character, build your instruments</em></button>
           <button class="menu-item big" data-nav data-action="online" data-hero="online"><b>Online</b><em>Play with friends anywhere</em></button>
           <button class="menu-item big" data-nav data-action="import" data-hero="import"><b>Import Song</b><em>Any audio file or YouTube search</em></button>
         </nav>
@@ -219,6 +221,30 @@
     <section class="screen" id="screen-career">
       <div class="screen-title"><h1>Career</h1></div>
       <div class="career" id="career"></div>
+    </section>
+
+    <!-- BACKSTAGE: character + instrument creator (src/ui/creator-ui.js over the 3D set in src/game/backstage.js) -->
+    <section class="screen" id="screen-creator">
+      <div class="cr-top">
+        <div class="cr-title"><h1>Backstage</h1><div class="cr-modes" id="cr-modes" data-nav-group="modes"></div></div>
+        <div class="cr-wallet" id="cr-wallet" title="Cash: earn it by playing songs and beating bosses"><span class="coin"><i class="fa-solid fa-coins"></i></span><b id="cr-cash">$0</b></div>
+      </div>
+      <div class="cr-body">
+        <nav class="cr-rail" id="cr-rail" data-nav-group="rail"></nav>
+        <div class="cr-panel" id="cr-panel" data-nav-group="items"></div>
+        <div class="cr-view">
+          <div class="cr-drag" id="cr-drag" title="Drag to turn"></div>
+          <div class="cr-parts" id="cr-parts" data-nav-group="parts"></div>
+          <div class="cr-name" id="cr-name"></div>
+          <div class="cr-stats" id="cr-stats" hidden></div>
+          <div class="cr-turn"><i class="fa-solid fa-rotate"></i> Drag to turn</div>
+          <div class="cr-actions" data-nav-group="actions">
+            <button class="nav-btn" data-nav data-action="cr-pose"><i class="fa-solid fa-star"></i> Pose</button>
+            <button class="nav-btn cr-char-only" data-nav data-action="cr-random"><i class="fa-solid fa-dice"></i> Randomize</button>
+            <button class="nav-btn primary" data-nav data-action="cr-done"><i class="fa-solid fa-check"></i> Done</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- LEADERBOARDS -->

@@ -3,6 +3,7 @@ import { AudioEngine, STEM_RATE } from './audio/engine.js';
 import { createDemo } from './audio/pipeline.js';
 import { getSong, getAudio, listSongs, initScores, storageMode, migrateFromBrowser, songsFolder } from './storage/library.js';
 import { Stage } from './game/stage.js';
+import { Backstage } from './game/backstage.js';
 import { Renderer } from './game/renderer.js';
 import { Session } from './game/session.js';
 import { Hud } from './ui/hud.js';
@@ -31,6 +32,7 @@ class App {
     this.renderer = new Renderer(document.getElementById('gl'), this.stage, null, settings.quality);
     this.renderer.setQuality(settings.quality, settings.bloom);
     this.renderer.setAntialiasing(settings.antialiasing);
+    this.backstage = new Backstage(this.renderer.renderer);
     this.hud = new Hud();
     this.diagnostics = new Diagnostics();
     this.game = new Session({
@@ -177,7 +179,8 @@ class App {
       return;
     }
     const f = this.game.update(dt) || this.menuFeatures();
-    this.stage.update(dt, f);
+    if (this.backstage.active) this.backstage.update(dt, f); // the creator: the stage isn't on screen
+    else this.stage.update(dt, f);
     this.ds.tick(now);
     this.ui.frame();
     const cap = Number(settings.frameLimit);

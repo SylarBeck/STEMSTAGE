@@ -21,7 +21,8 @@ export const DEFAULTS = {
   antialiasing: '2x',    // off | 2x | 4x multisampling in the 3D composer
   frameLimit: 'display', // display refresh | 30 | 60 | 120 fps (rendering only; input stays responsive)
   vocalPart: 0,          // singing: 0 = lead, 1 = harmony 2, 2 = harmony 3 (songs charted with the AI transcriber)
-  proMode: false,        // Pro: tighter timing, overstrums count, no assists / no-fail (+25% XP, PRO on results)
+  proMode: false,
+  gearMods: true,        // instrument upgrades + pedals change play (gear runs stay off the world leaderboard)        // Pro: tighter timing, overstrums count, no assists / no-fail (+25% XP, PRO on results)
   venue: 'auto',         // the stage: auto (the arena; tour gigs in their own venue) | garage | club | bar | theater | arena | stadium | festival
   bloom: true,
   filmGrain: true,

@@ -20,7 +20,8 @@ export const ACH_ICON = {
   setlist_marathon: 'person-running', tour_gig: 'ticket', tour_arena: 'building', tour_festival: 'campground',
   tour_legend: 'wand-magic-sparkles', daily_1: 'calendar-day', daily_7: 'calendar-check', ghost_beat: 'ghost',
   replay_watch: 'film', fc_hard: 'mountain', streak_1000: 'certificate', stars_100: 'award', band_4: 'people-group',
-  night_owl: 'moon', importer_batch: 'folder-open',
+  night_owl: 'moon', importer_batch: 'folder-open', gear_max: 'screwdriver-wrench', stage_builder: 'helmet-safety',
+  boss_first: 'dragon', boss_flawless: 'shield-halved', boss_all: 'meteor',
 };
 export const achIcon = (id) => fa(ACH_ICON[id] || 'award');
 

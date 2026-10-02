@@ -445,6 +445,79 @@ export class AudioEngine {
     o.connect(g).connect(this.sfxGain); o.start(t); o.stop(t + 0.2);
   }
 
+  /** Backstage: a sparkly chime when something is equipped (pitch rises a little with each equip in a row). */
+  sfxEquip(step = 0) {
+    const ctx = this.ctx, t = ctx.currentTime;
+    const base = 880 * Math.pow(2, (step % 6) / 12);
+    [1, 1.5, 2, 3].forEach((m, i) => {
+      const o = ctx.createOscillator(); o.type = i % 2 ? 'triangle' : 'sine'; o.frequency.value = base * m;
+      const g = ctx.createGain(); this._env(g, t + i * 0.035, 0.09 / (1 + i * 0.4), 0.004, 0.32);
+      o.connect(g).connect(this.sfxGain); o.start(t + i * 0.035); o.stop(t + 0.6);
+    });
+    const src = ctx.createBufferSource(); src.buffer = this.noise;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7000;
+    const g = ctx.createGain(); this._env(g, t, 0.06, 0.005, 0.25);
+    src.connect(hp).connect(g).connect(this.sfxGain); src.start(t); src.stop(t + 0.35);
+  }
+
+  /** Backstage: a cash register (bell + drawer) when something is bought. */
+  sfxCash() {
+    const ctx = this.ctx, t = ctx.currentTime;
+    for (const [f, d] of [[2093, 0], [2637, 0.08], [3136, 0.16]]) {
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = ctx.createGain(); this._env(g, t + d, 0.14, 0.002, 0.7);
+      o.connect(g).connect(this.sfxGain); o.start(t + d); o.stop(t + d + 0.9);
+    }
+    const src = ctx.createBufferSource(); src.buffer = this.noise;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 1.4;
+    const g = ctx.createGain(); this._env(g, t + 0.22, 0.35, 0.005, 0.12);
+    src.connect(bp).connect(g).connect(this.sfxGain); src.start(t + 0.22); src.stop(t + 0.45);
+  }
+
+  /** Backstage: a dull buzz for something still locked. */
+  sfxLocked() {
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(140, t); o.frequency.setValueAtTime(110, t + 0.09);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+    const g = ctx.createGain(); this._env(g, t, 0.1, 0.004, 0.2);
+    o.connect(lp).connect(g).connect(this.sfxGain); o.start(t); o.stop(t + 0.3);
+  }
+
+  /** Backstage: a rising power-up arpeggio; higher upgrade levels climb higher. */
+  sfxUpgrade(level = 1) {
+    const ctx = this.ctx, t = ctx.currentTime;
+    const notes = [0, 4, 7, 12, 16, 19].slice(0, 2 + level);
+    notes.forEach((n, i) => {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 220 * Math.pow(2, n / 12);
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400;
+      const g = ctx.createGain(); this._env(g, t + i * 0.06, 0.08, 0.005, 0.28);
+      o.connect(lp).connect(g).connect(this.sfxGain); o.start(t + i * 0.06); o.stop(t + i * 0.06 + 0.4);
+    });
+  }
+
+  /** Backstage: the camera swooping to a new framing. */
+  sfxWhoosh() {
+    const ctx = this.ctx, t = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = this.noise;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(400, t); bp.frequency.exponentialRampToValueAtTime(2400, t + 0.18); bp.frequency.exponentialRampToValueAtTime(600, t + 0.4);
+    const g = ctx.createGain(); this._env(g, t, 0.07, 0.12, 0.28);
+    src.connect(bp).connect(g).connect(this.sfxGain); src.start(t); src.stop(t + 0.45);
+  }
+
+  /** Backstage: a power chord stab for "strike a pose". */
+  sfxPose() {
+    const ctx = this.ctx, t = ctx.currentTime;
+    const sh = ctx.createWaveShaper();
+    const curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 6); }
+    sh.curve = curve;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600;
+    const g = ctx.createGain(); this._env(g, t, 0.12, 0.005, 1.1);
+    sh.connect(lp).connect(g).connect(this.sfxGain);
+    for (const f of [82.41, 123.47, 164.81]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.connect(sh); o.start(t); o.stop(t + 1.2); }
+    this.cheer(0.4);
+  }
+
   sfxFail() {
     const ctx = this.ctx, t = ctx.currentTime;
     const o = ctx.createOscillator(); o.type = 'sawtooth';

@@ -500,6 +500,7 @@ function pill(text, bg = '#1c1d24') {
 /** Inline prompt for a menu action on the current input family. */
 export function glyph(action, family = 'keyboard') {
   if (action === 'prevnext') return `${glyph('prev', family)}${glyph('next', family)}`;
+  if (action === 'pgupdn') return `${glyph('pgup', family)}${glyph('pgdn', family)}`;
   if (action === 'lr' || action === 'ud' || action === 'dpad') {
     if (family === 'keyboard' || family === 'midi') return `<span class="gl-key">${KEY_GLYPH[action]}</span>`;
     const hl = action === 'lr' ? 'M4 12h16' : action === 'ud' ? 'M12 4v16' : '';

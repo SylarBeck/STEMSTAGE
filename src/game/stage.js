@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { settings } from '../settings.js';
+import { createMember, animateMember } from './figure.js';
 
 // lighting states, like a club rig's gels: amber + red, tungsten + deep blue, crimson + amber, white + red, gold + blue
 const PALETTES = [
@@ -28,15 +29,6 @@ export const VENUE_LOOKS = {
     gels: [[0xf2ecdf, 0x2447d8], [0xffc233, 0x3050e0], [0x9fd8ff, 0xd02a1e]] },
   festival: { crowd: 1, heads: 99, stacks: 4, truss: true, pillars: true, wall: 0, wallDim: 1.15, fog: 0.012, bg: 0x0a0f24, fogColor: 0x0d1330, light: 1.15, pyro: 1.5, phones: true,
     gels: [[0xff9a2e, 0x1cc8a0], [0xffe14d, 0xff3d8b], [0x9b5cff, 0x33e0ff]] },
-};
-
-// Band members as they look out of the box; a player's character (profiles → look) replaces the one on their part.
-export const HAIR_STYLES = ['short', 'long', 'mohawk', 'bun', 'shaved'];
-export const DEFAULT_LOOKS = {
-  guitar: { skin: '#2a2026', hair: 'short', hairColor: '#0c0c12', top: '#3a0d1c', pants: '#0c0c12', finish: '#d81b3a' },
-  bass: { skin: '#2a2026', hair: 'short', hairColor: '#0c0c12', top: '#0d1c3a', pants: '#0c0c12', finish: '#1b5ed8' },
-  drums: { skin: '#2a2026', hair: 'short', hairColor: '#0c0c12', top: '#2a1a08', pants: '#0c0c12', finish: '#b86a1b' },
-  keys: { skin: '#2a2026', hair: 'short', hairColor: '#0c0c12', top: '#1c0d3a', pants: '#0c0c12', finish: '#0a0a0a' },
 };
 
 const GOLD = new THREE.Color(1, 0.8, 0.3);
@@ -316,139 +308,25 @@ export class Stage {
     }
   }
 
-  _figure(shirt) {
-    const g = new THREE.Group();
-    const skin = new THREE.MeshStandardMaterial({ color: 0x2a2026, roughness: 0.7 });
-    const cloth = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.8 });
-    const pants = new THREE.MeshStandardMaterial({ color: 0x0c0c12, roughness: 0.9 });
-    const hairMat = new THREE.MeshStandardMaterial({ color: 0x0c0c12, roughness: 0.85 });
-    for (const sx of [-1, 1]) {
-      const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.8, 4, 8), pants);
-      leg.position.set(sx * 0.17, 0.55, 0);
-      g.add(leg);
-    }
-    const torso = new THREE.Group();
-    torso.position.y = 1.05;
-    const chest = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.55, 4, 10), cloth);
-    chest.position.y = 0.35;
-    torso.add(chest);
-    const head = new THREE.Group();
-    head.position.y = 0.95;
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), skin);
-    skull.position.y = 0.12;
-    // hair styles (one is shown at a time, see setLook)
-    const hair = {
-      short: new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), hairMat),
-      long: new THREE.Group(),
-      mohawk: new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.2, 0.38), hairMat),
-      bun: new THREE.Group(),
-      shaved: new THREE.Mesh(new THREE.SphereGeometry(0.205, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.45), hairMat),
-    };
-    hair.short.position.y = 0.15;
-    hair.shaved.position.y = 0.13;
-    hair.mohawk.position.set(0, 0.34, -0.02);
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.225, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat);
-    cap.position.y = 0.15;
-    const back = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.34, 4, 10), hairMat);
-    back.position.set(0, -0.08, -0.1);
-    hair.long.add(cap, back);
-    const cap2 = cap.clone();
-    const knot = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), hairMat);
-    knot.position.set(0, 0.36, -0.1);
-    hair.bun.add(cap2, knot);
-    for (const [k, m] of Object.entries(hair)) { m.visible = k === 'short'; head.add(m); }
-    head.add(skull);
-    torso.add(head);
-    const arms = [];
-    for (const sx of [-1, 1]) {
-      const shoulder = new THREE.Group();
-      shoulder.position.set(sx * 0.34, 0.62, 0);
-      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.55, 4, 8), cloth);
-      arm.position.y = -0.3;
-      shoulder.add(arm);
-      shoulder.rotation.x = -0.6;
-      torso.add(shoulder);
-      arms.push(shoulder);
-    }
-    g.add(torso);
-    return { g, torso, head, arms, hair, mats: { skin, cloth, pants, hair: hairMat } };
-  }
-
   _band() {
+    // the band (game/figure.js): sculpted, jointed people playing the instruments of their rigs
+    const at = {
+      guitar: { x: -4.5, y: 1.2, z: -1.2, rotY: 0.25 }, bass: { x: 4.5, y: 1.2, z: -1.2, rotY: -0.25 },
+      drums: { x: 0, y: 1.9, z: -5.6 }, keys: { x: -8.6, y: 1.2, z: -2.6, rotY: 0.45 }, vocals: { x: 0, y: 1.2, z: 0.55 },
+    };
     this.band = {};
+    for (const [name, pos] of Object.entries(at)) this.band[name] = createMember(this.scene, name, pos);
     const metal = new THREE.MeshStandardMaterial({ color: 0x9a9aa8, metalness: 1, roughness: 0.25 });
-    const lacquer = (c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.4, roughness: 0.3 });
-    this.finish = {};
-    const addGuitar = (fig, color, bass) => {
-      const inst = new THREE.Group();
-      const finish = lacquer(color);
-      this.finish[bass ? 'bass' : 'guitar'] = finish;
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.36, 0.08), finish);
-      const neck = new THREE.Mesh(new THREE.BoxGeometry(bass ? 1.05 : 0.8, 0.06, 0.04), new THREE.MeshStandardMaterial({ color: 0x3a2412 }));
-      neck.position.x = bass ? 0.75 : 0.62;
-      inst.add(body, neck);
-      inst.position.set(0.05, 0.22, 0.28);
-      inst.rotation.z = 0.35;
-      fig.torso.add(inst);
-    };
-    const mk = (name, x, z, y, shirt, rotY = 0) => {
-      const f = this._figure(shirt);
-      f.g.position.set(x, y, z);
-      f.g.rotation.y = rotY;
-      this.scene.add(f.g);
-      this.band[name] = f;
-      return f;
-    };
-    const gtr = mk('guitar', -4.5, -1.2, 1.2, 0x3a0d1c, 0.25);
-    addGuitar(gtr, 0xd81b3a, false);
-    const bass = mk('bass', 4.5, -1.2, 1.2, 0x0d1c3a, -0.25);
-    addGuitar(bass, 0x1b5ed8, true);
-    const drm = mk('drums', 0, -5.6, 1.9, 0x2a1a08);
-    drm.g.scale.setScalar(0.95);
-    // drum kit
-    const kit = new THREE.Group();
-    kit.position.set(0, 1.9, -4.6);
-    const shell = lacquer(0xb86a1b);
-    this.finish.drums = shell;
-    const kick = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.45, 24).rotateX(Math.PI / 2), shell);
-    kick.position.set(0, 0.5, 0.2);
-    const snare = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.15, 20), shell);
-    snare.position.set(-0.55, 0.75, 0.1);
-    const tom1 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.2, 20), shell); tom1.position.set(-0.2, 1.1, 0.25);
-    const tom2 = tom1.clone(); tom2.position.x = 0.25;
-    const floorTom = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.4, 20), shell); floorTom.position.set(0.7, 0.55, 0.1);
-    this.cymbals = [];
-    for (const [cx, cy] of [[-0.95, 1.45], [0.95, 1.5], [-0.75, 1.05]]) {
-      const cym = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.01, 24), new THREE.MeshStandardMaterial({ color: 0xc9a13a, metalness: 1, roughness: 0.2 }));
-      cym.position.set(cx, cy, 0.15);
-      cym.rotation.x = 0.25;
-      const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, cy, 6), metal);
-      stand.position.set(cx, cy / 2, 0.15);
-      kit.add(cym, stand);
-      this.cymbals.push(cym);
-    }
-    kit.add(kick, snare, tom1, tom2, floorTom);
-    this.scene.add(kit);
-    // keys
-    const keys = mk('keys', -8.6, -2.6, 1.2, 0x1c0d3a, 0.45);
-    const kb = new THREE.Group();
-    this.finish.keys = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.4 });
-    const board = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.45), this.finish.keys);
-    const whites = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.02, 0.2), new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.3 }));
-    whites.position.set(0, 0.05, 0.1);
-    const standL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.0, 0.05), metal); standL.position.set(-0.5, -0.5, 0);
-    const standR = standL.clone(); standR.position.x = 0.5;
-    kb.add(board, whites, standL, standR);
-    kb.position.set(-8.6 + 0.35, 1.2 + 1.05, -2.6 + 0.65);
-    kb.rotation.y = 0.45;
-    this.scene.add(kb);
-    // mic stands
     for (const x of [-4.2, 4.2]) {
       const st = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.6, 6), metal);
       st.position.set(x, 2.0, -0.35);
       this.scene.add(st);
     }
-    this.focusPos = { guitar: new THREE.Vector3(-4.5, 2.4, -1.2), bass: new THREE.Vector3(4.5, 2.4, -1.2), drums: new THREE.Vector3(0, 3.0, -5.2), keys: new THREE.Vector3(-8.6, 2.4, -2.6) };
+    this.cymbals = this.band.drums.kit.cymbals;
+    this.focusPos = {
+      guitar: new THREE.Vector3(-4.5, 2.6, -1.2), bass: new THREE.Vector3(4.5, 2.6, -1.2), drums: new THREE.Vector3(0, 3.1, -5.2),
+      keys: new THREE.Vector3(-8.6, 2.6, -2.6), vocals: new THREE.Vector3(0, 2.7, 0.55),
+    };
   }
 
   _crowd() {
@@ -636,17 +514,12 @@ export class Stage {
     this.tgtB.set(gels[this.paletteIndex][1]);
   }
 
-  /** Dress a band member (guitar / bass / drums / keys) as a player's character; null = the default look. */
-  setLook(inst, look) {
-    const f = this.band[inst];
-    if (!f) return;
-    const L = { ...DEFAULT_LOOKS[inst], ...(look || {}) };
-    f.mats.skin.color.set(L.skin);
-    f.mats.cloth.color.set(L.top);
-    f.mats.pants.color.set(L.pants);
-    f.mats.hair.color.set(L.hairColor);
-    for (const [k, m] of Object.entries(f.hair)) m.visible = k === (HAIR_STYLES.includes(L.hair) ? L.hair : 'short');
-    this.finish[inst]?.color.set(L.finish);
+  /** Dress a band member as a player's character and give them their instrument rig; null = the defaults. */
+  setLook(inst, look, rig = null) {
+    const m = this.band[inst];
+    if (!m) return;
+    m.setLook(look);
+    m.setRig(rig);
   }
 
   /** Everyone back in their default look. */
@@ -741,22 +614,8 @@ export class Stage {
     // band animation
     const bp = beat * Math.PI * 2;
     const hb = Math.max(0, Math.sin(bp)) * (0.2 + intensity * 0.4);
-    for (const [name, b] of Object.entries(this.band)) {
-      const energy = f.mode === 'game' ? 1 : 0.5;
-      if (name === 'drums') {
-        b.arms[0].rotation.x = -0.9 + Math.max(0, Math.sin(bp * 2)) * 0.8 * energy;
-        b.arms[1].rotation.x = -0.9 + Math.max(0, Math.sin(bp * 2 + Math.PI)) * 0.8 * energy;
-        b.head.rotation.x = hb * 0.6;
-        b.torso.position.y = 1.05 + Math.abs(Math.sin(bp)) * 0.03;
-      } else {
-        b.head.rotation.x = hb * (name === 'keys' ? 0.4 : 0.9) * energy + (od ? Math.sin(bp * 2) * 0.3 : 0);
-        b.torso.rotation.x = 0.1 + hb * 0.25 * energy;
-        b.torso.rotation.z = Math.sin(bp * 0.5) * 0.06;
-        b.g.position.y = 1.2 + (od ? Math.max(0, Math.sin(bp)) * 0.25 : 0);
-        b.arms[1].rotation.x = -0.9 + Math.sin(bp * 2) * 0.35 * energy;
-      }
-    }
-    this.cymbals.forEach((c, i) => { c.rotation.z = Math.sin(t * 20 + i) * 0.05 * pulse; });
+    const energy = f.mode === 'game' ? 1 : 0.5;
+    for (const m of Object.values(this.band)) animateMember(m, { bp, hb, energy, od, t, pulse });
 
     // crowd
     const jumpAmp = (0.1 + intensity * 0.45 + od * 0.35) * (f.mode === 'game' ? 1 : 0.4);

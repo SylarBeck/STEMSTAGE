@@ -11,6 +11,15 @@ import { profiles, levelInfo } from './profiles.js';
 import { tourStars } from './career.js';
 
 export const CASH = '$';
+
+/** The five world bosses (game/boss.js runs the fights). */
+export const BOSS_INFO = {
+  leviathan: { name: 'The Leviathan', title: 'Terror of the Deep', world: 'aquarium', color: '#2fd3ff' },
+  conductor: { name: 'The Void Conductor', title: 'Maestro of the Dark Between Stars', world: 'nebula', color: '#b36bff' },
+  titan: { name: 'The Magma Titan', title: 'Heart of the Mountain', world: 'forge', color: '#ff6a1a' },
+  wyrm: { name: 'The Frost Wyrm', title: 'Queen of the Long Night', world: 'aurora', color: '#9fe8ff' },
+  thunderbird: { name: 'The Thunderbird', title: 'Wrath of the High Winds', world: 'citadel', color: '#ffe14d' },
+};
 const DIFF_CASH = { easy: 0.6, medium: 0.8, hard: 1, expert: 1.25 };
 
 /** Cash for a finished run (before pedal bonuses). Practice and replays earn nothing. */
@@ -29,7 +38,7 @@ export function requirementText(req = {}, names = {}) {
   if (req.level) bits.push(`Level ${req.level}`);
   if (req.stars) bits.push(`${req.stars} tour stars`);
   if (req.ach) bits.push(`Achievement: ${names.ach?.(req.ach) || req.ach}`);
-  if (req.boss) bits.push(`Defeat ${names.boss?.(req.boss) || req.boss}`);
+  if (req.boss) bits.push(`Defeat ${names.boss?.(req.boss) || BOSS_INFO[req.boss]?.name || req.boss}`);
   if (req.cash) bits.push(fmtCash(req.cash));
   return bits.join(' · ') || 'Free';
 }
