@@ -518,6 +518,50 @@ export class AudioEngine {
     this.cheer(0.4);
   }
 
+  /** Bosses: an alarm before one arrives. */
+  sfxBossWarn() {
+    const ctx = this.ctx, t = ctx.currentTime;
+    for (let k = 0; k < 3; k++) {
+      const o = ctx.createOscillator(); o.type = 'square';
+      o.frequency.setValueAtTime(660, t + k * 0.5); o.frequency.linearRampToValueAtTime(440, t + k * 0.5 + 0.35);
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800;
+      const g = ctx.createGain(); this._env(g, t + k * 0.5, 0.09, 0.01, 0.35);
+      o.connect(lp).connect(g).connect(this.sfxGain); o.start(t + k * 0.5); o.stop(t + k * 0.5 + 0.4);
+    }
+  }
+
+  /** Bosses: a roar (0 = entrance, 1 = an attack). */
+  sfxBossRoar(kind = 0) {
+    const ctx = this.ctx, t = ctx.currentTime, len = kind ? 0.9 : 1.8;
+    const src = ctx.createBufferSource(); src.buffer = this.noise;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 3;
+    bp.frequency.setValueAtTime(380, t); bp.frequency.exponentialRampToValueAtTime(140, t + len);
+    const g = ctx.createGain(); this._env(g, t, kind ? 0.35 : 0.55, 0.12, len);
+    src.connect(bp).connect(g).connect(this.sfxGain); src.start(t); src.stop(t + len + 0.2);
+    for (const f of [55, 58.3, 82.4]) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f * 1.4, t); o.frequency.exponentialRampToValueAtTime(f, t + len);
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
+      const og = ctx.createGain(); this._env(og, t, kind ? 0.1 : 0.16, 0.1, len);
+      o.connect(lp).connect(og).connect(this.sfxGain); o.start(t); o.stop(t + len + 0.2);
+    }
+  }
+
+  /** Bosses: the big finish when one is beaten. */
+  sfxBossDefeat() {
+    const ctx = this.ctx, t = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = this.noise;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(3000, t); lp.frequency.exponentialRampToValueAtTime(80, t + 1.6);
+    const g = ctx.createGain(); this._env(g, t, 0.6, 0.01, 1.6);
+    src.connect(lp).connect(g).connect(this.sfxGain); src.start(t); src.stop(t + 1.8);
+    [261.63, 329.63, 392, 523.25, 659.25].forEach((f, i) => {
+      const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+      const og = ctx.createGain(); this._env(og, t + 0.15 + i * 0.07, 0.12, 0.02, 1.6);
+      o.connect(og).connect(this.sfxGain); o.start(t + 0.15 + i * 0.07); o.stop(t + 2.2);
+    });
+    this.cheer(1.4);
+  }
+
   sfxFail() {
     const ctx = this.ctx, t = ctx.currentTime;
     const o = ctx.createOscillator(); o.type = 'sawtooth';

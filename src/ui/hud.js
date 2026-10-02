@@ -126,6 +126,78 @@ export class Hud extends HudBase {
     d.className = `hg-delta ${g.delta >= 0 ? 'ahead' : 'behind'}`;
   }
 
+  // ---------------------------------------------------------------- world bosses (game/boss.js)
+  _bossEls() {
+    if (this.bossEl) return this.bossEl;
+    const bar = document.createElement('div');
+    bar.className = 'hud-boss';
+    bar.hidden = true;
+    bar.innerHTML = '<div class="hb-name"><b></b><small></small></div><div class="hb-bar"><i class="hb-trail"></i><i class="hb-fill"></i><span class="hb-pct"></span></div><div class="hb-time"><i></i></div>';
+    const warn = document.createElement('div');
+    warn.className = 'hud-boss-warn';
+    warn.hidden = true;
+    warn.innerHTML = '<span>WARNING</span><b></b><small></small>';
+    const stamp = document.createElement('div');
+    stamp.className = 'hud-boss-stamp';
+    stamp.hidden = true;
+    this.root.append(bar, warn, stamp);
+    this.bossEl = { bar, warn, stamp, fill: bar.querySelector('.hb-fill'), trail: bar.querySelector('.hb-trail'), pct: bar.querySelector('.hb-pct'), time: bar.querySelector('.hb-time i') };
+    return this.bossEl;
+  }
+
+  /** A boss is coming: the warning banner. */
+  bossWarn(info) {
+    const el = this._bossEls();
+    el.warn.style.setProperty('--bc', info.color);
+    el.warn.querySelector('b').textContent = info.name;
+    el.warn.querySelector('small').textContent = info.title;
+    el.warn.hidden = false;
+    popClass(el.warn, 'show');
+    clearTimeout(this._warnT);
+    this._warnT = setTimeout(() => { el.warn.hidden = true; }, 4200);
+  }
+
+  /** The fight: { name, title, color, hp 0..1, time 0..1 } */
+  boss(b) {
+    const el = this._bossEls();
+    if (el.bar.hidden) {
+      el.bar.hidden = false;
+      el.bar.style.setProperty('--bc', b.color);
+      el.bar.querySelector('b').textContent = b.name;
+      el.bar.querySelector('small').textContent = b.title;
+      this._bossTrail = 1;
+      popClass(el.bar, 'in');
+    }
+    const hp = Math.max(0, Math.min(1, b.hp));
+    this._set('bossHp', Math.round(hp * 400), () => {
+      el.fill.style.width = `${hp * 100}%`;
+      el.pct.textContent = `${Math.ceil(hp * 100)}%`;
+      if (hp < (this._bossLast ?? 1) - 0.004) popClass(el.bar, 'hit');
+      this._bossLast = hp;
+    });
+    this._bossTrail = Math.max(hp, (this._bossTrail ?? 1) - 0.012);
+    el.trail.style.width = `${this._bossTrail * 100}%`;
+    this._set('bossTime', Math.round(b.time * 200), (v) => { el.time.style.width = `${v / 2}%`; });
+  }
+
+  /** The fight is over: a stamp across the screen, then the bar goes. */
+  bossEnd(won, info) {
+    const el = this._bossEls();
+    el.stamp.className = `hud-boss-stamp ${won ? 'won' : 'lost'}`;
+    el.stamp.style.setProperty('--bc', info.color);
+    el.stamp.innerHTML = won ? `<b>BOSS DEFEATED</b><small>${info.name} falls</small>` : `<b>ESCAPED</b><small>${info.name} got away</small>`;
+    el.stamp.hidden = false;
+    popClass(el.stamp, 'show');
+    clearTimeout(this._stampT);
+    this._stampT = setTimeout(() => { el.stamp.hidden = true; el.bar.hidden = true; }, 3200);
+  }
+
+  bossHide() {
+    if (!this.bossEl) return;
+    this.bossEl.bar.hidden = this.bossEl.warn.hidden = this.bossEl.stamp.hidden = true;
+    this._bossLast = 1;
+  }
+
   replayBadge(on) {
     let el = document.getElementById('hud-replay');
     if (!el && on) {

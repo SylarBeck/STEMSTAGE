@@ -320,6 +320,68 @@ const metalFragment = /* glsl */`
     gl_FragColor = vec4(col, 1.0);
   }`;
 
+// Boss hazards (game/boss.js): a full-highway overlay, plus notes that sway sideways or warp in speed. They only
+// change what you see: timing and judgement stay exactly the same.
+const HAZARDS = {
+  ink: { mode: 1 }, bubbles: { mode: 2, sway: 0.12 }, tide: { sway: 0.55 }, gravity: { mode: 9, warp: 0.45 }, blackout: { mode: 8 },
+  meteor: { mode: 11, shake: 0.22 }, heat: { mode: 3, sway: 0.28 }, quake: { shake: 0.55 }, ash: { mode: 4 }, frost: { mode: 5 },
+  whiteout: { mode: 6 }, shatter: { mode: 12, mirror: true }, lightning: { mode: 10, shake: 0.18 }, gust: { mode: 13, sway: 0.5 }, static: { mode: 7 },
+};
+const hazardFragment = /* glsl */`
+  varying vec2 vUv;
+  uniform float uTime, uAmt, uMode, uLane;
+  float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float n2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+  float fbm(vec2 p) { float s = 0.0, a = 0.5; for (int k = 0; k < 4; k++) { s += a * n2(p); p *= 2.03; a *= 0.5; } return s; }
+  void main() {
+    vec2 uv = vUv; float far = uv.y; // 0 = the strikeline, 1 = the far end
+    vec3 col = vec3(0.0); float a = 0.0; float t = uTime;
+    int m = int(uMode + 0.5);
+    if (m == 1) { // ink: dark clouds rolling in from the far end
+      float c = fbm(vec2(uv.x * 3.0, far * 6.0 - t * 0.6)) + fbm(vec2(uv.x * 7.0 + t * 0.2, far * 11.0));
+      a = smoothstep(0.55, 1.1, c) * smoothstep(0.12, 0.45, far); col = vec3(0.01, 0.02, 0.05);
+    } else if (m == 2) { // bubbles rising up the highway
+      vec2 g = vec2(uv.x * 7.0, far * 26.0 + t * 3.5); vec2 id = floor(g); vec2 f = fract(g) - 0.5;
+      float r = 0.18 + 0.22 * h(id); vec2 o = vec2(h(id + 3.1) - 0.5, h(id + 7.7) - 0.5) * 0.4;
+      float d = length(f - o); float ring = smoothstep(r, r - 0.06, d) * (0.35 + 0.65 * smoothstep(r - 0.12, r, d));
+      a = ring * step(0.45, h(id + 1.3)) * smoothstep(0.08, 0.3, far) * 0.9; col = vec3(0.6, 0.9, 1.0);
+    } else if (m == 3) { // heat haze: orange shimmer bands
+      float w = sin(far * 40.0 - t * 9.0 + sin(uv.x * 12.0 + t) * 2.0);
+      a = (0.25 + 0.2 * w) * smoothstep(0.1, 0.5, far); col = vec3(1.0, 0.42, 0.08);
+    } else if (m == 4 || m == 13) { // ash (grey specks + haze) / gust (wind streaks)
+      float s = m == 4 ? step(0.985, h(floor(vec2(uv.x * 90.0 + t * 7.0, far * 160.0 + t * 30.0)))) : smoothstep(0.92, 1.0, n2(vec2(uv.x * 2.0 - t * 4.0, far * 70.0)));
+      a = s * 0.9 + 0.35 * smoothstep(0.25, 0.9, far) * (m == 4 ? 1.0 : 0.3); col = m == 4 ? vec3(0.32, 0.3, 0.28) : vec3(0.85, 0.9, 1.0);
+    } else if (m == 5) { // frost creeping in from both sides
+      float edge = min(uv.x, 1.0 - uv.x);
+      float cr = fbm(vec2(uv.x * 22.0, far * 40.0)) * 0.22;
+      a = smoothstep(0.32 + cr, 0.05, edge) * 0.92; col = vec3(0.75, 0.92, 1.0) * (0.8 + 0.4 * n2(vec2(uv.x * 80.0, far * 120.0)));
+    } else if (m == 6) { // whiteout
+      a = smoothstep(0.08, 0.55, far) * (0.75 + 0.2 * fbm(vec2(uv.x * 4.0 + t * 0.5, far * 5.0))); col = vec3(0.92, 0.96, 1.0);
+    } else if (m == 7) { // static
+      float s = h(floor(vec2(uv.x * 120.0, far * 220.0)) + floor(t * 30.0));
+      float band = step(0.82, fract(far * 3.0 - t * 2.3));
+      a = (s * 0.55 + band * 0.25) * (0.5 + 0.5 * step(0.5, fract(t * 7.0))); col = vec3(s);
+    } else if (m == 8) { // blackout: only the near end stays lit
+      a = smoothstep(0.1, 0.32, far) * 0.97; col = vec3(0.0);
+    } else if (m == 9) { // void: purple swirl
+      vec2 c = vec2(uv.x - 0.5, far - 0.6); float ang = atan(c.y, c.x) + t * 1.5; float r = length(c);
+      a = smoothstep(0.1, 0.6, far) * (0.35 + 0.35 * sin(ang * 5.0 + r * 30.0)); col = vec3(0.35, 0.05, 0.6);
+    } else if (m == 10) { // lightning: one lane goes white-hot
+      float lane = floor(uv.x * 5.0); float hitLane = step(abs(lane - uLane), 0.5);
+      float fl = step(0.55, fract(t * 6.0));
+      a = hitLane * fl * 0.9 * smoothstep(0.05, 0.25, far) + 0.08 * fl; col = vec3(0.95, 0.95, 1.4);
+    } else if (m == 11) { // meteors streaking down the highway
+      vec2 g = vec2(uv.x * 5.0, far * 3.0 + t * 2.6); vec2 id = floor(g); vec2 f = fract(g);
+      float on = step(0.6, h(id)); float d = abs(f.x - 0.5);
+      a = on * smoothstep(0.12, 0.0, d) * smoothstep(0.0, 0.8, f.y) * 0.95 * smoothstep(0.15, 0.4, far); col = vec3(1.2, 0.55, 0.15);
+    } else if (m == 12) { // shatter: ice cracks
+      float c = abs(n2(vec2(uv.x * 14.0, far * 24.0)) - 0.5);
+      a = smoothstep(0.03, 0.0, c) * 0.9 + 0.15; col = vec3(0.8, 0.95, 1.0);
+    }
+    gl_FragColor = vec4(col, clamp(a, 0.0, 1.0) * uAmt);
+  }`;
+
 export class Highway {
   constructor() {
     this.scene = new THREE.Scene();
@@ -346,6 +408,7 @@ export class Highway {
     this._buildFlames();
     this._buildFire();
     this._buildRings();
+    this._buildHazards();
     this.configure({ instrument: 'guitar', lefty: false, speed: 20, accent: 0xe0432f });
   }
 
@@ -571,6 +634,35 @@ export class Highway {
     this.sweep = 0;
   }
 
+  _buildHazards() {
+    this.hazardU = { uTime: { value: 0 }, uAmt: { value: 0 }, uMode: { value: 0 }, uLane: { value: 2 } };
+    const geo = new THREE.PlaneGeometry(WIDTH + BORDER * 2 + 0.4, HWY_LEN, 1, 1).rotateX(-Math.PI / 2).translate(0, 0.42, -HWY_LEN / 2);
+    // uv.y runs from the strikeline (0) to the far end (1)
+    const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+    this.hazardMesh = new THREE.Mesh(geo, new THREE.ShaderMaterial({
+      uniforms: this.hazardU, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: hazardFragment, transparent: true, depthWrite: false, depthTest: false,
+    }));
+    this.hazardMesh.renderOrder = 20;
+    this.hazardMesh.visible = false;
+    this.hazardMesh.frustumCulled = false;
+    this.scene.add(this.hazardMesh);
+    this.hazards = new Map(); // kind -> { until (performance.now ms), mild }
+    this.sway = 0; this.warp = 0;
+  }
+
+  /** A boss hazard for ms milliseconds. mild: cosmetic strength only (Settings → Boss hazards). → the hazard's spec */
+  hazard(kind, ms, mild = false) {
+    const hz = HAZARDS[kind];
+    if (!hz) return null;
+    this.hazards.set(kind, { until: performance.now() + ms, mild });
+    if (hz.mode === 10) this.hazardU.uLane.value = Math.floor(Math.random() * 5);
+    if (hz.shake) this.shake = Math.max(this.shake, hz.shake * (mild ? 0.4 : 1));
+    return hz;
+  }
+
+  clearHazards() { this.hazards.clear(); }
+
   ring(x, color, big = false) {
     const r = this.rings[this.ringHead];
     this.ringHead = (this.ringHead + 1) % this.rings.length;
@@ -732,7 +824,25 @@ export class Highway {
     const speed = this.speed;
     // fog (a battle attack): notes only show up on the near part of the highway
     this.fogK = (this.fogK || 0) + ((this.fog ? 1 : 0) - (this.fogK || 0)) * Math.min(1, dt * 8);
-    const lookahead = (this.len / speed) * (1 - 0.68 * this.fogK);
+    // boss hazards: the overlay, sway and speed warp of whatever is active (the newest overlay wins)
+    const nowMs = performance.now();
+    let mode = 0, sway = 0, warp = 0, mild = false;
+    for (const [kind, h] of this.hazards) {
+      if (h.until < nowMs) { this.hazards.delete(kind); continue; }
+      const hz = HAZARDS[kind];
+      if (hz.mode) mode = hz.mode;
+      sway = Math.max(sway, hz.sway || 0); warp = Math.max(warp, hz.warp || 0); mild = mild || h.mild;
+      if (kind === 'quake' && st.beatHit) this.shake = Math.max(this.shake, mild ? 0.15 : 0.4);
+    }
+    const HU = this.hazardU;
+    if (mode) HU.uMode.value = mode;
+    HU.uAmt.value += ((mode ? (mild ? 0.4 : 1) : 0) - HU.uAmt.value) * Math.min(1, dt * 5);
+    HU.uTime.value = this.time;
+    this.hazardMesh.visible = HU.uAmt.value > 0.01;
+    this.sway += ((mild ? sway * 0.4 : sway) - this.sway) * Math.min(1, dt * 3);
+    this.warp += ((mild ? warp * 0.4 : warp) - this.warp) * Math.min(1, dt * 3);
+    const warpK = 1 + this.warp * Math.sin(this.time * 2.2);
+    const lookahead = (this.len / speed) * (1 - 0.68 * this.fogK) / Math.max(0.55, warpK);
     const U = this.surfaceUniforms;
     U.uTime.value = this.time;
     U.uScroll.value = t * speed;
@@ -838,8 +948,9 @@ export class Highway {
       for (let i = this._start || 0; i < notes.length; i++) {
         const n = notes[i];
         if (n.t > t + lookahead) break;
-        const z = -(n.t - t) * speed;
-        const tailEnd = n.len > 0 ? -(n.t + n.len - t) * speed : z;
+        const z = -(n.t - t) * speed * warpK;
+        const tailEnd = n.len > 0 ? -(n.t + n.len - t) * speed * warpK : z;
+        const swayX = this.sway ? this.sway * Math.sin(z * 0.22 + this.time * 2.6) * Math.min(1, -z / 12) : 0;
         const odNote = n.p >= 0 && st.odPhraseAlive?.(n.p);
         // sustain tail
         if (n.len > 0 && !n.sus?.done && si < MAX_SUS && tailEnd < 0.5) {
@@ -847,7 +958,7 @@ export class Highway {
           const state = n.sus?.held ? 1 : (n.missed || n.sus?.dead) ? 2 : 0;
           const headZ = state === 1 ? Math.min(0, z) : z;
           m.visible = true;
-          m.position.set(this.laneX(n.lane), 0, headZ);
+          m.position.set(this.laneX(n.lane) + swayX, 0, headZ);
           m.scale.set(this.drums ? 1.2 : 1, 1, Math.max(0.001, headZ - tailEnd));
           const u = m.material.uniforms;
           u.uColor.value.copy(this.colors[n.lane]);
@@ -867,16 +978,16 @@ export class Highway {
         } else if (this.drums && CYMBAL_LANES.has(n.lane)) {
           if (ci >= MAX_CYM) continue;
           mesh = this.cymbals; idx = ci++;
-          this._p.set(this.laneX(n.lane), 0.02, z); this._s.set(1, 1, 0.72);
+          this._p.set(this.laneX(n.lane) + swayX, 0.02, z); this._s.set(1, 1, 0.72);
         } else if (this.drums) {
           if (pi >= MAX_GEMS) continue;
           mesh = this.pads; idx = pi++;
-          this._p.set(this.laneX(n.lane), 0.02, z); this._s.set(1.08, 1, 1.05);
+          this._p.set(this.laneX(n.lane) + swayX, 0.02, z); this._s.set(1.08, 1, 1.05);
         } else {
           if (gi >= MAX_GEMS) continue;
           mesh = this.gems; idx = gi++;
           const hs = n.hopo ? 0.84 : 1;
-          this._p.set(this.laneX(n.lane), 0.02, z); this._s.set(hs, n.hopo ? 1.15 : 1, hs);
+          this._p.set(this.laneX(n.lane) + swayX, 0.02, z); this._s.set(hs, n.hopo ? 1.15 : 1, hs);
         }
         this._q.identity();
         this._m.compose(this._p, this._q, this._s);
@@ -906,7 +1017,7 @@ export class Highway {
       while (this._bStart < b.length - 1 && b[this._bStart] < t - 0.5) this._bStart++;
       for (let i = this._bStart; i < b.length && li < MAX_LINES; i++) {
         if (b[i] > t + lookahead) break;
-        const z = -(b[i] - t) * speed;
+        const z = -(b[i] - t) * speed * warpK;
         const measure = ((i - st.downbeat) % 4 + 4) % 4 === 0;
         this._p.set(0, 0.006, z); this._s.set(WIDTH, 0.008, measure ? 0.085 : 0.035); this._q.identity();
         this._m.compose(this._p, this._q, this._s);
@@ -916,7 +1027,7 @@ export class Highway {
         li++;
         const nb = b[i + 1];
         if (nb && li < MAX_LINES) {
-          const hz = -((b[i] + nb) / 2 - t) * speed;
+          const hz = -((b[i] + nb) / 2 - t) * speed * warpK;
           this._p.set(0, 0.005, hz); this._s.set(WIDTH, 0.004, 0.018);
           this._m.compose(this._p, this._q, this._s);
           this.lines.setMatrixAt(li, this._m);

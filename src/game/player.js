@@ -4,6 +4,7 @@ import { settings } from '../settings.js';
 import { Trigger } from '../input/dualsense.js';
 import { FIVE_COLORS, DRUM_COLORS } from './highway.js';
 import { currentRules } from './replay.js';
+import { cleanMods, changesPlay } from '../profile/rig.js';
 
 export const WINDOWS = { perfect: 0.035, great: 0.07, good: 0.115 };
 // Pro mode: tighter timing (and no assists, no no-fail, overstrums count: see replay.js currentRules)
@@ -34,8 +35,11 @@ export class Player {
     this.colors = this.drums ? DRUM_COLORS : FIVE_COLORS;
     this.dsOwner = false;
     this.lefty = cfg.lefty ?? settings.leftyFlip;
-    this.rules = cfg.rules || currentRules(); // judgement rules (a replay keeps the ones it was recorded with)
-    this.win = this.rules.pro ? PRO_WINDOWS : WINDOWS;
+    // judgement rules (a replay keeps the ones it was recorded with); gear = the instrument's upgrades + pedals
+    this.rules = cfg.rules || { ...currentRules(), gear: currentRules().pro ? null : cleanMods(cfg.gear) };
+    this.gear = cleanMods(this.rules.gear) || cleanMods({});
+    const base = this.rules.pro ? PRO_WINDOWS : WINDOWS;
+    this.win = this.gear.window ? { ...base, good: base.good + this.gear.window } : base;
     this.replayer = cfg.replayer || null;
   }
 
@@ -86,6 +90,7 @@ export class Player {
     this.baseScore = this.notes.reduce((sum, n) => sum + 50 + (n.len > 0 ? (n.len / 0.5) * 25 : 0), 0);
     this.score = 0; this.streak = 0; this.maxStreak = 0; this.mult = 1;
     this.od = 0; this.odActive = false; this.odActivations = 0;
+    this.shield = this.gear.shield; this.shieldsUsed = 0;
     this.rock = 0.5;
     this.failed = false;
     this.audible = true;
@@ -224,7 +229,7 @@ export class Player {
     this.maxStreak = Math.max(this.maxStreak, this.streak);
     this._updateMult();
     this.score += 50 * this.mult * (this.odActive ? 2 : 1);
-    this.rock = Math.min(1, this.rock + (this.odActive ? 0.02 : 0.012));
+    this.rock = Math.min(1, this.rock + (this.odActive ? 0.02 : 0.012) * (1 + this.gear.crowd * 0.5));
     this.audible = true;
     this.highway.hitFx(n.lane, j);
     this.hud.judge(j.toUpperCase(), JUDGE_COLOR[j]);
@@ -234,6 +239,7 @@ export class Player {
       if (this.streak >= 100) this.s.stage.sparks();
     }
     if (n.sus) { n.sus.held = true; n.sus.last = n.t + delta; this.activeSus.add(n); this._setSusTrigger(n, true); }
+    this.s.boss?.hit(this, j);
     if (n.p >= 0 && !this.phraseFailed.has(n.p)) {
       const h = (this.phraseHits.get(n.p) || 0) + 1;
       this.phraseHits.set(n.p, h);
@@ -257,9 +263,13 @@ export class Player {
     if (n.group && n.group.notes.every((x) => x.judged)) n.group.judged = true;
     if (n.sus) n.sus.dead = true;
     this.stats.miss++;
-    this.streak = 0;
+    this.s.boss?.miss(this);
+    if (this.shield > 0 && this.streak > 0) { // a streak shield (gear): the miss counts, the streak survives
+      this.shield--; this.shieldsUsed++;
+      this.hud.callout('SHIELD!', '#2fd3ff');
+    } else this.streak = 0;
     this._updateMult();
-    this.rock = Math.max(0, this.rock - MISS_PENALTY[this.diff]);
+    this.rock = Math.max(0, this.rock - MISS_PENALTY[this.diff] * (1 - this.gear.crowd));
     if (n.p >= 0) this.phraseFailed.add(n.p);
     this.audible = false;
     const now = performance.now();
@@ -276,12 +286,12 @@ export class Player {
   }
 
   _updateMult() {
-    this.mult = Math.min(this.maxMult, 1 + Math.floor(this.streak / 10));
+    this.mult = Math.min(this.maxMult, 1 + Math.floor(this.streak / (this.gear.multStep || 10)));
   }
 
   _phraseComplete() {
     const before = this.od;
-    this.od = Math.min(1, this.od + 0.25);
+    this.od = Math.min(1, this.od + 0.25 * (1 + this.gear.odGain));
     this.engine.sfxPhrase();
     this.rumble(0, 200, 90); setTimeout(() => this.rumble(0, 200, 90), 130);
     if (!this.odActive && before < 0.5 && this.od >= 0.5) this.hud.callout('OVERDRIVE READY', '#ffe39a');
@@ -371,7 +381,7 @@ export class Player {
   _susScore(n, until) {
     const d = until - n.sus.last;
     if (d <= 0) return;
-    this.score += (25 * this.mult * (this.odActive ? 2 : 1) * d) / (this._bl || 0.5);
+    this.score += (25 * this.mult * (this.odActive ? 2 : 1) * d * (1 + this.gear.sustain)) / (this._bl || 0.5);
     n.sus.last = until;
   }
 
@@ -431,7 +441,7 @@ export class Player {
         if (this.dsOwner && now - this.lastSusRumble > 45) { this.rumble(0, 40 + whammy * 60, 60); this.lastSusRumble = now; }
       }
       if (this.odActive) {
-        this.od -= dt / bl / 32;
+        this.od -= dt / bl / 32 / (1 + this.gear.odTime);
         if (this.od <= 0) { this.od = 0; this.odActive = false; }
       }
     }
@@ -448,7 +458,7 @@ export class Player {
     });
     this.hud.frame(dt, {
       score: Math.floor(this.score), mult: this.mult * (this.odActive ? 2 : 1), maxMult: this.maxMult,
-      multProgress: this.mult >= this.maxMult ? 1 : (this.streak % 10) / 10, streak: this.streak,
+      multProgress: this.mult >= this.maxMult ? 1 : (this.streak % (this.gear.multStep || 10)) / (this.gear.multStep || 10), streak: this.streak,
       od: this.od, odActive: this.odActive, rock: this.rock, anchor: this.highway.anchor(),
     });
   }
@@ -472,6 +482,7 @@ export class Player {
       index: this.index, name: this.cfg.name, color: this.cfg.color || PLAYER_COLORS[this.index], device: this.cfg.device, profileId: this.cfg.profileId || null,
       instrument: this.inst, difficulty: this.diff, score: Math.floor(this.score), stars, gold, accuracy, hits, total,
       maxStreak: this.maxStreak, ...this.stats, odActivations: this.odActivations, failed: this.failed, strum: this.strum, assist: this.assisted, pro: !!this.rules.pro,
+      gear: changesPlay(this.gear), cashBonus: this.gear.cash || 0,
     };
   }
 }

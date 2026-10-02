@@ -4,6 +4,7 @@
 import { settings } from '../settings.js';
 import { Mic } from '../audio/pitch.js';
 import { currentRules } from './replay.js';
+import { cleanMods, changesPlay } from '../profile/rig.js';
 
 const TOL = { easy: 3.5, medium: 2.5, hard: 1.8, expert: 1.2 }; // semitones
 const RATINGS = [[0.7, 'AWESOME', '#f6c945'], [0.5, 'STRONG', '#ece5d3'], [0.3, 'GOOD', '#c9bea6'], [0.15, 'OK', '#e0935a'], [0, 'MESSY', '#e5402f']];
@@ -62,7 +63,8 @@ export class VocalPlayer {
     this.diff = cfg.difficulty;
     this.mic = true;
     this.maxMult = 4;
-    this.rules = cfg.rules || currentRules();
+    this.rules = cfg.rules || { ...currentRules(), gear: currentRules().pro ? null : cleanMods(cfg.gear) };
+    this.gear = cleanMods(this.rules.gear) || cleanMods({});
     this.replayer = cfg.replayer || null;
     this.part = cfg.part || 0; // 0 = lead, 1 / 2 = harmony parts 2 and 3
     this.activeSus = new Set();
@@ -153,9 +155,10 @@ export class VocalPlayer {
     this.mult = Math.min(this.maxMult, 1 + Math.floor(this.streak / 2));
     this.rock = Math.max(0, Math.min(1, this.rock + (frac >= 0.5 ? 0.06 : frac >= 0.3 ? 0.03 : frac >= 0.15 ? -0.04 : -0.08)));
     this.hud.judge(label, color);
+    this.s.boss?.phrase(this, frac);
     if (ph.od && frac >= 0.5) {
       const before = this.od;
-      this.od = Math.min(1, this.od + 0.25);
+      this.od = Math.min(1, this.od + 0.25 * (1 + this.gear.odGain));
       this.engine.sfxPhrase();
       if (!this.odActive && before < 0.5 && this.od >= 0.5) this.hud.callout('OVERDRIVE READY', '#ffe39a');
     }
@@ -212,6 +215,7 @@ export class VocalPlayer {
       instrument: 'vocals', difficulty: this.diff, score: Math.floor(this.score), stars: this.failed ? 0 : th.filter((x) => accuracy >= x).length,
       gold: !this.failed && accuracy >= 0.98 && this.stats.miss === 0, accuracy, hits, total, maxStreak: this.maxStreak, ...this.stats,
       odActivations: this.odActivations, failed: this.failed, strum: false, mic: true, part: this.part,
+      gear: changesPlay(this.gear), cashBonus: this.gear.cash || 0,
     };
   }
 }

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { settings } from '../settings.js';
 import { createMember, animateMember } from './figure.js';
+import { WORLDS, buildWorld } from './worlds/index.js';
 
 // lighting states, like a club rig's gels: amber + red, tungsten + deep blue, crimson + amber, white + red, gold + blue
 const PALETTES = [
@@ -196,11 +197,14 @@ export class Stage {
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), floorMat);
     floor.rotation.x = -Math.PI / 2;
     this.scene.add(floor);
+    this.floor = floor;
 
     const stageMat = new THREE.MeshStandardMaterial({ color: 0x0c0b14, roughness: 0.25, metalness: 0.5 });
     const stage = new THREE.Mesh(new THREE.BoxGeometry(24, 1.2, 10), stageMat);
     stage.position.set(0, 0.6, -2.5);
     this.scene.add(stage);
+    this.stageMat = stageMat;
+    this.stageBase = stageMat.color.clone();
     // stage lip LED strip
     this.lipMat = new THREE.MeshBasicMaterial({ color: 0xff9a2e });
     const lip = new THREE.Mesh(new THREE.BoxGeometry(24, 0.08, 0.08), this.lipMat);
@@ -250,10 +254,12 @@ export class Stage {
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(24, 9.5), mat);
     wall.position.set(0, 6.2, -7.4);
     this.scene.add(wall);
+    this.ledWall = wall;
     this.pillars = [];
     const frame = new THREE.Mesh(new THREE.BoxGeometry(24.6, 10, 0.3), new THREE.MeshStandardMaterial({ color: 0x08070c, roughness: 0.5 }));
     frame.position.set(0, 6.2, -7.6);
     this.scene.add(frame);
+    this.wallFrame = frame;
     // side LED pillars
     this.pillarMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     for (const sx of [-1, 1]) {
@@ -528,10 +534,12 @@ export class Stage {
   /** Menus: frame one band member up close (the character editor), or null to go back to the slow orbit. */
   preview(inst) { this.previewInst = this.band[inst] ? inst : null; }
 
-  /** Dress the stage as one of the tour's venues (VENUE_LOOKS). */
+  /** Dress the stage as one of the tour's venues (VENUE_LOOKS) or one of the five worlds (game/worlds). */
   setVenue(id) {
+    if (WORLDS[id]) { this._setWorld(id); return; }
     const v = VENUE_LOOKS[id] ? VENUE_LOOKS[id] : VENUE_LOOKS.arena;
-    if (this.venueId === (VENUE_LOOKS[id] ? id : 'arena')) return;
+    if (this.venueId === (VENUE_LOOKS[id] ? id : 'arena') && !this.world) return;
+    this._clearWorld();
     this.venueId = VENUE_LOOKS[id] ? id : 'arena';
     this.gels = v.gels;
     this.paletteIndex = 0;
@@ -551,6 +559,52 @@ export class Stage {
     this.phones.pts.visible = v.phones;
     this.lightScale = v.light;
     this.pyroScale = v.pyro;
+  }
+
+  /** A world: its own set and sky replace parts of the arena; the band, stage and crowd stay. */
+  _setWorld(id) {
+    if (this.venueId === id && this.world) return;
+    this._clearWorld();
+    this.worlds ||= {};
+    const w = (this.worlds[id] ||= buildWorld(id, this));
+    this.world = w;
+    this.venueId = id;
+    w.group.visible = true;
+    const L = w.look;
+    this.gels = L.gels;
+    this.paletteIndex = 0;
+    this.tgtA.set(L.gels[0][0]); this.tgtB.set(L.gels[0][1]);
+    this.scene.background = L.background || new THREE.Color(L.bg);
+    if (!L.background) this.scene.background.set(L.bg);
+    this.scene.fog.color.set(L.fogColor);
+    this.scene.fog.density = L.fog;
+    const hide = L.hide || {};
+    this.floor.visible = !hide.floor;
+    this.ledWall.visible = this.wallFrame.visible = !hide.wall;
+    this.trussMesh.visible = !hide.truss;
+    for (const p of this.pillars) p.visible = !hide.pillars;
+    for (const s of this.stacks) s.mesh.visible = !hide.stacks && s.level < 2;
+    [...this.heads].sort((a, b) => Math.abs(a.x) - Math.abs(b.x)).forEach((h, i) => { h.pivot.visible = !hide.heads && i < (L.heads ?? 8); });
+    this.crowd.count = Math.max(1, Math.round(this.crowdData.length * (L.crowd ?? 1)));
+    this.crowd.material.color.set(L.crowdTint || 0xffffff);
+    this.phones.pts.visible = L.phones !== false;
+    this.stageMat.color.set(L.stageColor || this.stageBase);
+    this.lightScale = L.light ?? 1;
+    this.pyroScale = L.pyro ?? 1;
+    this.wallBright = 1;
+  }
+
+  _clearWorld() {
+    if (!this.world) return;
+    this.world.group.visible = false;
+    this.world.boss?.reset();
+    this.world = null;
+    this.scene.background = new THREE.Color(0x040302);
+    this.floor.visible = true;
+    this.ledWall.visible = this.wallFrame.visible = true;
+    this.crowd.material.color.set(0xffffff);
+    this.stageMat.color.copy(this.stageBase);
+    this.venueId = null;
   }
 
   resize(w, h) { this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
@@ -650,6 +704,7 @@ export class Stage {
     dg.attributes.position.needsUpdate = true; dg.attributes.color.needsUpdate = true;
     if (!this._dustSized) { dg.attributes.aSize.needsUpdate = true; this._dustSized = true; }
 
+    if (this.world) this.world.update(dt, f, t, pulse);
     this._camera(dt, f, pulse, beat);
   }
 
@@ -674,6 +729,13 @@ export class Stage {
         case 'low': pos.set(0, 1.8, 10); tgt.set(0, 4.2, -4); break;
         case 'player': pos.set(focus.x + (focus.x > 0 ? -3.5 : 3.5), focus.y + 2.2, focus.z + 10.5); tgt.copy(focus); break;
         case 'drums': pos.set(3, 4.5, 4); tgt.copy(this.focusPos.drums); break;
+        case 'boss': {
+          // the boss arrives: a slow push from the crowd towards it, then back to the wide shot
+          const b = this.world?.boss;
+          if (b?.cam) { pos.copy(b.cam.pos); tgt.copy(b.cam.tgt); } else pos.set(0, 5.2, 17), tgt.set(0, 3.8, -3);
+          if (this.shotTimer > 4.5) this.setShot('wide');
+          break;
+        }
         default: pos.set(0, 5.2, 17); tgt.set(0, 3.8, -3);
       }
       pos.x += Math.sin(t * 0.3) * 1.2;

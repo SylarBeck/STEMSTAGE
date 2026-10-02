@@ -13,6 +13,7 @@ import { STEM_FOR } from '../audio/engine.js';
 import { runJob } from '../audio/pipeline.js';
 import { Recorder, Replayer, buildReplay, ghostAt } from './replay.js';
 import { discord } from '../net/discord.js';
+import { planBoss, BossFight } from './boss.js';
 
 const SHOTS = ['wide', 'left', 'player', 'right', 'low', 'drums', 'wide', 'player'];
 const stretchInWorker = (L, R, rate, onProgress) => runJob('stretch', { L: L.slice(), R: R.slice(), rate }, undefined, onProgress);
@@ -65,6 +66,7 @@ export class Session {
     });
     this.ds.offAll();
     for (const p of this.players) this._assignFeedback(p);
+    this._setupBoss(song, opts);
 
     const lastEnd = Math.max(0, ...this.players.flatMap((p) => p.notes.map((n) => n.t + (n.len || 0))));
     this.endTime = Math.min(song.duration, Math.max(lastEnd + 5, this.startTime + 20));
@@ -107,6 +109,46 @@ export class Session {
     this.engine.setCrowd(0.3);
   }
 
+  /**
+   * A world's boss may show up in this song (game/boss.js). Online, the room's seed decides, so everyone gets the
+   * same boss at the same time; practice and replays never have one.
+   */
+  _setupBoss(song, opts) {
+    this.boss = null;
+    this.hazardTimers = [];
+    this.hud.bossHide();
+    const world = this.stage.world;
+    world?.boss?.reset();
+    if (!world?.bossId || this.practice || this.replay) return;
+    const seed = this.online?.seed ?? opts.seed ?? ((Math.random() * 2 ** 32) >>> 0);
+    const mode = this.online?.bosses ?? settings.bosses ?? 'random';
+    const plan = planBoss({ bossId: world.bossId, song, notes: this.players.map((p) => p.notes || []), seed, mode, startTime: this.startTime });
+    if (!plan) return;
+    let remoteNotes = 0;
+    const band = this.online && this.matchMode === 'band';
+    if (band) {
+      for (const r of this.online.lineup) {
+        if (r.id === this.online.client.id) continue;
+        remoteNotes += (song.charts[r.instrument]?.notes?.[r.difficulty] || []).filter((n) => n.t >= plan.start && n.t <= plan.end).length;
+      }
+    }
+    this.boss = new BossFight(this, plan, { shared: band, remoteNotes });
+  }
+
+  /** A boss attack: a hazard on every local highway (mirror = battle mode's mirror, quake shakes). */
+  bossAttack(kind, dur) {
+    const mild = settings.bossHazards === 'mild' || settings.calmVisuals;
+    for (const p of this.players) {
+      const hz = p.highway?.hazard(kind, dur * 1000, mild);
+      if (hz?.mirror && !mild && p.attack) p.attack('mirror', dur * 1000);
+      if (p.dsOwner) p.rumble(180, 120, 260);
+    }
+  }
+
+  clearHazards() { for (const p of this.players) p.highway?.clearHazards(); }
+
+  get calm() { return !!settings.calmVisuals; }
+
   /** Give a player the controller that should rumble / drive triggers for them. */
   _assignFeedback(p) {
     const dev = p.cfg.device || 'any';
@@ -134,7 +176,10 @@ export class Session {
     if (!this.online) return;
     const c = this.online.client;
     this.offOnline = [
-      c.on('live', (m) => { this.remote.set(m.id, m); }),
+      c.on('live', (m) => {
+        this.remote.set(m.id, m);
+        if (this.boss?.shared) { let sum = 0; for (const v of this.remote.values()) sum += v.bossDmg || 0; this.boss.setRemote(sum); }
+      }),
       c.on('event', (m) => {
         const who = this.online.lineup.find((r) => r.id === m.id);
         const band = this.matchMode === 'band';
@@ -193,6 +238,9 @@ export class Session {
     this.hud.remote(null);
     this.hud.ghost(null);
     this.hud.replayBadge(false);
+    this.hud.bossHide();
+    this.stage.world?.boss?.reset();
+    this.boss = null;
     this.input.setMenu();
     this.ds.offAll();
     this.engine.setCrowd(0); // no crowd noise in the menus
@@ -303,6 +351,7 @@ export class Session {
           if (!this.players.some((p) => p.odActive) && !settings.calmVisuals) this.stage.setShot(SHOTS[(measure / 32) % SHOTS.length]);
         }
       }
+      if (this.boss) this.boss.update(t);
       if (t > this.endTime) this._finish();
     }
     const b0 = beats[this.beatPtr], b1 = beats[this.beatPtr + 1] || b0 + 0.5;
@@ -327,6 +376,7 @@ export class Session {
       this.online.client.live({
         score: Math.floor(me.score), streak: me.streak, mult: me.mult * (me.odActive ? 2 : 1), od: +me.od.toFixed(2),
         odActive: me.odActive, rock: +me.rock.toFixed(2), audible: me.audible, failed: me.failed, instrument: me.inst,
+        ...(this.boss ? { bossDmg: Math.round(this.boss.damage) } : {}),
       });
     }
     if (this.online && now - this.lastBoard > 250) { this.lastBoard = now; this.hud.remote(this._remoteRows(), { mode: this.matchMode }); }
@@ -422,7 +472,9 @@ export class Session {
       song: this.song, players, failed, bandScore: players.reduce((s, r) => s + r.score, 0), practice: this.practice, replays,
       replay: this.replay, ghost: this.ghost ? { name: this.ghost.name, score: this.ghost.score } : null,
       mode: this.replay ? 'replay' : this.practice ? 'practice' : this.online ? 'online' : this.solo ? 'solo' : 'band',
+      boss: this.boss ? this.boss.result() : null,
     };
+    this.hud.bossHide();
     if (this.online) {
       const c = this.online.client;
       const others = (remoteResults || []).filter((r) => r.id !== c.id).map((r) => ({ ...r, remote: true }));
