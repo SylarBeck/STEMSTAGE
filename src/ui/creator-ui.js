@@ -15,6 +15,18 @@ import { lockOf, buy, spend, fmtCash, requirementText, BOSS_INFO } from '../prof
 import { ACHIEVEMENTS } from '../profile/profiles.js';
 import { fa, instIcon } from './icons.js';
 import { settings } from '../settings.js';
+import { SLOTS, ITEMS, DEFAULT_LAYOUT, itemId, cleanLayout } from '../game/props.js';
+import { slotView } from '../game/stagecraft.js';
+
+const STAGE_MAX = 6;
+const SLOT_BLURB = {
+  base: 'How big the room is: the crowd, the stacks and how much pyro the venue allows.', backdrop: 'What plays on the giant LED wall behind the band.',
+  floor: 'The floor under the band and the crowd.', rig: 'The light show: movers on a truss, lasers, a disco ball, or just house lights.',
+  wingL: 'Stage left: something big to stand next to.', wingR: 'Stage right: the other side.', upstage: 'Behind the band, either side of the drum riser.',
+  downstage: 'At the front edge of the stage: pyro, CO₂, lamps.', overhead: 'Hanging above the band.', fx: 'What floats in the air.',
+  crowd: 'How many people came.', gels: 'The colours of the lights, the LED wall and the trim.',
+};
+const STAGE_CATS = SLOTS.map((s) => ({ id: s.id, name: s.name, icon: s.icon, shot: s.id, blurb: SLOT_BLURB[s.id], sections: [{ kind: 'stage', slot: s.id }] }));
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -64,9 +76,10 @@ export function installCreator(ui) {
     if (sec.rig === 'shape') { const id = `shape.${st.part}.${v}`; return SHAPE_REQ[id] ? [id, SHAPE_REQ[id]] : [null, null]; }
     if (sec.rig === 'hardware') { const id = `hw.${v}`; return HARDWARE_REQ[id] ? [id, HARDWARE_REQ[id]] : [null, null]; }
     if (sec.rig === 'glow') return v ? ['rig.glow', GLOW_REQ] : [null, null];
+    if (sec.slot) { const it = ITEMS[sec.slot].find(([id]) => id === v); return it && Object.keys(it[3]).length ? [itemId(sec.slot, v), it[3]] : [null, null]; }
     return [null, null];
   };
-  const cats = () => (st.mode === 'character' ? CHAR_CATS : instCats(st.part));
+  const cats = () => (st.mode === 'character' ? CHAR_CATS : st.mode === 'stage' ? STAGE_CATS : instCats(st.part));
   const cat = () => cats()[Math.min(st.cat, cats().length - 1)];
   const shownPart = () => (st.mode === 'character' ? look().part : st.part);
   const rigFor = (part) => rigPart(prof(), part);
@@ -77,7 +90,60 @@ export function installCreator(ui) {
     bs.setPart(part);
     bs.dress(lk, rig || rigFor(part));
   }
-  function frame(shot) { if (bs.focus(shot)) app.engine.sfxWhoosh(); }
+  function frame(shot) {
+    if (st.mode === 'stage') { app.stage.designView(slotView(shot)); app.engine.sfxWhoosh(); return; }
+    if (bs.focus(shot)) app.engine.sfxWhoosh();
+  }
+
+  // ---------------------------------------------------------------- stages (the stage designer)
+  const stages = () => (prof().stages ||= []);
+  function curStage() {
+    let s = stages().find((x) => x.id === st.stageId) || stages()[0];
+    if (!s) s = newStage();
+    st.stageId = s.id;
+    s.layout = cleanLayout(s.layout);
+    return s;
+  }
+  function newStage() {
+    const s = { id: Math.random().toString(36).slice(2, 8), name: `My Stage ${stages().length + 1}`, layout: { ...DEFAULT_LAYOUT } };
+    stages().push(s);
+    profiles.saveSoon();
+    profiles.award(prof().id, 'stage_builder').then((fresh) => { for (const a of fresh) ui.toast(`${a.name} — ${a.desc}`, 'ok', 'trophy'); });
+    return s;
+  }
+  const showStage = (layout = curStage().layout) => app.stage.setCustom(`custom:${curStage().id}`, layout);
+  /** Into the stage designer: the real stage is on screen instead of the dressing room. */
+  function stageView(on) {
+    if (on) { bs.active = false; app.renderer.setView(null); showStage(); app.stage.designView(slotView(cat().shot)); }
+    else { app.stage.designView(null); bs.active = true; app.renderer.setView(bs); }
+  }
+  function stageHeader() {
+    const cur = curStage();
+    return `<div class="cr-stages">${stages().map((s) => `<button class="cr-chip ${s.id === cur.id ? 'sel' : ''}" data-nav data-cr-stage="${s.id}">${fa('helmet-safety')} ${esc(s.name)}</button>`).join('')}
+      ${stages().length < STAGE_MAX ? `<button class="cr-chip add" data-nav data-cr-stage="new">${fa('plus')} New stage</button>` : ''}</div>
+      <div class="cr-stage-acts"><button class="nav-btn primary" data-nav data-cr-sact="play">${fa('play')} Play on this stage</button><button class="nav-btn" data-nav data-cr-sact="rename">${fa('pen')} Rename</button>${stages().length > 1 ? `<button class="nav-btn danger" data-nav data-cr-sact="delete">${fa('trash')}</button>` : ''}</div>`;
+  }
+  async function stageAction(a) {
+    const cur = curStage();
+    if (a === 'play') { settings.venue = `custom:${cur.id}`; app.engine.sfxPose(); app.stage.pyro(0.8); app.stage.confettiBurst(); ui.toast(`Songs now play on "${cur.name}"`, 'ok', 'helmet-safety'); return; }
+    if (a === 'rename') {
+      const name = await ui.osk.show({ title: 'Stage name', value: cur.name, type: 'text', max: 24 });
+      if (name && name.trim()) { cur.name = name.trim().slice(0, 24); profiles.saveSoon(); render(); }
+      return;
+    }
+    if (a === 'delete' && stages().length > 1 && await ui.confirmDialog(`Delete "${cur.name}"?`, 'The stage goes; everything you unlocked for it stays yours.', 'Delete')) {
+      prof().stages = stages().filter((s) => s.id !== cur.id);
+      if (settings.venue === `custom:${cur.id}`) settings.venue = 'auto';
+      st.stageId = null; profiles.saveSoon(); showStage(); render();
+    }
+  }
+  function pickStage(id) {
+    if (id === 'new') { if (stages().length < STAGE_MAX) { st.stageId = newStage().id; app.engine.sfxEquip(2); } }
+    else st.stageId = id;
+    showStage();
+    app.stage.pyro(0.5);
+    render();
+  }
 
   // ---------------------------------------------------------------- open / close
   function open() {
@@ -89,16 +155,17 @@ export function installCreator(ui) {
     ui.show('creator');
   }
   function enter() {
-    bs.active = true;
-    app.renderer.setView(bs);
+    bs.active = st.mode !== 'stage';
+    app.renderer.setView(bs.active ? bs : null);
     st.cash = prof()?.cash || 0;
     st.shownCash = st.cash;
     st.combo = 0;
-    showModel();
-    bs.focus(cat().shot);
+    if (st.mode === 'stage') stageView(true);
+    else { showModel(); bs.focus(cat().shot); }
     render(true);
   }
   function leave() {
+    app.stage.designView(null);
     bs.active = false;
     bs.clearThumbQueue();
     app.renderer.setView(null);
@@ -127,7 +194,7 @@ export function installCreator(ui) {
     if (!p || !root) return;
     const lv = levelInfo(p.xp);
     root.dataset.mode = st.mode;
-    $('#cr-modes').innerHTML = [['character', 'Character', 'user-astronaut'], ['instrument', 'Instruments', 'guitar']]
+    $('#cr-modes').innerHTML = [['character', 'Character', 'user-astronaut'], ['instrument', 'Instruments', 'guitar'], ['stage', 'Stages', 'helmet-safety']]
       .map(([v, l, i]) => `<button class="cr-mode ${st.mode === v ? 'sel' : ''}" data-nav data-cr-mode="${v}">${fa(i)} ${l}</button>`).join('');
     $('#cr-parts').innerHTML = st.mode === 'instrument' ? PARTS.map((pt) => `<button class="cr-part ${st.part === pt ? 'sel' : ''}" data-nav data-cr-part="${pt}" title="${PART_LABEL[pt]}">${instIcon(pt)}<span>${PART_LABEL[pt]}</span></button>`).join('') : '';
     $('#cr-name').innerHTML = `<b>${esc(p.name)}</b><small>Level ${lv.level} · ${esc(lv.rank)}</small>`;
@@ -169,6 +236,16 @@ export function installCreator(ui) {
         continue;
       }
       if (sec.kind === 'components') { html += componentsHtml(rig); continue; }
+      if (sec.kind === 'stage') {
+        const layout = curStage().layout;
+        html = stageHeader() + html;
+        html += `<div class="cr-sec"><div class="cr-grid">${ITEMS[sec.slot].map(([v, name, icon]) => {
+          const [id, req] = reqOf(sec, v);
+          const lock = lockFor(id, req);
+          return card({ key: `s|${sec.slot}|${v}`, sel: layout[sec.slot] === v, lock, label: name, sub: lock && !lock.needsCash ? requirementText(req, names) : '', icon: fa(icon), data: `data-slot="${sec.slot}" data-v="${v}"` });
+        }).join('')}</div></div>`;
+        continue;
+      }
       if (sec.kind === 'pedals') { html += pedalsHtml(); continue; }
       const field = sec.field || sec.rig;
       const cur = sec.field ? lk[field] : rig[field];
@@ -206,6 +283,8 @@ export function installCreator(ui) {
     $$('[data-cr-comp]', panel).forEach((b) => b.addEventListener('click', () => upgrade(b.dataset.crComp)));
     $$('[data-cr-pedal]', panel).forEach((b) => b.addEventListener('click', () => pedal(b.dataset.crPedal)));
     $$('[data-cr-slot]', panel).forEach((b) => b.addEventListener('click', () => unequipSlot(+b.dataset.crSlot)));
+    $$('[data-cr-stage]', panel).forEach((b) => b.addEventListener('click', () => pickStage(b.dataset.crStage)));
+    $$('[data-cr-sact]', panel).forEach((b) => b.addEventListener('click', () => stageAction(b.dataset.crSact)));
   }
 
   function componentsHtml(rig) {
@@ -264,6 +343,7 @@ export function installCreator(ui) {
   // ---------------------------------------------------------------- try on (focus) and equip (confirm)
   function readItem(el) {
     if (el.dataset.preset) return { preset: el.dataset.preset };
+    if (el.dataset.slot) return { slot: el.dataset.slot, v: el.dataset.v };
     if (!el.dataset.field) return null;
     return { scope: el.dataset.scope, field: el.dataset.field, v: el.dataset.v };
   }
@@ -274,6 +354,7 @@ export function installCreator(ui) {
     if (key === st.tryKey) return;
     st.tryKey = key;
     bs.moveDemo = false;
+    if (st.mode === 'stage') { showStage(it?.slot ? { ...curStage().layout, [it.slot]: it.v } : undefined); return; }
     if (!it) { showModel(); return; }
     const lk = look(), rig = rigFor(shownPart());
     if (it.preset) showModel(fromPreset(it.preset, lk.part));
@@ -297,6 +378,23 @@ export function installCreator(ui) {
       if (locked.length) ui.toast(`${locked.length} piece${locked.length === 1 ? ' is' : 's are'} still locked: swapped for free ones`);
       profiles.setLook(p.id, cleanLook(l));
       equipped(el, PRESETS.find((x) => x.id === it.preset)?.top || '#f0b429', 'full');
+      return;
+    }
+    if (it.slot) {
+      const it2 = ITEMS[it.slot].find(([id]) => id === it.v);
+      const req2 = it2 && Object.keys(it2[3]).length ? it2[3] : null;
+      const lock2 = req2 ? lockFor(itemId(it.slot, it.v), req2) : null;
+      if (lock2 && !(await purchase(el, itemId(it.slot, it.v), req2, lock2, it2[1]))) return;
+      curStage().layout[it.slot] = it.v;
+      profiles.saveSoon();
+      showStage();
+      app.stage.pyro(0.45);
+      if (it.slot === 'overhead' || it.slot === 'fx') app.stage.confettiBurst(); else app.stage.sparks();
+      app.engine.sfxEquip(st.combo++);
+      st.tryKey = null;
+      render();
+      const items = ui.navItems(); const i = items.findIndex((x) => x.dataset.crItem === el.dataset.crItem);
+      if (i >= 0) { ui.focus = i; ui.applyFocus(false); items[i].classList.add('pop'); }
       return;
     }
     const sec = cat().sections.find((s) => (s.field || s.rig) === it.field);
@@ -404,8 +502,10 @@ export function installCreator(ui) {
   // ---------------------------------------------------------------- navigation
   function setMode(mode) {
     if (mode === st.mode) return;
+    if (st.mode === 'stage') stageView(false);
     st.mode = mode;
     st.cat = 0;
+    if (mode === 'stage') { stageView(true); app.engine.sfxWhoosh(); render(true); return; }
     if (mode === 'instrument') st.part = look().part;
     st.tryKey = null;
     showModel();
@@ -429,7 +529,7 @@ export function installCreator(ui) {
     if (i === st.cat) return;
     st.cat = i;
     st.tryKey = null;
-    showModel();
+    if (st.mode === 'stage') showStage(); else showModel();
     frame(cat().shot);
     const focusRail = ui.navItems()[ui.focus]?.dataset.crCat !== undefined;
     render();
@@ -464,13 +564,15 @@ export function installCreator(ui) {
   ui.navHooks.push((dir) => {
     if (ui.screen !== 'creator' || ui.sheet || ui.osk.open) return false;
     if (dir === 'prev' || dir === 'next') { setCat(st.cat + (dir === 'next' ? 1 : -1)); return true; }
-    if (dir === 'pgup' || dir === 'pgdn') { bs.turn(dir === 'pgdn' ? 5 : -5); return true; }
-    if (dir === 'alt') { bs.pose(); app.engine.sfxPose(); return true; }
+    if (dir === 'pgup' || dir === 'pgdn') { if (st.mode !== 'stage') bs.turn(dir === 'pgdn' ? 5 : -5); return true; }
+    if (dir === 'alt') { if (st.mode === 'stage') { app.stage.pyro(1); app.stage.sparks(); app.engine.sfxPose(); } else { bs.pose(); app.engine.sfxPose(); } return true; }
     if (dir === 'alt2' && st.mode === 'character') { randomize(); return true; }
-    if (dir === 'select') { setMode(st.mode === 'character' ? 'instrument' : 'character'); return true; }
+    if (dir === 'select') { setMode({ character: 'instrument', instrument: 'stage', stage: 'character' }[st.mode]); return true; }
     return false;
   });
-  ui.legendHooks.creator = () => [['confirm', 'Equip'], ['prevnext', 'Category'], ['pgupdn', 'Turn'], ['alt', 'Pose'], ...(st.mode === 'character' ? [['alt2', 'Randomize']] : []), ['back', 'Done']];
+  ui.legendHooks.creator = () => (st.mode === 'stage'
+    ? [['confirm', 'Equip'], ['prevnext', 'Part'], ['alt', 'Pyro!'], ['select', 'Mode'], ['back', 'Done']]
+    : [['confirm', 'Equip'], ['prevnext', 'Category'], ['pgupdn', 'Turn'], ['alt', 'Pose'], ...(st.mode === 'character' ? [['alt2', 'Randomize']] : []), ['back', 'Done']]);
   ui.screenHooks.creator = enter;
 
   // drag the 3D model to turn it

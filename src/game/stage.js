@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { settings } from '../settings.js';
 import { createMember, animateMember } from './figure.js';
 import { WORLDS, buildWorld } from './worlds/index.js';
+import { applyLayout, clearLayout } from './stagecraft.js';
 
 // lighting states, like a club rig's gels: amber + red, tungsten + deep blue, crimson + amber, white + red, gold + blue
 const PALETTES = [
@@ -43,14 +44,50 @@ const ledFragment = /* glsl */`
   uniform float uTime, uPulse, uBass, uOD, uLevel, uDim, uStyle;
   uniform vec3 uA, uB;
   uniform sampler2D uSpec;
+  float hsh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float nz(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hsh(i), hsh(i + vec2(1, 0)), f.x), mix(hsh(i + vec2(0, 1)), hsh(i + vec2(1, 1)), f.x), f.y); }
   void main() {
-    if (uStyle > 1.5) { // theatre: a red velvet curtain
+    int st = int(uStyle + 0.5);
+    if (st >= 3) { // the stage creator's backdrops
+      vec2 q = vUv; vec3 c = vec3(0.0);
+      if (st == 3) { // starfield with a nebula
+        c = vec3(0.01, 0.005, 0.03) + uB * 0.15 * pow(nz(q * vec2(6.0, 3.0) + uTime * 0.02), 3.0) * 2.0;
+        for (int k = 0; k < 3; k++) { vec2 g = q * vec2(90.0, 36.0) * (1.0 + float(k)) + vec2(uTime * 0.01 * float(k + 1), 0.0); float s = step(0.985, hsh(floor(g))) * smoothstep(0.5, 0.0, length(fract(g) - 0.5)); c += vec3(s) * (0.6 + 0.4 * sin(uTime * 3.0 + hsh(floor(g)) * 40.0)); }
+      } else if (st == 4) { // synthwave sunset: banded sun over a neon grid
+        c = mix(vec3(0.25, 0.02, 0.3), vec3(1.0, 0.45, 0.2), smoothstep(1.0, 0.35, q.y));
+        vec2 sc = vec2((q.x - 0.5) * 2.45, q.y - 0.55); float sr = length(sc);
+        float band = step(0.5, fract((q.y - 0.3) * 22.0 - uTime * 0.3)) + step(0.62, q.y);
+        c = mix(c, mix(vec3(1.0, 0.85, 0.2), vec3(1.0, 0.2, 0.55), smoothstep(0.75, 0.4, q.y)), step(sr, 0.33) * min(1.0, band) * step(0.35, q.y));
+        if (q.y < 0.35) { float gy = 0.35 - q.y; vec2 g = vec2((q.x - 0.5) / (gy + 0.02), 1.0 / (gy + 0.02) + uTime * 2.0); float l = max(smoothstep(0.92, 1.0, fract(g.x * 0.5)), smoothstep(0.9, 1.0, fract(g.y * 0.15))); c = vec3(0.05, 0.0, 0.08) + uA * l * 1.6; }
+      } else if (st == 5) { // ocean waves under a moon
+        c = mix(vec3(0.0, 0.03, 0.08), vec3(0.05, 0.12, 0.25), q.y);
+        c += vec3(0.9) * smoothstep(0.08, 0.07, length(vec2((q.x - 0.7) * 2.45, q.y - 0.78)));
+        float w = 0.0; for (int k = 0; k < 4; k++) { float fk = float(k); float h = 0.12 + fk * 0.08 + 0.02 * sin(q.x * (14.0 + fk * 6.0) + uTime * (0.8 + fk * 0.3)); w += step(q.y, h) * 0.25; }
+        c = mix(c, mix(vec3(0.0, 0.2, 0.4), uB, 0.3) * (0.6 + w), step(0.001, w));
+        c += vec3(0.8, 0.9, 1.0) * smoothstep(0.02, 0.0, abs(q.x - 0.7)) * step(q.y, 0.44) * nz(vec2(q.y * 80.0, uTime * 2.0)) * 0.6;
+      } else if (st == 6) { // code rain
+        vec2 g = vec2(floor(q.x * 70.0), q.y * 34.0); float sp = 0.5 + hsh(vec2(g.x, 1.0)) * 1.5;
+        float y = fract(g.y * 0.06 + uTime * sp * 0.25 + hsh(vec2(g.x, 3.0)));
+        float on = step(0.5, hsh(floor(vec2(g.x, g.y + uTime * 6.0 * sp))));
+        c = vec3(0.1, 1.0, 0.35) * pow(y, 6.0) * on * (step(0.3, fract(q.x * 70.0)) * step(0.15, fract(g.y)));
+        c = mix(c, uA * pow(y, 6.0) * on, 0.25);
+      } else if (st == 7) { // aurora curtains
+        c = vec3(0.01, 0.02, 0.05);
+        for (int k = 0; k < 3; k++) { float fk = float(k); float line = 0.45 + fk * 0.12 + 0.08 * sin(q.x * (5.0 + fk * 3.0) + uTime * 0.4 + fk); float cu = exp(-pow((q.y - line) * 7.0, 2.0)) * (0.5 + 0.5 * nz(vec2(q.x * 60.0, uTime * 0.5 + fk))); c += mix(vec3(0.1, 1.0, 0.45), vec3(0.6, 0.25, 1.0), fk * 0.5) * cu; }
+      } else { // lava lamp
+        float m = 0.0; for (int k = 0; k < 6; k++) { float fk = float(k); vec2 b = vec2(0.15 + fk * 0.14, 0.5 + 0.45 * sin(uTime * (0.2 + fk * 0.05) + fk * 2.0)); vec2 d = q - b; d.x *= 2.45; m += 0.012 / dot(d, d); }
+        c = mix(vec3(0.1, 0.0, 0.08), mix(uA, uB, q.y) * 1.4, smoothstep(0.9, 1.2, m));
+      }
+      gl_FragColor = vec4(c * (0.75 + uPulse * 0.5 + uBass * 0.3) * uDim * 1.4, 1.0);
+      return;
+    }
+    if (st == 2) { // theatre: a red velvet curtain
       float fold = 0.55 + 0.45 * sin(vUv.x * 150.0 + sin(vUv.y * 3.0) * 0.6);
       vec3 cur = vec3(0.42, 0.04, 0.06) * fold * (0.35 + 0.65 * smoothstep(0.0, 0.9, vUv.y));
       gl_FragColor = vec4(cur * (0.6 + uPulse * 0.25) * uDim, 1.0);
       return;
     }
-    if (uStyle > 0.5) { // garage: bare brick in a pool of warm light
+    if (st == 1) { // garage: bare brick in a pool of warm light
       vec2 b = vUv * vec2(26.0, 19.0);
       b.x += 0.5 * mod(floor(b.y), 2.0);
       vec2 fb = fract(b);
@@ -536,6 +573,7 @@ export class Stage {
 
   /** Dress the stage as one of the tour's venues (VENUE_LOOKS) or one of the five worlds (game/worlds). */
   setVenue(id) {
+    if (this.customGroup && !String(id).startsWith('custom:')) { clearLayout(this); this.venueId = null; }
     if (WORLDS[id]) { this._setWorld(id); return; }
     const v = VENUE_LOOKS[id] ? VENUE_LOOKS[id] : VENUE_LOOKS.arena;
     if (this.venueId === (VENUE_LOOKS[id] ? id : 'arena') && !this.world) return;
@@ -560,6 +598,15 @@ export class Stage {
     this.lightScale = v.light;
     this.pyroScale = v.pyro;
   }
+
+  /** A stage from the stage creator (key 'custom:<id>', layout: game/props.js). */
+  setCustom(key, layout) {
+    this._clearWorld();
+    applyLayout(this, key, layout);
+  }
+
+  /** Stage designer: frame a spot ({ pos, tgt }) in the menus, or null for the slow orbit. */
+  designView(v) { this.design = v; }
 
   /** A world: its own set and sky replace parts of the arena; the band, stage and crowd stay. */
   _setWorld(id) {
@@ -705,6 +752,7 @@ export class Stage {
     if (!this._dustSized) { dg.attributes.aSize.needsUpdate = true; this._dustSized = true; }
 
     if (this.world) this.world.update(dt, f, t, pulse);
+    if (this.customUpdates?.length) { const cols = [this.colA, this.colB]; for (const u of this.customUpdates) u(dt, t, f, pulse, cols, beat); }
     this._camera(dt, f, pulse, beat);
   }
 
@@ -717,6 +765,9 @@ export class Stage {
       const a = Math.sin(t * 0.25) * 0.35;
       pos.set(focus.x - 0.9 + Math.sin(a) * 3.6, focus.y + 0.3, focus.z + Math.cos(a) * 4.2);
       tgt.set(focus.x - 0.72, focus.y - 0.4, focus.z);
+    } else if (f.mode !== 'game' && this.design) {
+      pos.copy(this.design.pos).add(new THREE.Vector3(Math.sin(t * 0.2) * 0.8, Math.sin(t * 0.3) * 0.3, 0));
+      tgt.copy(this.design.tgt);
     } else if (f.mode !== 'game') {
       pos.set(Math.sin(t * 0.06) * 13, 4.6 + Math.sin(t * 0.13) * 0.8, 13 + Math.cos(t * 0.06) * 4);
       tgt.set(0, 3.6, -3);

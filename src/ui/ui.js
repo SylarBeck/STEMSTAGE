@@ -1234,7 +1234,14 @@ export class UI {
     this.renderStagePicker();
   }
 
-  applyVenue(forGame = false) { this.app.stage.setVenue(this.venueId(forGame)); }
+  applyVenue(forGame = false) {
+    const id = this.venueId(forGame);
+    if (id.startsWith('custom:')) {
+      const s = profiles.current?.stages?.find((x) => `custom:${x.id}` === id);
+      if (s) { this.app.stage.setCustom(id, s.layout); return; }
+    }
+    this.app.stage.setVenue(id);
+  }
 
   /** Import a song the world has charts for: search YouTube for it; it keeps the world's title and artist. */
   findOnYouTube(artist, title) {
