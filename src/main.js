@@ -12,6 +12,7 @@ import { input } from './input/input.js';
 import { dualsense } from './input/dualsense.js';
 import { profiles } from './profile/profiles.js';
 import { discord } from './net/discord.js';
+import { Capacitor } from '@capacitor/core';
 
 const DEMO_ID = 'demo-neon-overdrive';
 
@@ -58,7 +59,7 @@ class App {
 
   async boot() {
     this.ui.show('title');
-    this.ds.autoConnect().then((ok) => { if (ok) this.ui.toast(`${this.ds.label} linked`, 'ok'); });
+    if (!iosTouch) this.ds.autoConnect().then((ok) => { if (ok) this.ui.toast(`${this.ds.label} linked`, 'ok'); });
     this.last = performance.now();
     this.lastRender = 0;
     requestAnimationFrame((t) => this.frame(t));
@@ -67,7 +68,7 @@ class App {
     this.ui.refreshStatus();
     await this.ui.social.finishDiscordLogin(); // back from "Log in with Discord"
     discord.menus();
-    if ((await storageMode()) === 'idb') this.ui.toast('Songs folder unavailable (start the game with play.bat) — using browser storage', 'err');
+    if ((await storageMode()) === 'idb' && !iosTouch) this.ui.toast('Songs folder unavailable (start the game with play.bat) — using browser storage', 'err');
     try {
       const moved = await migrateFromBrowser((song) => this.ui.toast(`Moving "${song.title}" from browser storage to the songs folder...`));
       if (moved) { this.ui.toast(`Moved ${moved} song${moved === 1 ? '' : 's'} to ${songsFolder()}`, 'ok'); await this.ui.reloadSongs(); }
@@ -204,10 +205,55 @@ function fitUi() {
 fitUi();
 window.addEventListener('resize', fitUi);
 
+const iosTouch = Capacitor.getPlatform() === 'ios' || /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+if (iosTouch) {
+  document.documentElement.classList.add('ios-touch');
+  document.querySelector('#drop .drop-title').textContent = 'Tap to choose audio files';
+  document.querySelector('#screen-menu [data-action="import"] em').textContent = 'Choose audio files from this device';
+  const controls = document.getElementById('touch-controls');
+  controls.hidden = false;
+  const active = new Map();
+  const laneAt = (x, y) => document.elementFromPoint(x, y)?.closest?.('#touch-lanes [data-lane]')?.dataset.lane ?? null;
+  const setLane = (id, next) => {
+    const prev = active.get(id) ?? null;
+    if (prev === next) return;
+    if (prev !== null) {
+      input.touchAction(`lane${prev}`, false, id);
+      controls.querySelector(`[data-lane="${prev}"]`)?.classList.remove('pressed');
+    }
+    if (next !== null) {
+      input.touchAction(`lane${next}`, true, id);
+      controls.querySelector(`[data-lane="${next}"]`)?.classList.add('pressed');
+      active.set(id, next);
+    } else active.delete(id);
+  };
+  const lanes = document.getElementById('touch-lanes');
+  lanes.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    lanes.setPointerCapture(e.pointerId);
+    setLane(e.pointerId, laneAt(e.clientX, e.clientY));
+  });
+  lanes.addEventListener('pointermove', (e) => {
+    if (active.has(e.pointerId) || e.buttons) setLane(e.pointerId, laneAt(e.clientX, e.clientY));
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    lanes.addEventListener(type, (e) => setLane(e.pointerId, null));
+  }
+  document.getElementById('touch-overdrive').addEventListener('pointerdown', (e) => {
+    e.preventDefault(); input.touchAction('od', true, e.pointerId);
+  });
+  document.getElementById('touch-pause').addEventListener('pointerdown', (e) => {
+    e.preventDefault(); input.touchAction('pause', true, e.pointerId);
+  });
+  window.addEventListener('blur', () => { for (const id of active.keys()) setLane(id, null); });
+}
+
 // Fullscreen first: the desktop app starts fullscreen (tauri.conf.json); in a browser we ask on the first
 // click / key press (browsers only allow it after a user gesture). Settings → Video → Fullscreen turns it off.
 const tauriWindow = window.__TAURI__?.window?.getCurrentWindow?.();
 export async function setFullscreen(on) {
+  if (iosTouch) return;
   if (tauriWindow) { try { await tauriWindow.setFullscreen(on); } catch { /* not allowed */ } return; }
   try {
     if (on && !document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' });

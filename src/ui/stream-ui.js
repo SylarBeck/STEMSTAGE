@@ -3,7 +3,7 @@
 //   !vote 1-3     vote for the next song while a vote runs
 //   !sr <words>   request a song from the library (2 per viewer)
 //   !hype         pyro + crowd roar during a song (shared 15 s cooldown)
-import { settings } from '../settings.js';
+import { settings, isIOS } from '../settings.js';
 import { coverUrl } from '../storage/library.js';
 import { fa } from './icons.js';
 
@@ -14,6 +14,7 @@ const VOTE_SECONDS = 30;
 const HYPE_COOLDOWN = 15000;
 
 export function installStream(ui) {
+  if (isIOS) return { onResults() {}, publish() {} };
   const app = ui.app;
   const st = { status: { status: 'off', channel: '', overlays: 0 }, vote: null, requests: [], log: [], lastHype: 0, lastResult: null };
   const overlayUrl = () => `${location.origin}/overlay.html`;

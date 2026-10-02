@@ -4,7 +4,7 @@
 //
 // Both use STEMSTAGE's own Discord application. Its ID is public (not a secret) and baked in at build time, so
 // players set nothing up. Forks: build with VITE_DISCORD_CLIENT_ID=<your application id>.
-import { settings } from '../settings.js';
+import { settings, isIOS } from '../settings.js';
 
 export const DISCORD_APP_ID = import.meta.env?.VITE_DISCORD_CLIENT_ID || '1553872601603117127';
 const appId = () => settings.discordClientId || DISCORD_APP_ID;
@@ -102,6 +102,7 @@ class Discord {
 
   /** Rich Presence. a: { details, state, start?, end?, image?, party? } or null to clear. Coalesced, ≤ 1 per 2 s. */
   activity(a) {
+    if (isIOS) return;
     if (!settings.discordPresence) a = null;
     const key = JSON.stringify(a);
     if (key === this.lastKey) return;
@@ -150,6 +151,7 @@ class Discord {
 
   /** Events from Discord: { type: 'join', secret } (a friend pressed Join) or { type: 'join-request', user }. */
   onEvent(fn) {
+    if (isIOS) return;
     (this.handlers ||= new Set()).add(fn);
     if (this.es || typeof EventSource === 'undefined') return;
     this.es = new EventSource(`/api/discord/events?clientId=${encodeURIComponent(appId())}`);

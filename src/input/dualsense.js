@@ -4,7 +4,7 @@
 // we send back trigger effects, rumble, lightbar colour and player LEDs. Every bridged controller is also
 // exposed to the input system as a virtual standard-mapping gamepad: once a Bluetooth DualSense receives
 // full output reports, the browser's own Gamepad API can no longer read it, so input has to come from here.
-import { settings } from '../settings.js';
+import { settings, isIOS } from '../settings.js';
 
 export const HID_PAD_BASE = 16; // virtual pad indices start here (the Gamepad API uses 0..3)
 const RECONNECT_MS = 2000;
@@ -184,13 +184,13 @@ export class DualSenseManager {
     this.online = false;
     this.everOnline = false;
     this.tries = 0;
-    this._connect();
+    if (!isIOS) this._connect();
     window.addEventListener('beforeunload', () => this.reset());
   }
 
   get url() { return settings.bridgeUrl || 'ws://127.0.0.1:8766'; }
   /** The bridge approach works in any browser (and the desktop app). */
-  get supported() { return typeof WebSocket !== 'undefined'; }
+  get supported() { return !isIOS && typeof WebSocket !== 'undefined'; }
   get connected() { return this.devices.some((d) => d.connected); }
   get primary() { return this.devices.find((d) => d.connected) || null; }
   get label() {
@@ -208,6 +208,7 @@ export class DualSenseManager {
 
   // ---------------------------------------------------------------- bridge connection
   _connect() {
+    if (isIOS) return;
     clearTimeout(this._retry);
     let ws;
     try { ws = new WebSocket(this.url); } catch { this._scheduleRetry(); return; }

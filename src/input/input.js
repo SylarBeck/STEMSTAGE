@@ -249,6 +249,28 @@ export class Input {
     }));
   }
 
+  /** Direct touch controls for the first local player. Pointer IDs keep chords and sustains independent. */
+  touchAction(action, down, pointerId = 0) {
+    if (this.menu || !this.players.length) return;
+    const t = performance.now();
+    const player = 0;
+    if (action.startsWith('lane')) {
+      const lane = Number(action.slice(4));
+      if (!Number.isInteger(lane) || lane < 0 || lane > 4) return;
+      const source = `touch:${pointerId}`;
+      const held = this.held[player][lane];
+      if (down) {
+        if (held.has(source)) return;
+        held.add(source);
+        this._emitGame({ type: 'press', player, lane, t, device: 'touch' });
+      } else if (held.delete(source) && held.size === 0) {
+        this._emitGame({ type: 'release', player, lane, t, device: 'touch' });
+      }
+    } else if (down && (action === 'od' || action === 'pause')) {
+      this._emitGame({ type: action, player, t, device: 'touch' });
+    }
+  }
+
   // ---------------------------------------------------------------- emit helpers
   _emitGame(ev) { this.gameListeners.forEach((fn) => fn(ev)); }
   _emitNav(dir, deviceId) { this.navListeners.forEach((fn) => fn(dir, deviceId)); }

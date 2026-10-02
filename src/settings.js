@@ -65,10 +65,17 @@ export const DEFAULTS = {
   lastDifficulty: 'medium',
 };
 
-let current = { ...DEFAULTS };
+export const isIOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const iosDefaults = isIOS ? {
+  quality: 'low', antialiasing: 'off', bloom: false, frameLimit: '60',
+  fullscreen: false, aiEnabled: false, splitter: 'dsp', vocalMode: 'buttons',
+  discordPresence: false, dualsenseAudio: false,
+} : {};
+let current = { ...DEFAULTS, ...iosDefaults };
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
-  current = { ...DEFAULTS, ...saved };
+  current = { ...DEFAULTS, ...iosDefaults, ...saved };
 } catch { /* storage unavailable */ }
 
 const listeners = new Set();

@@ -79,6 +79,23 @@
 
 ### Install
 
+#### iPhone and iPad (source build)
+
+The iOS app uses the same game frontend in a Capacitor WebView. It runs in landscape, keeps songs and scores on the device, and provides five touch lanes, Overdrive, and Pause. The demo song and audio-file imports use the on-device DSP splitter. Controller input can still be used where iOS exposes it to the WebView.
+
+On a Mac with Node.js 22+, Xcode 26+, and Xcode Command Line Tools:
+
+```bash
+npm ci
+npm run ios:sync
+npm run ios:open
+```
+
+Select an iPhone or iPad in Xcode, configure your Apple development team under Signing & Capabilities, and run the `App` scheme. Run `npm run ios:sync` again after changing the web frontend. The Xcode project is in `ios/App/App.xcodeproj`.
+
+The iOS build does not bundle the desktop Node/Python services. YouTube downloading, the local AI splitter, Discord desktop presence, and the DualSense bridge require iOS-specific replacements. Audio-file importing uses the browser DSP path; large songs are limited by available device memory. The iOS project has been generated and the web bundle built on Windows, but an iOS compile and device run require macOS/Xcode.
+
+
 **Players:** download `STEMSTAGE_x.y.z_x64-setup.exe` (Windows) or the `.AppImage` / `.deb` / `.rpm` (Linux) from [Releases](https://github.com/SylarBeck/STEMSTAGE/releases/latest) and run it. The app ships its own Node.js. The setup wizard installs the DualSense controller bridge and offers the AI splitter only when a working NVIDIA GPU is detected (a 3–5 GB download). Otherwise it uses the built-in DSP splitter. If an NVIDIA driver is missing on Windows, the app opens NVIDIA's official driver page once; installing a system driver requires the player's confirmation and may require a restart. The app updates itself when a new release is published. Details: [wiki → Installation](https://github.com/SylarBeck/STEMSTAGE/wiki/Installation).
 
 **From source:**

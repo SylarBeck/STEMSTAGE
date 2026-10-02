@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>STEMSTAGE</title>
   <link rel="icon" type="image/png" href="/icon.png" />
   <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
@@ -444,6 +444,17 @@
         </div>
       </div>
     </section>
+  </div>
+  <div id="touch-controls" aria-label="Touch game controls" hidden>
+    <button id="touch-pause" type="button" aria-label="Pause game">Ⅱ</button>
+    <button id="touch-overdrive" type="button" aria-label="Activate overdrive">OVERDRIVE</button>
+    <div id="touch-lanes" aria-label="Note lanes">
+      <button type="button" data-lane="0" aria-label="Lane 1">1</button>
+      <button type="button" data-lane="1" aria-label="Lane 2">2</button>
+      <button type="button" data-lane="2" aria-label="Lane 3">3</button>
+      <button type="button" data-lane="3" aria-label="Lane 4">4</button>
+      <button type="button" data-lane="4" aria-label="Lane 5">5</button>
+    </div>
   </div>
 
   <div id="sheet" hidden></div>

@@ -1074,7 +1074,7 @@ export class UI {
       this.renderLibrary();
       return;
     }
-    if (which === 'import-tab') { this.importTab = this.importTab === 'file' ? 'youtube' : 'file'; this.renderImportTab(); return; }
+    if (which === 'import-tab') { if (document.documentElement.classList.contains('ios-touch')) return; this.importTab = this.importTab === 'file' ? 'youtube' : 'file'; this.renderImportTab(); return; }
     if (which === 'pr-speed') { const i = SPEEDS.indexOf(this.practice.speed); this.practice.speed = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, i + d))]; this._renderPractice(); return; }
     if (which === 'pr-start') { this.practice.startPct = Math.max(0, Math.min(95, this.practice.startPct + d * 5)); $('#pr-start-range').value = this.practice.startPct; this._renderPracticeStart(); return; }
     if ((m = /^slot-(\w+)-(\d)$/.exec(which))) { this._slotCycle(this.party[+m[2]], m[1], d); return; }
@@ -1717,18 +1717,23 @@ export class UI {
   }
 
   renderSplitter() {
+    const ios = document.documentElement.classList.contains('ios-touch');
+    if (ios) this.splitter = 'dsp';
     const h = this.aiStatus;
-    const opts = [['auto', `Auto${h ? ' (AI)' : ' (DSP)'}`], ['ai', 'AI · Demucs'], ['dsp', 'Quick DSP']];
+    const opts = ios ? [['dsp', 'On-device DSP']] : [['auto', `Auto${h ? ' (AI)' : ' (DSP)'}`], ['ai', 'AI · Demucs'], ['dsp', 'Quick DSP']];
     $('#pick-splitter').innerHTML = opts.map(([v, l]) => `<div class="opt ${v === this.splitter ? 'sel' : ''}" data-val="${v}">${l}</div>`).join('');
     $$('#pick-splitter .opt').forEach((o) => o.addEventListener('click', () => { this.splitter = o.dataset.val; settings.splitter = this.splitter; this.renderSplitter(); }));
-    $('#splitter-note').innerHTML = h
+    $('#splitter-note').innerHTML = ios ? 'Songs are split and charted on this device.' : h
       ? `Demucs ${esc(h.model)} · ${esc(h.gpu || 'CPU')}`
       : settings.aiEnabled ? 'AI splitter offline — using the quick DSP splitter' : 'AI server off — imports use the quick DSP splitter';
   }
 
   renderImportTab() {
+    const ios = document.documentElement.classList.contains('ios-touch');
+    if (ios) this.importTab = 'file';
     const yt = this.importTab === 'youtube';
-    $('#pick-import-tab').innerHTML = [['file', `${fa('file-audio')} Audio file`], ['youtube', `${fa('play')} YouTube search`]].map(([v, l]) => `<div class="opt ${v === this.importTab ? 'sel' : ''}" data-v="${v}">${l}</div>`).join('');
+    const sources = ios ? [['file', `${fa('file-audio')} Audio file`]] : [['file', `${fa('file-audio')} Audio file`], ['youtube', `${fa('play')} YouTube search`]];
+    $('#pick-import-tab').innerHTML = sources.map(([v, l]) => `<div class="opt ${v === this.importTab ? 'sel' : ''}" data-v="${v}">${l}</div>`).join('');
     $$('#pick-import-tab .opt').forEach((o) => o.addEventListener('click', () => { this.importTab = o.dataset.v; this.renderImportTab(); }));
     $('#import-yt').hidden = !yt;
     $('#drop').style.display = yt ? 'none' : '';
