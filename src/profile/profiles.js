@@ -2,6 +2,8 @@
 // leaderboards and career stats. Stored in <project>/data (profiles.json, plays.json).
 // PINs are salted SHA-256 hashes: a lock between people sharing this PC, not an online account.
 import { loadProfiles, saveProfiles, loadPlays, addPlays } from '../storage/library.js';
+import { cashForRun, addCash, recordBoss, BOSS_INFO } from './economy.js';
+import { BOSS_REWARD } from '../game/boss.js';
 
 const CURRENT_KEY = 'stemstage.profile.current';
 export const PROFILE_COLORS = ['#e2432f', '#3f86e0', '#f0b429', '#6cbf46', '#9a6ad8', '#f2861c', '#2fb3a8', '#d9d0bc'];
@@ -228,7 +230,7 @@ class Profiles {
    * Record finished plays. results: [{ profileId, ...player result }], ctx: { song, mode, onlineWinner }
    * Returns per-profile summaries { profileId, xpGained, levelBefore, levelAfter, achievements[] }.
    */
-  async recordPlays(results, { song, mode, onlineWinnerId, bandSize = 1, ghost = null }) {
+  async recordPlays(results, { song, mode, onlineWinnerId, bandSize = 1, ghost = null, boss = null }) {
     const entries = [];
     const summaries = [];
     for (const r of results) {
@@ -240,7 +242,8 @@ class Profiles {
         songId: song.id, songTitle: song.title, songArtist: song.artist, instrument: r.instrument, difficulty: r.difficulty,
         score: r.score, stars: r.stars, gold: !!r.gold, accuracy: +r.accuracy.toFixed(4), maxStreak: r.maxStreak,
         hits: r.hits, total: r.total, miss: r.miss, fc, failed: !!r.failed, od: r.odActivations || 0, mode, assist: !!r.assist, real: r.real || null, pro: !!r.pro,
-        seconds: Math.round(song.duration || 0), date: Date.now(),
+        seconds: Math.round(song.duration || 0), date: Date.now(), gear: !!r.gear,
+        boss: boss?.outcome ? { id: boss.id, outcome: boss.outcome } : null,
       };
       entries.push(entry);
       const before = levelInfo(p.xp).level;
@@ -266,9 +269,24 @@ class Profiles {
       if ((r.odActivations || 0) >= 3) this._unlock(p, 'overdrive_3', fresh);
       if (mode === 'online') this._unlock(p, 'online_play', fresh);
       if (mode === 'online' && onlineWinnerId && r.onlineId === onlineWinnerId) this._unlock(p, 'online_win', fresh);
+      // cash for the run, plus the boss's bounty (more the first time)
+      let cash = Math.round(cashForRun({ ...r, miss: r.miss }) * (1 + (r.cashBonus || 0)));
+      let bossWin = null;
+      if (boss?.outcome === 'defeated') {
+        const rec = recordBoss(p, boss.id, boss);
+        if (rec) {
+          cash += BOSS_REWARD.cash + (rec.first ? BOSS_REWARD.firstCash : 0);
+          p.xp += BOSS_REWARD.xp;
+          bossWin = { id: boss.id, first: rec.first, kills: rec.kills };
+          this._unlock(p, 'boss_first', fresh);
+          if (boss.flawless) this._unlock(p, 'boss_flawless', fresh);
+          if (Object.keys(BOSS_INFO).every((id) => p.bosses?.[id]?.kills)) this._unlock(p, 'boss_all', fresh);
+        }
+      }
+      addCash(p, cash);
       this.plays.push(entry);
       this._checkCareer(p, fresh);
-      summaries.push({ profileId: p.id, name: p.name, xpGained: gained, levelBefore: before, levelAfter: levelInfo(p.xp).level, achievements: fresh });
+      summaries.push({ profileId: p.id, name: p.name, xpGained: gained + (bossWin ? BOSS_REWARD.xp : 0), levelBefore: before, levelAfter: levelInfo(p.xp).level, achievements: fresh, cash, boss: bossWin });
     }
     if (entries.length) {
       await addPlays(entries);
@@ -306,7 +324,7 @@ class Profiles {
   leaderboard(songId, instrument, difficulty, limit = 10) {
     const best = new Map();
     for (const x of this.plays) {
-      if (x.songId !== songId || x.instrument !== instrument || x.difficulty !== difficulty || x.failed || x.assist) continue; // assisted runs stay off the boards
+      if (x.songId !== songId || x.instrument !== instrument || x.difficulty !== difficulty || x.failed || x.assist || x.gear) continue; // assisted and gear runs stay off the boards
       const cur = best.get(x.profileId);
       if (!cur || x.score > cur.score) best.set(x.profileId, x);
     }
@@ -320,7 +338,7 @@ class Profiles {
       const mine = this.plays.filter((x) => x.profileId === p.id);
       const bestPerChart = new Map();
       for (const x of mine) {
-        if (x.failed || x.assist) continue;
+        if (x.failed || x.assist || x.gear) continue;
         const k = `${x.songId}|${x.instrument}|${x.difficulty}`;
         const cur = bestPerChart.get(k);
         if (!cur || x.score > cur.score) bestPerChart.set(k, x);

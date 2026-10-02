@@ -345,7 +345,7 @@ const hazardFragment = /* glsl */`
       vec2 g = vec2(uv.x * 7.0, far * 26.0 + t * 3.5); vec2 id = floor(g); vec2 f = fract(g) - 0.5;
       float r = 0.18 + 0.22 * h(id); vec2 o = vec2(h(id + 3.1) - 0.5, h(id + 7.7) - 0.5) * 0.4;
       float d = length(f - o); float ring = smoothstep(r, r - 0.06, d) * (0.35 + 0.65 * smoothstep(r - 0.12, r, d));
-      a = ring * step(0.45, h(id + 1.3)) * smoothstep(0.08, 0.3, far) * 0.9; col = vec3(0.6, 0.9, 1.0);
+      a = ring * step(0.45, h(id + 1.3)) * smoothstep(0.1, 0.4, far) * 0.6; col = vec3(0.6, 0.9, 1.0);
     } else if (m == 3) { // heat haze: orange shimmer bands
       float w = sin(far * 40.0 - t * 9.0 + sin(uv.x * 12.0 + t) * 2.0);
       a = (0.25 + 0.2 * w) * smoothstep(0.1, 0.5, far); col = vec3(1.0, 0.42, 0.08);

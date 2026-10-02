@@ -31,3 +31,21 @@
 .hud-boss-stamp.lost b { color: #a59d8b; text-shadow: none; }
 .hud-boss-stamp.lost { border-color: #a59d8b; }
 .hud-boss-stamp small { font-family: var(--hand); font-size: 22px; color: #fff; }
+
+/* ================================================================ results: cash, loot and the boss */
+.res-boss { display: flex; align-items: center; gap: 14px; margin: 6px auto 4px; padding: 10px 22px; max-width: 760px; border-left: 5px solid var(--bc); background: linear-gradient(90deg, color-mix(in srgb, var(--bc) 22%, transparent), rgba(12,11,10,0.8) 60%); animation: bossRes .6s cubic-bezier(.2,1.4,.4,1) both .8s; }
+@keyframes bossRes { from { opacity: 0; transform: translateX(-30px); } }
+.res-boss .rb-ico { font-size: 30px; color: var(--bc); filter: drop-shadow(0 0 10px var(--bc)); }
+.res-boss b { white-space: nowrap; font-family: var(--display); font-weight: 400; font-size: 28px; text-transform: uppercase; letter-spacing: 0.03em; }
+.res-boss small { color: var(--dim); font-size: 16px; margin-left: auto; }
+.res-boss.escaped { filter: saturate(0.4); }
+.rp-cash { color: #ffd76a; font-weight: 800; }
+.rp-loot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; color: var(--gold); font-weight: 800; }
+.rp-loot span { padding: 2px 9px; border: 1px solid var(--gold); color: var(--ink); font-size: 14px; letter-spacing: 0.04em; animation: lootIn .5s cubic-bezier(.2,1.6,.4,1) both; }
+.rp-loot span:nth-child(3) { animation-delay: .1s; } .rp-loot span:nth-child(4) { animation-delay: .2s; } .rp-loot span:nth-child(5) { animation-delay: .3s; }
+@keyframes lootIn { from { opacity: 0; transform: scale(1.6); } }
+
+/* ================================================================ song screen: the stage picker */
+#pick-stage .stage-cur { flex: 1; display: flex; align-items: center; gap: 8px; }
+#pick-stage .stage-peek { opacity: 0.45; }
+#pick-stage .boss-tag { margin-left: auto; color: var(--bc); font-weight: 800; letter-spacing: 0.04em; text-shadow: 0 0 10px color-mix(in srgb, var(--bc) 60%, transparent); }

@@ -175,6 +175,7 @@ export class BossFight {
     this.s.stage.pyro(1.4);
     this.s.stage.sparks();
     this.s.stage.confettiBurst();
+    this.s.hud.boss({ ...this.info, hp: 0, time: 0 });
     this.s.hud.bossEnd(true, this.info);
     this.s.onBossOutcome?.(this);
   }

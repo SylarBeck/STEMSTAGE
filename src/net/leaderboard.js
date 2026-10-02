@@ -86,7 +86,7 @@ export async function submitRuns(r, onChartError = () => {}) {
   if (settings.worldLeaderboard === false || r.practice || r.mode === 'replay') return [];
   const out = [];
   for (const res of r.players || []) {
-    if (!res.profileId || res.assist || res.failed || res.part) continue; // harmony parts aren't the vocal chart the boards rank
+    if (!res.profileId || res.assist || res.gear || res.failed || res.part) continue; // harmony parts aren't the vocal chart the boards rank; gear runs aren't ranked
     const p = profiles.byId(res.profileId);
     if (!p) continue;
     const cloud = await identityOf(p);
@@ -113,3 +113,26 @@ export async function submitRuns(r, onChartError = () => {}) {
   }
   return out;
 }
+
+/**
+ * Boss hall of fame (v2): a signed-in profile that beats a world boss sends the kill (POST /v1/bosses).
+ * The site and the game show the fastest kills and the most kills per boss (GET /v1/bosses?boss=).
+ */
+export async function submitBossKill(r) {
+  if (settings.worldLeaderboard === false || r.practice || r.mode === 'replay' || r.boss?.outcome !== 'defeated') return [];
+  const out = [];
+  for (const res of r.players || []) {
+    const p = res.profileId && profiles.byId(res.profileId);
+    if (!p) continue;
+    const cloud = await identityOf(p);
+    const body = {
+      player: playerOf(p, cloud), boss: r.boss.id, seconds: +r.boss.seconds.toFixed(2), damage: r.boss.damage, flawless: !!r.boss.flawless,
+      song: { title: r.song.title, artist: r.song.artist }, instrument: res.instrument, difficulty: res.difficulty, mode: r.mode, version: __APP_VERSION__,
+    };
+    const resp = await fetch(`${API}/v1/bosses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });
+    if (resp.ok) out.push(await resp.json().catch(() => ({})));
+  }
+  return out;
+}
+
+export const bossBoard = (boss, limit = 20) => get('/v1/bosses', { boss, limit });

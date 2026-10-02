@@ -18,7 +18,9 @@ import { installEditor } from './editor-ui.js';
 import { installStream } from './stream-ui.js';
 import { installCreator } from './creator-ui.js';
 import { rigPart } from '../profile/rig.js';
-import { fmtCash } from '../profile/economy.js';
+import { fmtCash, BOSS_INFO } from '../profile/economy.js';
+import { gearMods, changesPlay } from '../profile/rig.js';
+import { WORLDS, WORLD_IDS, worldUnlocked } from '../game/worlds/index.js';
 import { tourStars, TOUR_MAX, dailyDone, VENUES, unlocked } from '../profile/career.js';
 import { Osk } from './osk.js';
 import { controllerPicture, detectController, glyph } from './controller-art.js';
@@ -79,6 +81,9 @@ const SETTINGS_SCHEMA = [
   { key: 'strumMode', label: 'Strum mode', desc: 'Auto = each controller profile decides (on for guitars). On / Off override every profile', type: 'choice', options: ['auto', 'on', 'off'] },
   { key: 'ghost', label: 'Ghost race', desc: 'Race an earlier run in solo play: your own best, or the top run on this PC', type: 'choice', options: ['off', 'best', 'top'] },
   { key: 'leftyFlip', label: 'Lefty flip', desc: 'Mirror the highway (profiles can override this per controller)', type: 'toggle' },
+  { key: 'gearMods', label: 'Gear modifiers', desc: 'Instrument upgrades and pedals (Backstage) change how you play. Gear runs earn XP and cash but stay off the world leaderboard: turn this off for ranked runs', type: 'toggle' },
+  { key: 'bosses', label: 'World bosses', desc: 'In the five worlds a boss can show up in the middle of a song. Random: in some songs. Always: in every song that is long enough', type: 'choice', options: ['random', 'always', 'off'], labels: { random: 'Random', always: 'Always', off: 'Off' } },
+  { key: 'bossHazards', label: 'Boss hazards', desc: 'Full: boss attacks cover, sway and mirror your highway. Mild: lighter, cosmetic only', type: 'choice', options: ['full', 'mild'], labels: { full: 'Full', mild: 'Mild' } },
   { group: 'Audio' },
   { key: 'masterVolume', label: 'Master volume', type: 'range', min: 0, max: 1, step: 0.05, fmt: 'pct' },
   { key: 'playerVolume', label: 'Played instruments', type: 'range', min: 0, max: 1.5, step: 0.05, fmt: 'pct' },
@@ -104,7 +109,7 @@ const SETTINGS_SCHEMA = [
   { key: 'bloom', label: 'Bloom', type: 'toggle' },
   { key: 'filmGrain', label: 'Film grain', desc: 'Light texture over the stage image; off keeps notes clearer', type: 'toggle' },
   { key: 'cameraShake', label: 'Camera shake', type: 'toggle' },
-  { key: 'venue', label: 'Venue', desc: 'The stage you play on. Auto: the arena, and every tour gig in its own venue. Venues open up as you earn tour stars (the arena is always open)', type: 'choice', options: ['auto', 'garage', 'club', 'bar', 'theater', 'arena', 'stadium', 'festival'], labels: { auto: 'Auto', garage: 'Garage', club: 'Club', bar: 'Dive bar', theater: 'Theater', arena: 'Arena', stadium: 'Stadium', festival: 'Festival' } },
+  { key: 'venue', label: 'Venue', desc: 'The stage you play on (also on each song: Stage). Auto: the arena, and every tour gig in its own venue. Venues open with tour stars, worlds with your level or by beating the previous world\u2019s boss', type: 'choice', options: ['auto', 'garage', 'club', 'bar', 'theater', 'arena', 'stadium', 'festival', 'aquarium', 'nebula', 'forge', 'aurora', 'citadel'], labels: { auto: 'Auto', garage: 'Garage', club: 'Club', bar: 'Dive bar', theater: 'Theater', arena: 'Arena', stadium: 'Stadium', festival: 'Festival', aquarium: 'Abyssal Aquarium', nebula: 'Orbital Nebula', forge: 'Volcanic Forge', aurora: 'Crystal Aurora', citadel: 'Storm Citadel' } },
   { group: 'Debug' },
   { key: 'showFps', label: 'Show FPS', desc: 'Show how smoothly the game is running', type: 'toggle' },
   { key: 'showPing', label: 'Show ping', desc: 'Show delay to your online room; says Offline when you are not in one', type: 'toggle' },
@@ -1038,6 +1043,8 @@ export class UI {
       ? lb.map((r, i) => `<div class="lb-row ${r.profileId === meId ? 'me' : ''}"><span class="pos">${i + 1}</span><span>${avatarHtml(r.profile, 20)} ${esc(r.profileName)}</span><b>${r.score.toLocaleString()}</b><small>${starsOnly(r.stars)}${r.fc ? ` ${fa('gem')}` : ''}</small></div>`).join('')
       : '<div class="small-note">No scores yet — be the first.</div>');
     this.renderWorldLine(s);
+    $('#pick-stage-wrap').hidden = pickForRoom;
+    this.renderStagePicker();
     const best = band || pickForRoom ? null : getBest(s.id, this.instrument, this.difficulty);
     $('#detail-best').innerHTML = best && !lb.length ? `Best (guest): <b>${best.score.toLocaleString()}</b> · ${starsOnly(best.stars)}` : '';
     $('[data-action="play"]').innerHTML = pickForRoom ? `${fa('check')} Select for match` : this.mode === 'setlist-add' ? `${fa('plus')} Add to setlist` : `${fa('play')} Play`;
@@ -1071,6 +1078,12 @@ export class UI {
   cyclePicker(which, d) {
     let m;
     if (this.pickerHooks.some((h) => h(which, d))) return;
+    if (which === 'stage') {
+      const list = this.stageChoices();
+      const i = Math.max(0, list.findIndex((x) => x.id === this.venueId(false)));
+      this.setStage(list[(i + d + list.length) % list.length].id);
+      return;
+    }
     if (which === 'real-mode' && this.selected) { settings.realInstrument = !settings.realInstrument; this.renderDetail(this.selected); return; }
     if (which === 'vocal-mode' && this.selected) { settings.vocalMode = settings.vocalMode === 'mic' ? 'buttons' : 'mic'; this.renderDetail(this.selected); return; }
     if (which === 'vocal-part' && this.selected) {
@@ -1127,6 +1140,15 @@ export class UI {
     return inst === 'keys' && this.app.input.midiInputs?.size ? 'midi' : 'audio';
   }
 
+  /** The gameplay modifiers a profile's rig gives one part (null: no gear, Pro mode, or gear turned off). */
+  gearFor(profileId, instrument, allowed = true) {
+    if (!allowed || settings.gearMods === false || settings.proMode) return null;
+    const p = profileId && profiles.byId(profileId);
+    if (!p) return null;
+    const m = gearMods(p, instrument, levelInfo(p.xp).level);
+    return changesPlay(m) || m.cash ? m : null;
+  }
+
   /** Per-player options from the controller's config profile. */
   deviceCfg(deviceId) {
     const o = this.app.input.optionsFor(deviceId);
@@ -1146,12 +1168,12 @@ export class UI {
       cfgs = this.party.map((p) => {
         const mic = p.instrument === 'vocals' && settings.vocalMode === 'mic' && !micTaken;
         micTaken ||= mic;
-        return { ...p, ...this.deviceCfg(p.device), color: profiles.byId(p.profileId)?.color, mic };
+        return { ...p, ...this.deviceCfg(p.device), color: profiles.byId(p.profileId)?.color, mic, gear: this.gearFor(p.profileId, p.instrument) };
       });
     } else {
       if (!s.charts[this.instrument]?.available) { this.toast('That instrument has no chart for this song', 'err'); return; }
       const p = profiles.current;
-      cfgs = [{ name: p?.name || 'P1', color: p?.color, profileId: p?.id || null, device: 'any', instrument: this.instrument, difficulty: this.difficulty, strum: this.instrument !== 'drums' && this.strumFor('any'), ...this.deviceCfg('any'), mic: this.instrument === 'vocals' && settings.vocalMode === 'mic', part: this.instrument === 'vocals' && settings.vocalMode === 'mic' ? settings.vocalPart || 0 : 0, real: this.realMode(this.instrument) }];
+      cfgs = [{ name: p?.name || 'P1', color: p?.color, profileId: p?.id || null, device: 'any', instrument: this.instrument, difficulty: this.difficulty, strum: this.instrument !== 'drums' && this.strumFor('any'), ...this.deviceCfg('any'), mic: this.instrument === 'vocals' && settings.vocalMode === 'mic', part: this.instrument === 'vocals' && settings.vocalMode === 'mic' ? settings.vocalPart || 0 : 0, real: this.realMode(this.instrument), gear: this.gearFor(p?.id, this.instrument) }];
     }
     this.app.engine.unlock();
     this.toast(`Loading ${s.title}...`);
@@ -1176,8 +1198,40 @@ export class UI {
     if (gig) return gig;
     const want = settings.venue;
     if (!want || want === 'auto' || want === 'arena') return 'arena';
+    if (WORLDS[want]) return worldUnlocked(profiles.current, want) ? want : 'arena';
+    if (want.startsWith('custom:')) return profiles.current?.stages?.some((s) => `custom:${s.id}` === want) ? want : 'arena';
     const v = VENUES.find((x) => x.id === want);
     return v && unlocked(profiles.current, v) ? want : 'arena';
+  }
+
+  /** Every stage this profile can play on: [{ id, name, icon, boss? }] (the arena, venues, worlds, own stages). */
+  stageChoices() {
+    const p = profiles.current;
+    const out = [{ id: 'arena', name: 'Metro Arena', icon: 'building' }];
+    for (const v of VENUES) if (v.id !== 'arena' && unlocked(p, v)) out.push({ id: v.id, name: v.name, icon: 'ticket' });
+    for (const id of WORLD_IDS) if (worldUnlocked(p, id)) out.push({ id, name: WORLDS[id].name, icon: WORLDS[id].icon, boss: WORLDS[id].boss });
+    for (const s of p?.stages || []) out.push({ id: `custom:${s.id}`, name: s.name, icon: 'helmet-safety' });
+    return out;
+  }
+
+  renderStagePicker() {
+    const el = $('#pick-stage');
+    if (!el) return;
+    const list = this.stageChoices();
+    const cur = this.venueId(false);
+    const i = Math.max(0, list.findIndex((x) => x.id === cur));
+    const c = list[i];
+    const prev = list[(i - 1 + list.length) % list.length], next = list[(i + 1) % list.length];
+    el.innerHTML = `<div class="opt dim stage-peek" data-st="${prev.id}">${fa(prev.icon)}</div><div class="opt sel stage-cur">${fa(c.icon)} ${esc(c.name)}${c.boss ? ` <small class="boss-tag" style="--bc:${BOSS_INFO[c.boss].color}">${fa('dragon')} ${esc(BOSS_INFO[c.boss].name)}</small>` : ''}</div><div class="opt dim stage-peek" data-st="${next.id}">${fa(next.icon)}</div>`;
+    $$('[data-st]', el).forEach((o) => o.addEventListener('click', () => this.setStage(o.dataset.st)));
+    const locked = WORLD_IDS.filter((id) => !worldUnlocked(profiles.current, id)).length;
+    $('#pick-stage-note').textContent = c.boss ? `— ${WORLDS[c.id].blurb}` : locked ? `— ${locked} world${locked === 1 ? '' : 's'} still locked` : '';
+  }
+
+  setStage(id) {
+    settings.venue = id === 'arena' ? 'auto' : id;
+    this.applyVenue(false);
+    this.renderStagePicker();
   }
 
   applyVenue(forGame = false) { this.app.stage.setVenue(this.venueId(forGame)); }
@@ -2187,7 +2241,7 @@ export class UI {
       ? `PRACTICE · ${Math.round(r.practice.speed * 100)}% speed · ${solo.instrument} · ${solo.difficulty}`
       : r.mode === 'online' ? `${r.song.artist} · online ${r.matchMode === 'band' ? 'band' : r.matchMode === 'battle' ? 'battle' : 'versus'} · ${everyone.length} players`
         : band ? `${r.song.artist} · ${r.players.length}-player band${r.failed ? ' · FAILED' : ''}`
-          : `${r.song.artist} · ${solo.instrument}${solo.part ? ` (harmony ${solo.part + 1})` : ''} · ${solo.difficulty}${solo.pro ? ' · PRO' : ''}${solo.strum ? ' · strum' : ''}${solo.real ? ` · real ${solo.instrument}` : ''}${solo.assist ? ' · assists on (not on leaderboards)' : ''}${r.failed ? ' · FAILED' : ''}`;
+          : `${r.song.artist} · ${solo.instrument}${solo.part ? ` (harmony ${solo.part + 1})` : ''} · ${solo.difficulty}${solo.pro ? ' · PRO' : ''}${solo.strum ? ' · strum' : ''}${solo.real ? ` · real ${solo.instrument}` : ''}${solo.assist ? ' · assists on (not on leaderboards)' : ''}${solo.gear ? ' · gear (not on world boards)' : ''}${r.failed ? ' · FAILED' : ''}`;
     const cv = coverUrl(r.song);
     $('#res-cover').style.background = cv ? `url('${cv}') center/cover` : this.art(r.song);
     $('[data-action="retry"]').textContent = r.mode === 'online' ? 'Back to lobby' : r.mode === 'replay' ? 'Watch again' : r.practice ? 'Practice again' : 'Play again';
@@ -2242,6 +2296,17 @@ export class UI {
         <div class="rp-line">${Math.round(p.accuracy * 100)}% · ${p.hits}/${p.total} notes · streak ${p.maxStreak}${p.failed ? ' · failed' : ''}</div>
       </div>`).join('') : '';
     this.onlineUi.decorateResults(this.lastResultRaw); // the result as the game reported it (r above may be re-sorted)
+    const bossEl = $('#res-boss');
+    const bo = this.lastResultRaw.boss;
+    if (bo?.outcome) {
+      const info = BOSS_INFO[bo.id];
+      bossEl.style.setProperty('--bc', info.color);
+      bossEl.className = `res-boss ${bo.outcome}`;
+      bossEl.innerHTML = bo.outcome === 'defeated'
+        ? `<span class="rb-ico">${fa('dragon')}</span><b>${esc(info.name)} defeated</b><small>in ${bo.seconds.toFixed(1)} s${bo.flawless ? ' · flawless' : ''} · ${bo.damage.toLocaleString()} damage</small>`
+        : `<span class="rb-ico">${fa('wind')}</span><b>${esc(info.name)} escaped</b><small>Hit harder: perfect notes, long streaks and overdrive do the most damage</small>`;
+      bossEl.hidden = false;
+    } else bossEl.hidden = true;
     this.focus = 0;
     this.applyFocus(false);
   }

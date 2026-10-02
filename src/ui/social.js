@@ -7,7 +7,23 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const initials = (n) => String(n || '?').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 import { instIcon, fa, starsOnly, achIcon } from './icons.js';
 import { discord, discordAvatar, STATUS_LABEL } from '../net/discord.js';
-import { submitRuns, worldBoard, worldPlayers, shareProfile, linkDiscordWorld } from '../net/leaderboard.js';
+import { submitRuns, worldBoard, worldPlayers, shareProfile, linkDiscordWorld, submitBossKill } from '../net/leaderboard.js';
+import { fmtCash, BOSS_INFO } from '../profile/economy.js';
+import { PEDALS } from '../profile/rig.js';
+import { WARDROBE_REQ, LABEL } from '../profile/looks.js';
+import { WORLDS } from '../game/worlds/index.js';
+
+/** What beating a boss for the first time opens: its pedal, wardrobe pieces, the next world. */
+function bossLoot(bossId, first) {
+  if (!first) return '';
+  const items = [];
+  for (const pd of PEDALS) if (pd.req.boss === bossId) items.push(`${pd.name} pedal`);
+  for (const [id, req] of Object.entries(WARDROBE_REQ)) if (req.boss === bossId) items.push(LABEL[id.split('.')[1]] || (id === 'glow.on' ? 'LED trim' : id === 'skin.alien' ? 'Alien skin tones' : id));
+  const next = Object.values(WORLDS).find((w) => w.prev === bossId);
+  if (next) items.push(`World: ${next.name}`);
+  items.push(`${BOSS_INFO[bossId].name} trophy (stage creator)`);
+  return `<div class="rp-loot">${fa('gift')} ${items.map((x) => `<span>${esc(x)}</span>`).join('')}</div>`;
+}
 const ICON = { guitar: instIcon('guitar'), bass: instIcon('bass'), drums: instIcon('drums'), keys: instIcon('keys'), vocals: instIcon('vocals') };
 const DIFFS = ['easy', 'medium', 'hard', 'expert'];
 const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'];
@@ -329,15 +345,18 @@ export function installSocial(ui) {
       el.innerHTML = profiles.list.length || !profiles.current ? '<div class="small-note">Playing as guest — sign in to save scores, XP and achievements.</div>' : '';
       return;
     }
-    const summaries = await profiles.recordPlays(results, { song: r.song, mode: r.mode, onlineWinnerId: r.onlineWinnerId, bandSize: r.players.length, ghost: r.ghost });
+    const summaries = await profiles.recordPlays(results, { song: r.song, mode: r.mode, onlineWinnerId: r.onlineWinnerId, bandSize: r.players.length, ghost: r.ghost, boss: r.boss });
     el.innerHTML = summaries.map((s) => {
       const p = profiles.byId(s.profileId);
       const lv = levelInfo(p.xp);
-      return `<div class="rp-prof" style="--pc:${p.color}">${avatarHtml(p, 40)}<div class="info"><b>${esc(p.name)}</b> +${s.xpGained} XP · level ${lv.level} ${s.levelAfter > s.levelBefore ? '<span class="lvlup">LEVEL UP!</span>' : ''}
+      const loot = s.boss ? bossLoot(s.boss.id, s.boss.first) : '';
+      return `<div class="rp-prof" style="--pc:${p.color}">${avatarHtml(p, 40)}<div class="info"><b>${esc(p.name)}</b> +${s.xpGained} XP · <span class="rp-cash">${fa('coins')} +${fmtCash(s.cash || 0)}</span> · level ${lv.level} ${s.levelAfter > s.levelBefore ? '<span class="lvlup">LEVEL UP!</span>' : ''}${loot}
         <div class="xpbar"><div style="width:${Math.round(lv.progress * 100)}%"></div></div>
         ${s.achievements.length ? `<div class="rp-ach">${s.achievements.map((a) => `<span>${achIcon(a.id)} ${esc(a.name)}</span>`).join('')}</div>` : ''}</div></div>`;
     }).join('');
     for (const s of summaries) for (const a of s.achievements) ui.toast(`${s.name}: ${a.name} — ${a.desc}`, 'ok', 'trophy');
+    for (const s of summaries) if (s.boss?.first) ui.toast(`${s.name}: first ${BOSS_INFO[s.boss.id].name} trophy! New loot in Backstage`, 'ok', 'dragon');
+    if (r.boss?.outcome === 'defeated') submitBossKill(r).catch((e) => console.warn('boss hall of fame:', e.message));
     ui.lastSubmit = submitRuns(r, (e) => ui.toast(`World chart upload failed: ${e.message}`, 'err'));
     ui.lastSubmit.then((list) => {
       for (const w of list) {

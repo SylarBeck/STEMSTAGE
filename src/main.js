@@ -25,6 +25,7 @@ function fatal(title, detail) {
 
 class App {
   constructor() {
+    this.settings = settings; // handy from the console (window.stemstage.settings)
     this.engine = new AudioEngine();
     this.input = input;
     this.ds = dualsense;
