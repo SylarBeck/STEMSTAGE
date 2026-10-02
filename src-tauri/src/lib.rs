@@ -162,6 +162,7 @@ const DISCORD_APP_ID: &str = "1553872601603117127";
 
 /// Register the link protocols that start STEMSTAGE:
 ///   stemstage://join/<CODE>   invite links (the website's /join page opens one)
+///   stemstage://match/<MODE>  Find match (any | versus | battle | band) from the website's /play page
 ///   discord-<app id>://       Discord starts the game when a friend presses Join and it isn't running (the join
 ///                             itself arrives once the game connects to Discord)
 fn register_protocols() {
@@ -201,6 +202,14 @@ fn register_protocols() {
             }
         }
     }
+}
+
+/// The match type in a `stemstage://match/<MODE>` argument, if any.
+fn match_mode<I: IntoIterator<Item = String>>(args: I) -> Option<String> {
+    args.into_iter().find_map(|a| {
+        let mode = a.strip_prefix("stemstage://match/")?.trim_end_matches('/').to_lowercase();
+        ["any", "versus", "battle", "band"].contains(&mode.as_str()).then_some(mode)
+    })
 }
 
 /// The room code in a `stemstage://join/<CODE>` argument, if any.
@@ -346,9 +355,10 @@ fn launch(app: &tauri::AppHandle) {
 
     let mut st = Status {
         // opened from an invite link: the game joins that room once it has loaded
-        url: match join_code(std::env::args()) {
-            Some(code) => format!("http://127.0.0.1:{GAME_PORT}/?join={code}"),
-            None => format!("http://127.0.0.1:{GAME_PORT}/"),
+        url: match (join_code(std::env::args()), match_mode(std::env::args())) {
+            (Some(code), _) => format!("http://127.0.0.1:{GAME_PORT}/?join={code}"),
+            (None, Some(mode)) => format!("http://127.0.0.1:{GAME_PORT}/?match={mode}"),
+            _ => format!("http://127.0.0.1:{GAME_PORT}/"),
         },
         songs: songs.display().to_string(),
         logs: logs.display().to_string(),
@@ -779,7 +789,9 @@ pub fn run() {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.unminimize();
                 let _ = w.set_focus();
-                if let Some(code) = join_code(argv) {
+                if let Some(mode) = match_mode(argv.clone()) {
+                    let _ = w.eval(format!("window.__stemstageMatch && window.__stemstageMatch('{mode}')"));
+                } else if let Some(code) = join_code(argv) {
                     let _ = w.eval(format!("window.__stemstageJoin && window.__stemstageJoin('{code}')"));
                 }
             }

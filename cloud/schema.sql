@@ -70,9 +70,22 @@ CREATE TABLE IF NOT EXISTS rooms (
   key_hash TEXT NOT NULL,         -- sha256 of the key only the hosting game knows (to update or close it)
   name TEXT NOT NULL, host TEXT, mode TEXT, song TEXT, artist TEXT,
   players INTEGER NOT NULL, max INTEGER NOT NULL, playing INTEGER NOT NULL DEFAULT 0, version TEXT,
+  continent TEXT, rating INTEGER, stage TEXT, gear INTEGER NOT NULL DEFAULT 0, mm INTEGER NOT NULL DEFAULT 0, -- 2.0.0: matchmaking
   created INTEGER NOT NULL, updated INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS rooms_updated ON rooms (updated);
+-- players searching for a match right now (2.0.0)
+CREATE TABLE IF NOT EXISTS mm_tickets (
+  ticket TEXT PRIMARY KEY, mode TEXT, rating INTEGER, continent TEXT, version TEXT, updated INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS mm_tickets_updated ON mm_tickets (updated);
+-- world bosses beaten by signed-in profiles (2.0.0)
+CREATE TABLE IF NOT EXISTS boss_kills (
+  player_id TEXT NOT NULL, boss TEXT NOT NULL, seconds REAL NOT NULL, damage INTEGER, flawless INTEGER NOT NULL DEFAULT 0,
+  song TEXT, instrument TEXT, difficulty TEXT, mode TEXT, version TEXT, created INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS boss_kills_boss ON boss_kills (boss, seconds);
+CREATE INDEX IF NOT EXISTS boss_kills_player ON boss_kills (player_id, boss);
 -- weekly challenges: the song part of each week, picked once (see migrations/0005_challenges.sql)
 CREATE TABLE IF NOT EXISTS challenges (
   week INTEGER PRIMARY KEY,       -- weeks since Monday 28 September 2026 (UTC)

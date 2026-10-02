@@ -49,3 +49,29 @@
 #pick-stage .stage-cur { flex: 1; display: flex; align-items: center; gap: 8px; }
 #pick-stage .stage-peek { opacity: 0.45; }
 #pick-stage .boss-tag { margin-left: auto; color: var(--bc); font-weight: 800; letter-spacing: 0.04em; text-shadow: 0 0 10px color-mix(in srgb, var(--bc) 60%, transparent); }
+
+/* ================================================================ online: matchmaking, lobby quality, host controls */
+.ol-player { grid-template-columns: 12px 1fr auto auto auto auto auto; }
+.ol-player .ol-rating { margin-left: 6px; padding: 0 6px; border: 1px solid var(--line-2); color: var(--dim); font-size: 13px; font-weight: 800; letter-spacing: 0.04em; }
+.ping { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
+.ping i { width: 4px; background: rgba(236,229,211,0.18); border-radius: 0 !important; }
+.ping i:nth-child(1) { height: 25%; } .ping i:nth-child(2) { height: 50%; } .ping i:nth-child(3) { height: 75%; } .ping i:nth-child(4) { height: 100%; }
+.ping.p4 i.on { background: #6cbf46; } .ping.p3 i.on { background: #b6d94a; } .ping.p2 i.on { background: #f0b429; } .ping.p1 i.on { background: #e5402f; }
+.ol-kick { all: unset; cursor: pointer; padding: 2px 7px; color: var(--dim); border: 1px solid transparent; }
+.ol-kick:hover, .ol-kick.focus { color: #fff; background: var(--accent); }
+.ol-host-ctl { margin: 4px 0 8px; padding: 6px 4px; border-top: 1px dashed var(--line-2); }
+.ol-host-ctl .picker.row { margin: 2px 0; padding: 4px 10px; }
+.ol-togs { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px 10px; }
+.ol-tog { font-family: var(--body); font-weight: 800; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; padding: 6px 10px; border: 1.5px solid var(--line-2); background: rgba(12,11,10,0.5); color: var(--dim); cursor: pointer; }
+.ol-tog.on { border-color: var(--gold); color: var(--ink); background: rgba(240,180,41,0.14); }
+.ol-tog.focus { background: var(--ink); color: var(--dark); border-color: var(--ink); box-shadow: 3px 3px 0 var(--accent); }
+.ol-opts { padding: 6px 10px; color: var(--dim); font-weight: 700; }
+.ol-opts b { color: var(--ink); }
+.ol-countdown { margin: 0 0 8px; padding: 8px 12px; border-left: 4px solid var(--gold); background: rgba(240,180,41,0.12); font-weight: 800; letter-spacing: 0.04em; animation: pulse 0.6s ease-in-out infinite; }
+.ol-countdown b { font-family: var(--display); font-size: 24px; color: var(--gold); }
+.ol-match { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; margin: 14px 0 4px; padding: 10px 0 0; border-top: 1px dashed var(--line-2); }
+.ol-match .picker { margin: 0; }
+.ol-mm-status { grid-column: 1 / -1; padding: 8px 12px; background: rgba(41,224,255,0.08); border-left: 4px solid #29e0ff; font-weight: 700; }
+.ol-mm-status .spin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(236,229,211,0.2); border-top-color: #29e0ff; animation: spin .8s linear infinite; vertical-align: -1px; margin-right: 6px; }
+.ol-stats { grid-column: 1 / -1; display: flex; gap: 16px; color: var(--dim); font-size: 15px; font-weight: 700; }
+.ol-stats b { color: var(--ink); }

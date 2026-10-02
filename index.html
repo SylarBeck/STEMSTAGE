@@ -289,7 +289,13 @@
             <h3>Join</h3>
             <div class="yt-search"><input type="text" id="ol-addr" placeholder="Invite code" spellcheck="false" data-osk="Invite code" data-osk-submit="ol-join" /><button class="nav-btn primary" data-nav data-action="ol-join">Join</button></div>
             <div class="small-note" id="ol-join-status"></div>
-            <div class="ol-browse-head"><h4>Public rooms</h4><button class="nav-btn" data-nav data-action="ol-quick">Quick match</button><button class="nav-btn" data-nav data-action="ol-refresh" aria-label="Refresh the list"><i class="fa-solid fa-rotate"></i></button></div>
+            <div class="ol-match">
+              <div class="picker compact" data-nav data-picker="ol-mm-mode"><label>Find a match</label><div class="picker-options" id="ol-mm-mode"></div></div>
+              <button class="nav-btn primary" data-nav data-action="ol-quick" id="ol-find"><i class="fa-solid fa-magnifying-glass"></i> Find match</button>
+              <div class="ol-mm-status" id="ol-mm-status" hidden></div>
+              <div class="ol-stats" id="ol-stats"></div>
+            </div>
+            <div class="ol-browse-head"><h4>Public rooms</h4><button class="nav-btn" data-nav data-action="ol-refresh" aria-label="Refresh the list"><i class="fa-solid fa-rotate"></i></button></div>
             <div class="ol-browse" id="ol-browse"><div class="small-note">Looking for rooms…</div></div>
           </div>
           <div class="panel" id="ol-hist-panel" hidden>
@@ -302,13 +308,16 @@
           <div class="lobby-head"><b id="ol-room">Room</b><span id="ol-status"></span><button class="nav-btn danger" data-nav data-action="ol-leave">Leave</button></div>
           <div class="ol-song" id="ol-song"></div>
           <div class="ol-download" id="ol-download" aria-live="polite" hidden></div>
+          <div class="ol-countdown" id="ol-countdown" hidden></div>
           <div class="ol-players" id="ol-players"></div>
+          <div class="ol-host-ctl" id="ol-host-ctl"></div>
           <div class="picker" data-nav data-picker="ol-mode"><label>Match <span class="lbl-note" id="ol-mode-note"></span></label><div class="picker-options" id="ol-pick-mode"></div></div>
           <div class="picker" data-nav data-picker="ol-inst"><label>Your instrument</label><div class="picker-options" id="ol-pick-inst"></div></div>
           <div class="picker" data-nav data-picker="ol-diff"><label>Difficulty</label><div class="picker-options" id="ol-pick-diff"></div></div>
           <div class="btn-row">
             <button class="nav-btn primary" data-nav data-action="ol-invite" id="ol-invite">Invite friends</button>
             <button class="nav-btn" data-nav data-action="ol-ready" id="ol-ready">Ready</button>
+            <button class="nav-btn" data-nav data-action="ol-spectate" id="ol-spectate">Watch</button>
             <button class="nav-btn" data-nav data-action="ol-choose" id="ol-choose">Choose song</button>
             <button class="nav-btn primary" data-nav data-action="ol-start" id="ol-start">Start match</button>
             <button class="nav-btn" data-nav data-action="ol-rematch" id="ol-rematch" hidden>Rematch</button>

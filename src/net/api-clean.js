@@ -7,11 +7,14 @@ const ENUMS = {
   instrument: INSTRUMENTS,
   difficulty: ['easy', 'medium', 'hard', 'expert'],
   mode: ['versus', 'battle', 'band', 'ranked', 'chart', 'unranked', 'all'],
+  stage: ['arena', 'garage', 'club', 'bar', 'theater', 'stadium', 'festival', 'aquarium', 'nebula', 'forge', 'aurora', 'citadel'],
+  boss: ['leviathan', 'conductor', 'titan', 'wyrm', 'thunderbird'],
 };
 const NUMBERS = new Set([
   'score', 'stars', 'accuracy', 'maxStreak', 'date', 'total', 'fcs', 'charts', 'last', 'entries', 'best', 'ranked', 'players', 'max',
   'runs', 'votes', 'notes', 'duration', 'updated', 'rank', 'points', 'weeks', 'wins', 'week', 'season', 'starts', 'ends', 'voteMin',
   'otherCharts', 'created', 'since', 'level', 'xp', 'progress', 'records', 'rankedVotes', 'listedFor', 'fc', 'playing', 'edited', 'offset',
+  'rating', 'kills', 'slayers', 'seconds', 'searching', 'damage', 'gear', 'mm', 'flawless',
 ]);
 const AVATAR = /^https:\/\/cdn\.discordapp\.com\/[\w/.-]+(\?size=\d{1,4})?$/;
 

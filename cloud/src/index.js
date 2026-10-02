@@ -20,6 +20,10 @@
 //   GET  /v1/season?player=         this season's standings (points from the weekly challenges)
 //   GET  /v1/rooms                  public online rooms (hosts re-announce every 30 s; listed for 90 s)
 //   POST /v1/rooms                  a host lists / refreshes its room   POST /v1/rooms/close   takes it down
+//   POST /v1/match                  matchmaking: the best open room for a player, or a ticket to keep searching (v2)
+//   POST /v1/match/cancel           stop searching                      GET /v1/lobby   rooms open, players, searching
+//   POST /v1/bosses                 a signed-in player beat a world boss (v2)
+//   GET  /v1/bosses?boss=           the boss hall of fame: fastest kills and most kills (all bosses without ?boss=)
 //   GET  /v1/health
 //
 // Every GET answers JSON with CORS, or JSONP with ?callback=<function name>. Songs are matched across players by
@@ -41,12 +45,16 @@
 // Optional callback: set the secret DISCORD_WEBHOOK (a Discord channel webhook URL) to announce every new #1.
 
 import { canonicalChart, chartId as idOfChart, noteCounts, INSTRUMENTS, DIFFICULTIES } from './chart.js';
+import { pickRoom, MODES as MATCH_MODES } from './match.js';
 
 const MAX_SCORE = 20_000_000;
 const VOTE_MIN = 3; // votes a chart needs before it can replace the ranked one
 const MAX_CHART_BYTES = 1_500_000, MAX_BODY_BYTES = 64_000;
 const RATE = { window: 600, max: 40 }; // runs per address per 10 minutes
 const ROOM_FRESH = 90, ROOM_KEEP = 600, ROOM_MODES = ['versus', 'battle', 'band'];
+const ROOM_STAGES = ['arena', 'garage', 'club', 'bar', 'theater', 'stadium', 'festival', 'aquarium', 'nebula', 'forge', 'aurora', 'citadel'];
+const TICKET_FRESH = 20;
+const BOSSES = ['leviathan', 'conductor', 'titan', 'wyrm', 'thunderbird'];
 // weekly challenges: weeks start on Monday 00:00 UTC; a season is six weeks
 const WEEK0 = Date.UTC(2026, 8, 28) / 1000, WEEK = 7 * 86400, SEASON_WEEKS = 6; // week 0 = season 1 starts Monday 28 September 2026
 const WEEK_DIFFS = ['hard', 'expert', 'medium', 'expert', 'hard', 'expert'];
@@ -392,15 +400,17 @@ async function announceRoom(req, env) {
     name: cleanText(b.name, 40) || 'STEMSTAGE room', host: cleanText(b.host, 24), mode: ROOM_MODES.includes(b.mode) ? b.mode : 'versus',
     song: cleanText(b.song, 120), artist: cleanText(b.artist, 120), players: clampInt(b.players, 1, max) ?? 1, max, playing: b.playing ? 1 : 0,
     version: /^\d+\.\d+\.\d+$/.test(b.version || '') ? b.version : null,
+    continent: /^[A-Z]{2}$/.test(req.cf?.continent || '') ? req.cf.continent : null, rating: clampInt(b.rating, 0, 4000) ?? 1000,
+    stage: ROOM_STAGES.includes(b.stage) ? b.stage : 'arena', gear: b.gear ? 1 : 0, mm: b.mm ? 1 : 0,
   };
   await env.DB.batch([
     // a new listing counts toward the address's rate limit; refreshing one doesn't
     ...(known ? [] : [env.DB.prepare('INSERT INTO hits (ip, ts) VALUES (?, ?)').bind(ip, now)]),
-    env.DB.prepare(`INSERT INTO rooms (code, key_hash, name, host, mode, song, artist, players, max, playing, version, created, updated)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(code) DO UPDATE SET name = excluded.name, host = excluded.host, mode = excluded.mode,
+    env.DB.prepare(`INSERT INTO rooms (code, key_hash, name, host, mode, song, artist, players, max, playing, version, continent, rating, stage, gear, mm, created, updated)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(code) DO UPDATE SET name = excluded.name, host = excluded.host, mode = excluded.mode,
         song = excluded.song, artist = excluded.artist, players = excluded.players, max = excluded.max, playing = excluded.playing,
-        version = excluded.version, updated = excluded.updated`)
-      .bind(code, keyHash, row.name, row.host, row.mode, row.song, row.artist, row.players, row.max, row.playing, row.version, now, now),
+        version = excluded.version, continent = excluded.continent, rating = excluded.rating, stage = excluded.stage, gear = excluded.gear, mm = excluded.mm, updated = excluded.updated`)
+      .bind(code, keyHash, row.name, row.host, row.mode, row.song, row.artist, row.players, row.max, row.playing, row.version, row.continent, row.rating, row.stage, row.gear, row.mm, now, now),
     env.DB.prepare('DELETE FROM rooms WHERE updated < ?').bind(now - ROOM_KEEP),
   ]);
   return json({ ok: true, code, listedFor: ROOM_FRESH });
@@ -416,9 +426,105 @@ async function closeRoomListing(req, env) {
 
 async function rooms(url, env) {
   const now = Math.floor(Date.now() / 1000);
-  const { results } = await env.DB.prepare(`SELECT code, name, host, mode, song, artist, players, max, playing, version, created, updated FROM rooms
+  const { results } = await env.DB.prepare(`SELECT code, name, host, mode, song, artist, players, max, playing, version, continent, rating, stage, gear, mm, created, updated FROM rooms
     WHERE updated >= ? ORDER BY playing ASC, players DESC, updated DESC LIMIT ?`).bind(now - ROOM_FRESH, limitOf(url, 50, 100)).all();
-  return reply(url, { rows: results.map((r) => ({ ...r, playing: !!r.playing })) }, 5);
+  return reply(url, { rows: results.map((r) => ({ ...r, playing: !!r.playing, gear: !!r.gear, mm: !!r.mm })) }, 5);
+}
+
+// ---------------------------------------------------------------- matchmaking (v2)
+/*
+  POST /v1/match { mode: any|versus|battle|band, rating, version, ticket?, waited }
+  → { room } (join it) | { ticket, searching, rooms } (keep searching with the same ticket; the game asks again every
+  few seconds and hosts a matchmaking room itself after ~20 s). Rooms are chosen by cloud/src/match.js.
+*/
+async function match(req, env) {
+  const b = await readJson(req, 4_000);
+  const now = Math.floor(Date.now() / 1000);
+  const mode = b?.mode === 'any' || MATCH_MODES.includes(b?.mode) ? b.mode : 'any';
+  const version = /^\d+\.\d+\.\d+$/.test(b?.version || '') ? b.version : null;
+  const continent = /^[A-Z]{2}$/.test(req.cf?.continent || '') ? req.cf.continent : null;
+  const rating = clampInt(b?.rating, 0, 4000) ?? 1000;
+  const waited = clampInt(b?.waited, 0, 600) ?? 0;
+  const ticket = typeof b?.ticket === 'string' && /^[a-f0-9]{24}$/.test(b.ticket) ? b.ticket : [...crypto.getRandomValues(new Uint8Array(12))].map((x) => x.toString(16).padStart(2, '0')).join('');
+  const { results } = await env.DB.prepare(`SELECT code, name, host, mode, song, artist, players, max, playing, version, continent, rating, stage, gear, mm FROM rooms
+    WHERE updated >= ? AND playing = 0 AND players < max LIMIT 200`).bind(now - ROOM_FRESH).all();
+  const room = pickRoom(results, { mode, version, continent, rating, waited });
+  if (room) {
+    await env.DB.prepare('DELETE FROM mm_tickets WHERE ticket = ?').bind(ticket).run();
+    return json({ room: { ...room, playing: false, gear: !!room.gear, mm: !!room.mm } });
+  }
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO mm_tickets (ticket, mode, rating, continent, version, updated) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(ticket) DO UPDATE SET mode = excluded.mode, rating = excluded.rating, updated = excluded.updated`).bind(ticket, mode, rating, continent, version, now),
+    env.DB.prepare('DELETE FROM mm_tickets WHERE updated < ?').bind(now - TICKET_FRESH),
+  ]);
+  const searching = await env.DB.prepare('SELECT COUNT(*) AS n FROM mm_tickets WHERE updated >= ?').bind(now - TICKET_FRESH).first();
+  return json({ ticket, searching: searching?.n || 1, rooms: results.length });
+}
+
+async function matchCancel(req, env) {
+  const b = await readJson(req, 1_000);
+  if (typeof b?.ticket === 'string' && /^[a-f0-9]{24}$/.test(b.ticket)) await env.DB.prepare('DELETE FROM mm_tickets WHERE ticket = ?').bind(b.ticket).run();
+  return json({ ok: true });
+}
+
+/** GET /v1/lobby: how busy online play is right now. */
+async function lobby(url, env) {
+  const now = Math.floor(Date.now() / 1000);
+  const [r, s, m] = await env.DB.batch([
+    env.DB.prepare('SELECT COUNT(*) AS rooms, COALESCE(SUM(players), 0) AS players FROM rooms WHERE updated >= ?').bind(now - ROOM_FRESH),
+    env.DB.prepare('SELECT COUNT(*) AS n FROM mm_tickets WHERE updated >= ?').bind(now - TICKET_FRESH),
+    env.DB.prepare('SELECT mode, COUNT(*) AS n FROM rooms WHERE updated >= ? GROUP BY mode').bind(now - ROOM_FRESH),
+  ]);
+  const byMode = Object.fromEntries((m.results || []).map((x) => [x.mode, x.n]));
+  return reply(url, { rooms: r.results?.[0]?.rooms || 0, players: r.results?.[0]?.players || 0, searching: s.results?.[0]?.n || 0, byMode }, 5);
+}
+
+// ---------------------------------------------------------------- boss hall of fame (v2)
+async function bossKill(req, env) {
+  const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Math.floor(Date.now() / 1000);
+  if (await rateLimited(env, ip, now)) return json({ error: 'too many requests from this address, try again later' }, 429);
+  const b = await readJson(req, 8_000);
+  const pl = await checkPlayer(env, b?.player);
+  if (pl.error) return json({ error: pl.error }, pl.status);
+  if (!BOSSES.includes(b.boss)) return json({ error: 'unknown boss' }, 400);
+  const seconds = Number.isFinite(+b.seconds) ? Math.max(1, Math.min(120, +b.seconds)) : null;
+  if (seconds === null) return json({ error: 'bad time' }, 400);
+  const damage = clampInt(b.damage, 0, 1_000_000) ?? 0;
+  const inst = INSTRUMENTS.includes(b.instrument) ? b.instrument : null, diff = DIFFICULTIES.includes(b.difficulty) ? b.difficulty : null;
+  const song = cleanText(`${b.song?.artist ? `${b.song.artist} – ` : ''}${b.song?.title || ''}`, 160);
+  await env.DB.batch([
+    upsertPlayer(env, pl, now),
+    env.DB.prepare('INSERT INTO hits (ip, ts) VALUES (?, ?)').bind(ip, now),
+    env.DB.prepare(`INSERT INTO boss_kills (player_id, boss, seconds, damage, flawless, song, instrument, difficulty, mode, version, created)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(pl.id, b.boss, seconds, damage, b.flawless ? 1 : 0, song, inst, diff, cleanText(b.mode, 12), cleanText(b.version, 16), now),
+  ]);
+  const rank = await env.DB.prepare('SELECT COUNT(*) AS n FROM (SELECT player_id, MIN(seconds) AS s FROM boss_kills WHERE boss = ? GROUP BY player_id) WHERE s < ?').bind(b.boss, seconds).first();
+  const kills = await env.DB.prepare('SELECT COUNT(*) AS n FROM boss_kills WHERE boss = ? AND player_id = ?').bind(b.boss, pl.id).first();
+  return json({ ok: true, rank: (rank?.n || 0) + 1, kills: kills?.n || 1 });
+}
+
+async function bossBoard(url, env) {
+  const boss = url.searchParams.get('boss');
+  const limit = limitOf(url, 20, 100);
+  if (!boss) {
+    const { results } = await env.DB.prepare('SELECT boss, COUNT(*) AS kills, COUNT(DISTINCT player_id) AS slayers, MIN(seconds) AS best FROM boss_kills GROUP BY boss').all();
+    return reply(url, { bosses: Object.fromEntries(BOSSES.map((id) => { const r = results.find((x) => x.boss === id); return [id, { kills: r?.kills || 0, slayers: r?.slayers || 0, best: r?.best || null }]; })) }, 30);
+  }
+  if (!BOSSES.includes(boss)) return json({ error: 'unknown boss' }, 400);
+  const [fast, most] = await env.DB.batch([
+    env.DB.prepare(`SELECT k.player_id, p.name, p.discord_id, p.discord_avatar, p.discord_verified, MIN(k.seconds) AS seconds, MAX(k.flawless) AS flawless
+      FROM boss_kills k JOIN players p ON p.id = k.player_id WHERE k.boss = ? GROUP BY k.player_id ORDER BY seconds ASC LIMIT ?`).bind(boss, limit),
+    env.DB.prepare(`SELECT k.player_id, p.name, p.discord_id, p.discord_avatar, p.discord_verified, COUNT(*) AS kills
+      FROM boss_kills k JOIN players p ON p.id = k.player_id WHERE k.boss = ? GROUP BY k.player_id ORDER BY kills DESC LIMIT ?`).bind(boss, limit),
+  ]);
+  const who = (r) => ({ playerId: r.player_id, player: r.name, avatar: r.discord_verified ? avatarOf(r) : null });
+  return reply(url, {
+    boss,
+    fastest: (fast.results || []).map((r) => ({ ...who(r), seconds: r.seconds, flawless: !!r.flawless })),
+    most: (most.results || []).map((r) => ({ ...who(r), kills: r.kills })),
+  }, 15);
 }
 
 // Search returns bounded pages of song keys first. FTS handles title/artist words; the separate detail query only
@@ -774,6 +880,9 @@ async function route(req, url, path, env, ctx) {
   if (req.method === 'POST' && path === '/v1/charts/vote') return await vote(req, env);
   if (req.method === 'POST' && path === '/v1/rooms') return await announceRoom(req, env);
   if (req.method === 'POST' && path === '/v1/rooms/close') return await closeRoomListing(req, env);
+  if (req.method === 'POST' && path === '/v1/match') return await match(req, env);
+  if (req.method === 'POST' && path === '/v1/match/cancel') return await matchCancel(req, env);
+  if (req.method === 'POST' && path === '/v1/bosses') return await bossKill(req, env);
   if (req.method === 'POST' && path === '/v1/link') return await link(req, env);
   if (req.method === 'GET') {
     if (path === '/v1/leaderboard') return await leaderboard(url, env);
@@ -785,6 +894,8 @@ async function route(req, url, path, env, ctx) {
     if (path === '/v1/charts') return await listCharts(url, env);
     if (path === '/v1/chart') return await getChart(url, env);
     if (path === '/v1/rooms') return await rooms(url, env);
+    if (path === '/v1/lobby') return await lobby(url, env);
+    if (path === '/v1/bosses') return await bossBoard(url, env);
     if (path === '/v1/challenge') return await challenge(url, env);
     if (path === '/v1/library') return await library(url, env);
     if (path === '/v1/season') return await season(url, env);

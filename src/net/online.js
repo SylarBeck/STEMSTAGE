@@ -11,6 +11,20 @@ const INSTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'], DIFFS = ['easy', 'm
 const MODES = ['versus', 'battle', 'band'], PHASES = ['lobby', 'playing'], ATTACKS = ['mirror', 'fog', 'shake', 'drain'];
 const EVENTS = ['od', 'fail', 'attack', 'left'];
 const REACTIONS = ['👏', '🔥', '🎸', '💜', '😂'];
+const STAGES = ['arena', 'garage', 'club', 'bar', 'theater', 'stadium', 'festival', 'aquarium', 'nebula', 'forge', 'aurora', 'citadel'];
+const BOSS_MODES = ['random', 'always', 'off'];
+/** The host's room options (stage, gear, bosses, size, lock, auto-start). */
+export function cleanOpts(o) {
+  const x = o && typeof o === 'object' ? o : {};
+  return { stage: oneOf(STAGES, x.stage, 'arena'), gear: !!x.gear, bosses: oneOf(BOSS_MODES, x.bosses, 'random'), max: Math.round(num(x.max, 2, 16)) || 8, locked: !!x.locked, autoStart: !!x.autoStart };
+}
+/** Another player's instruments (cosmetics only), made safe. */
+function cleanRigs(r) {
+  if (!r || typeof r !== 'object') return null;
+  const out = {};
+  for (const i of INSTS) if (r[i] && typeof r[i] === 'object') out[i] = { shape: str(r[i].shape, 12).replace(/[^a-z]/g, '') || null, finish: hex(r[i].finish, null), hardware: str(r[i].hardware, 10).replace(/[^a-z]/g, '') || null, glow: hex(r[i].glow, ''), guard: hex(r[i].guard, null) };
+  return out;
+}
 const str = (v, n) => (typeof v === 'string' ? v : v == null ? '' : String(v)).slice(0, n);
 const num = (v, lo = -1e12, hi = 1e12) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : 0);
 const hex = (v, fallback = '#df3a2c') => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : fallback);
@@ -47,13 +61,13 @@ export function cleanRoom(room) {
   if (!room || typeof room !== 'object') return null;
   return {
     code: str(room.code, 12).replace(/[^A-Z0-9]/gi, ''), phase: oneOf(PHASES, room.phase), song: songInfo(room.song), startAt: num(room.startAt, 0),
-    mode: oneOf(MODES, room.mode), max: num(room.max, 1, 16) || 8,
+    mode: oneOf(MODES, room.mode), max: num(room.max, 1, 16) || 8, opts: cleanOpts(room.opts), countdown: num(room.countdown, 0), version: str(room.version, 16),
     history: (Array.isArray(room.history) ? room.history : []).slice(0, 20).map(historyEntry),
     rematch: (Array.isArray(room.rematch) ? room.rematch : []).map(idOf).filter(Boolean),
     players: (Array.isArray(room.players) ? room.players : []).slice(0, 16).map((p) => ({
       ...person(p), host: !!p?.host, instrument: oneOf(INSTS, p?.instrument), difficulty: oneOf(DIFFS, p?.difficulty, 'medium'),
       ready: !!p?.ready, hasSong: !!p?.hasSong, loading: num(p?.loading, 0, 1), connected: p?.connected !== false, spectator: !!p?.spectator,
-      score: num(p?.score, 0),
+      score: num(p?.score, 0), ping: num(p?.ping, 0, 60000), rating: num(p?.rating, 0, 4000) || 1000,
     })),
   };
 }
@@ -66,8 +80,10 @@ export function cleanMessage(msg) {
     case 'room': return msg.room ? { t: 'room', room: cleanRoom(msg.room) } : null;
     case 'start': return {
       t: 'start', matchId: str(msg.matchId, 40), startAt: num(msg.startAt, 0), song: songInfo(msg.song), mode: oneOf(MODES, msg.mode),
-      lineup: (Array.isArray(msg.lineup) ? msg.lineup : []).slice(0, 16).map((q) => ({ ...person(q), instrument: oneOf(INSTS, q?.instrument), difficulty: oneOf(DIFFS, q?.difficulty, 'medium'), look: cleanLook(q?.look) })),
+      seed: Math.floor(num(msg.seed, 0, 4294967295)), opts: cleanOpts(msg.opts),
+      lineup: (Array.isArray(msg.lineup) ? msg.lineup : []).slice(0, 16).map((q) => ({ ...person(q), instrument: oneOf(INSTS, q?.instrument), difficulty: oneOf(DIFFS, q?.difficulty, 'medium'), look: cleanLook(q?.look), rig: cleanRigs(q?.rig) })),
     };
+    case 'countdown': return { t: 'countdown', at: num(msg.at, 0) };
     case 'live': return { ...stats(msg), t: 'live', id: idOf(msg.id) };
     case 'event': {
       if (!EVENTS.includes(msg.kind)) return null;
@@ -148,15 +164,15 @@ export class OnlineClient {
    * address: an invite code, a room URL, or a LAN address ("127.0.0.1:5180" for the host itself).
    * A brand-new internet room can take a few seconds to become reachable, so keep retrying for a while.
    */
-  async connect(address, { name, color, profileId, look = null, hostKey = null }) {
+  async connect(address, { name, color, profileId, look = null, hostKey = null, rating = 1000, rig = null }) {
     const base = roomUrl(address);
     if (!base) throw new Error('Enter an invite code');
     const remote = base.startsWith('https://');
-    this.credentials = { name, color, profileId, look, hostKey };
+    this.credentials = { name, color, profileId, look, hostKey, rating, rig };
     const deadline = performance.now() + (remote ? 30000 : 4000);
     let lastErr;
     for (let attempt = 0; performance.now() < deadline; attempt++) {
-      try { return await this._open(base, { name, color, profileId, look, hostKey }); } catch (e) { lastErr = e; }
+      try { return await this._open(base, this.credentials); } catch (e) { lastErr = e; if (e.refused) throw e; }
       if (this.cancelled) break;
       this.emit('connecting', attempt + 1);
       await new Promise((r) => setTimeout(r, 1500));
@@ -164,7 +180,7 @@ export class OnlineClient {
     throw new Error(remote ? `No room found for "${inviteCode(base) || address}" — check the code, or ask the host if their room is still open` : (lastErr?.message || `Could not connect to ${address}`));
   }
 
-  _open(base, { name, color, profileId, look, hostKey }) {
+  _open(base, { name, color, profileId, look, hostKey, rating, rig }) {
     this.close();
     this.cancelled = false;
     this.base = base;
@@ -173,28 +189,30 @@ export class OnlineClient {
       const ws = new WebSocket(base.replace(/^http/, 'ws'));
       this.ws = ws;
       const timer = setTimeout(() => { ws.close(); reject(new Error(`No STEMSTAGE room answered at ${this.address}`)); }, 8000);
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', name, color, profileId, look, hostKey, sessionId: this.sessionId }));
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', name, color, profileId, look, hostKey, sessionId: this.sessionId, version: typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '', rating, rig }));
       ws.onerror = () => { clearTimeout(timer); reject(new Error(`Could not connect to ${this.address}`)); };
       ws.onclose = () => {
         clearTimeout(timer);
         clearInterval(this.pingTimer);
+        clearInterval(this.watchdog);
+        // the room said no before letting us in (wrong version, locked, full, removed): don't keep retrying
+        if (this.ws === ws && !this.id && this.refusal) { const e = new Error(this.refusal); e.refused = true; this.refusal = null; reject(e); }
         // only a room we were actually in counts as a disconnect (not a failed join attempt)
         if (this.ws === ws) {
           const was = !!this.id;
           this.ws = null; this.room = null; this.id = null;
-          if (was) {
+          if (was && !this.kicked) {
             this.emit('disconnected');
-            this.reconnecting = true;
-            this.reconnectTimer = setTimeout(() => this.connect(base, this.credentials).then(() => {
-              this.reconnecting = false; this.emit('reconnected');
-            }).catch((error) => { this.reconnecting = false; this.emit('reconnect-failed', error.message); }), 1200);
+            this._reconnect(base, 0);
           }
         }
       };
       ws.onmessage = (e) => {
+        this.lastMsg = performance.now();
         let msg;
         try { msg = cleanMessage(JSON.parse(e.data)); } catch { return; }
         if (!msg) return;
+        if (msg.t === 'closed' && !this.id) { this.refusal = msg.reason; return; }
         if (msg.t === 'welcome') {
           if (!msg.room || !msg.id) return;
           clearTimeout(timer);
@@ -204,6 +222,10 @@ export class OnlineClient {
           this.offsetInit = false;
           this._ping(); setTimeout(() => this._ping(), 300); setTimeout(() => this._ping(), 700);
           this.pingTimer = setInterval(() => this._ping(), 3000);
+          // a connection that goes silent (a tunnel that dropped without closing) is closed and reopened
+          this.lastMsg = performance.now();
+          clearInterval(this.watchdog);
+          this.watchdog = setInterval(() => { if (this.ws === ws && performance.now() - this.lastMsg > 11000) { try { ws.close(); } catch { /* gone */ } } }, 2000);
           resolve(this);
           this.emit('room', this.room);
           if (this.room.song) this._syncSong(this.room.song); // joined after the host already picked a song
@@ -215,6 +237,17 @@ export class OnlineClient {
   }
 
   _ping() { this.send({ t: 'ping', c: performance.now() }); }
+
+  /** Reconnect with backoff: 1, 2.5, 5, 8, 12 s, then give up. */
+  _reconnect(base, n) {
+    const waits = [1000, 2500, 5000, 8000, 12000];
+    if (n >= waits.length) { this.reconnecting = false; this.emit('reconnect-failed', 'the room stopped answering'); return; }
+    this.reconnecting = true;
+    this.emit('reconnecting', n + 1);
+    this.reconnectTimer = setTimeout(() => this.connect(base, this.credentials).then(() => {
+      this.reconnecting = false; this.emit('reconnected');
+    }).catch((e) => { if (e.refused) { this.reconnecting = false; this.emit('reconnect-failed', e.message); } else this._reconnect(base, n + 1); }), waits[n]);
+  }
 
   _handle(msg) {
     switch (msg.t) {
@@ -248,7 +281,9 @@ export class OnlineClient {
       case 'event': this.emit('event', msg); break;
       case 'results': this.lastResults = { matchId: msg.matchId, results: msg.results, mode: msg.mode, winnerId: msg.winnerId || null, draw: !!msg.draw }; this.emit('results', msg.results, msg); break;
       case 'chat': this.emit('chat', msg); break;
-      case 'closed': this.emit('closed', msg.reason); break;
+      case 'react': this.emit('react', msg); break;
+      case 'countdown': this.emit('countdown', msg.at ? msg.at - this.offset : 0); break;
+      case 'closed': if (/removed you/.test(msg.reason)) this.kicked = true; this.emit('closed', msg.reason); break;
       default: break;
     }
   }
@@ -295,6 +330,12 @@ export class OnlineClient {
   start() { this.send({ t: 'start' }); }
   /** Host: versus | battle | band. */
   setMode(mode) { this.send({ t: 'mode', mode }); }
+  /** Host: the room's options { stage, gear, bosses, max, locked, autoStart } (any subset). */
+  setOpts(opts) { this.send({ t: 'opts', opts }); }
+  /** Host: remove a player (they can't come back to this room). */
+  kick(id) { this.send({ t: 'kick', id }); }
+  /** Watch the next songs instead of playing. */
+  spectate(on) { this.send({ t: 'set', spectate: !!on }); }
   /** Ask for the same song again (it starts once everyone wants it). */
   rematch(want = true) { this.send({ t: 'rematch', want }); }
   live(state) { this.send({ t: 'live', ...state }); }
@@ -305,8 +346,10 @@ export class OnlineClient {
 
   close() {
     this.cancelled = true;
+    this.kicked = false;
     clearTimeout(this.reconnectTimer);
     clearInterval(this.pingTimer);
+    clearInterval(this.watchdog);
     if (this.ws) { const ws = this.ws; this.ws = null; try { ws.close(); } catch { /* closed */ } }
     this.room = null; this.id = null; this.host = false;
     this.rtt = null;

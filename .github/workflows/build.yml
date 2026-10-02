@@ -44,6 +44,7 @@ jobs:
           workspaces: src-tauri
           key: ${{ matrix.platform }}
       - run: npm ci
+      - run: npm test
       - name: Build (no update signing)
         shell: bash
         run: |

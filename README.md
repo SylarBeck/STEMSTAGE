@@ -29,6 +29,15 @@
   <img src="docs/screenshots/controllers.png" width="49%" alt="Controllers hub with a DualSense" />
 </p>
 
+## New in 2.0
+
+- **Backstage** — a full screen to build your rock star and your instruments, in a 3D dressing room: sculpted, jointed characters (10 hair styles, facial hair, eyewear, hats, jackets, hoodies, coats, accessories, LED trim, five stage moves) and instruments (guitar / bass bodies, drum kits, keytar, mics; paint, hardware, LED glow). Every item card is a live 3D photo, and moving over one tries it on.
+- **Gear** — level up four components per instrument with cash and equip up to three pedals: more overdrive, longer overdrive, sustain points, a calmer crowd, streak shields, a wider timing window, a faster multiplier, boss damage. Gear runs earn XP and cash but stay off the world leaderboard (Settings → Gameplay → Gear modifiers).
+- **Five worlds, five bosses** — the Abyssal Aquarium, Orbital Nebula, Volcanic Forge, Crystal Aurora and Storm Citadel, each a full 3D world with its own boss (the Leviathan, the Void Conductor, the Magma Titan, the Frost Wyrm, the Thunderbird). A boss can show up in the middle of a song: hit notes to damage it while it attacks your highway (ink, bubbles, gravity wells, heat haze, frost, lightning…). Beat it for cash, XP, its pedal, wardrobe pieces, the next world and a trophy for your stage. Scores aren't changed, so boards stay fair.
+- **Stage creator** — Backstage → Stages: backdrops, floors, light rigs (truss, lasers, disco), props for the wings, upstage, the stage front and overhead, atmosphere, crowd and colours. Play any song on your own stage.
+- **Cash** — every song pays; bosses pay more. Spend it on wardrobe, upgrades, pedals and stage props.
+- **Online** — Find match (by mode, skill rating and region; hosts a matchmaking room when nobody's around), host controls (stage, bosses, gear, room size, lock, auto-start, kick), ping per player, spectating, a heartbeat that drops dead connections, reconnection with backoff, and a clear message when versions differ.
+
 ## Features
 
 - **Any song, any part** — [Demucs](https://github.com/facebookresearch/demucs) `htdemucs_6s` separates drums, bass, guitar, piano, vocals and other on your GPU; [basic-pitch](https://github.com/spotify/basic-pitch) transcribes the notes; an auto-charter builds four difficulties with overdrive phrases.

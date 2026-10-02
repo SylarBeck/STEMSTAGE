@@ -7,11 +7,16 @@
 //   GET /info          room summary
 //   GET /songs/<id>/song.json | /songs/<id>/stems/<stem>.wav | /songs/<id>/net/<stem> (compressed) | /songs/<id>/files/<file>
 //
-// Client -> server: hello{name,color,profileId,hostKey} · ping{c} · set{instrument,difficulty,ready} · select{song}
-//                   mode{mode} (host) · have{songId,ok,progress} · start · rematch{want} · live{...}
-//                   event{kind,target} · result{result} · chat{text}
-// Server -> client: welcome{id,room} · pong{c,s} · room{room} · start{startAt,lineup,song,mode} · live{id,...}
-//                   event{id,kind,target} · results{results,mode,winnerId,draw} · chat{from,text} · closed{reason}
+// Client -> server: hello{name,color,profileId,hostKey,sessionId,version,rating} · ping{c} · set{instrument,difficulty,ready,spectate}
+//                   select{song} · mode{mode} (host) · opts{stage,gear,bosses,max,locked,autoStart} (host) · kick{id} (host)
+//                   have{songId,ok,progress} · start · rematch{want} · live{...} · event{kind,target} · result{result} · chat{text}
+// Server -> client: welcome{id,room} · pong{c,s} · room{room} · start{startAt,lineup,song,mode,seed,opts} · countdown{at}
+//                   live{id,...} · event{id,kind,target} · results{results,mode,winnerId,draw} · chat{from,text} · closed{reason}
+//
+// v2: every connection is pinged every few seconds (dead tunnel connections are dropped instead of holding a slot,
+// and each player's round trip shows in the lobby); games of another minor version are refused with a clear message;
+// the host sets the room's stage (worlds bring their boss), whether gear modifiers count, bosses, the size, a lock,
+// and auto-start; the match start carries a seed so every player meets the same boss at the same time.
 //
 // Match modes: versus (highest score wins), battle (versus + overdrive attacks the leader), band (co-op: one band
 // score, overdrive saves bandmates). room.history keeps the last matches (for the lobby and rematches).
@@ -19,6 +24,7 @@ import http from 'node:http';
 import os from 'node:os';
 import { WebSocketServer } from 'ws';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { send, isLocal, readJsonBody } from './library.js';
 import { createTunnel } from './tunnel.js';
 
@@ -27,13 +33,18 @@ const MODES = ['versus', 'battle', 'band'];
 const ATTACKS = ['mirror', 'fog', 'shake', 'drain'];
 export const MAX_PLAYERS = 8;
 const HISTORY = 20;
-const HAIRS = ['short', 'long', 'mohawk', 'bun', 'shaved'], PARTS = ['guitar', 'bass', 'drums', 'keys'];
+const HAIRS = ['short', 'long', 'mohawk', 'bun', 'shaved', 'spiky', 'afro', 'ponytail', 'locs', 'bald'], PARTS = ['guitar', 'bass', 'drums', 'keys'];
 const INSTRUMENTS = ['guitar', 'bass', 'drums', 'keys', 'vocals'], DIFFICULTIES = ['easy', 'medium', 'hard', 'expert'];
 const EVENTS = ['od', 'fail', 'attack'];
 const REACTIONS = ['👏', '🔥', '🎸', '💜', '😂'];
 // what one connection may send: a steady 40 messages a second (the game sends ~10), bursts of 120
 const RATE = { perSecond: 40, burst: 120, dropLimit: 600 };
-const MAX_CONNECTIONS = 24, HELLO_MS = 10000;
+const MAX_CONNECTIONS = 24, HELLO_MS = 10000, BEAT_MS = 5000;
+export const STAGES = ['arena', 'garage', 'club', 'bar', 'theater', 'stadium', 'festival', 'aquarium', 'nebula', 'forge', 'aurora', 'citadel'];
+const BOSS_MODES = ['random', 'always', 'off'];
+const DEFAULT_OPTS = { stage: 'arena', gear: false, bosses: 'random', max: MAX_PLAYERS, locked: false, autoStart: false };
+const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version; } catch { return '0.0.0'; } })();
+const minor = (v) => String(v || '').split('.').slice(0, 2).join('.');
 
 /** Text another player sees: no control characters or angle brackets (every game escapes it too). */
 const cleanText = (v, n) => String(v ?? '').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -56,12 +67,26 @@ function cleanStats(o, maxKeys = 40) {
   return out;
 }
 const cleanProfileId = (v) => (typeof v === 'string' && /^[\w-]{8,64}$/.test(v) ? v : null);
+/** A player's instruments as the others see them (shape names, colours): only known words and colours pass. */
+function cleanRig(r) {
+  if (!r || typeof r !== 'object') return null;
+  const out = {};
+  for (const inst of PARTS.concat(['vocals'])) {
+    const x = r[inst];
+    if (!x || typeof x !== 'object') continue;
+    const hex = (v) => (/^#[0-9a-f]{6}$/i.test(v || '') ? v : null);
+    out[inst] = { shape: /^[a-z]{3,12}$/.test(x.shape || '') ? x.shape : null, finish: hex(x.finish), hardware: /^[a-z]{3,10}$/.test(x.hardware || '') ? x.hardware : null, glow: hex(x.glow) || '', guard: hex(x.guard) };
+  }
+  return out;
+}
 /** A player's character (src/profile/looks.js) as the other players get it: colours and names from known lists only. */
 function cleanLook(l) {
   if (!l || typeof l !== 'object') return null;
   const hex = (v) => (/^#[0-9a-f]{6}$/i.test(v || '') ? v : null);
-  const out = { part: PARTS.includes(l.part) ? l.part : 'guitar', hair: HAIRS.includes(l.hair) ? l.hair : 'short' };
+  const out = { part: [...PARTS, 'vocals'].includes(l.part) ? l.part : 'guitar', hair: HAIRS.includes(l.hair) ? l.hair : 'short' };
   for (const k of ['skin', 'hairColor', 'top', 'pants', 'finish']) { const v = hex(l[k]); if (!v) return null; out[k] = v; }
+  for (const k of ['accent', 'shoes', 'glow']) { const v = hex(l[k]); if (v) out[k] = v; }
+  for (const k of ['build', 'height', 'facial', 'eyes', 'head', 'topStyle', 'extra', 'move']) if (/^[a-z]{2,12}$/.test(l[k] || '')) out[k] = l[k];
   return out;
 }
 
@@ -76,15 +101,16 @@ export function lanAddresses() {
 }
 
 export function createOnline(library) {
-  let server = null, wss = null, port = 5180, room = null, resultsTimer = null, internet = false, hostKey = null;
+  let server = null, wss = null, port = 5180, room = null, resultsTimer = null, internet = false, hostKey = null, beat = null, autoTimer = null;
   const tunnel = createTunnel();
 
   const summary = () => room && {
-    code: room.code, phase: room.phase, song: room.song, startAt: room.startAt, mode: room.mode, max: MAX_PLAYERS,
-    history: room.history, rematch: [...room.rematch],
+    code: room.code, phase: room.phase, song: room.song, startAt: room.startAt, mode: room.mode, max: room.opts.max,
+    history: room.history, rematch: [...room.rematch], opts: room.opts, countdown: room.countdown || 0, version: VERSION,
     players: [...room.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, profileId: p.profileId, host: p.host, instrument: p.instrument,
-      difficulty: p.difficulty, ready: p.ready, hasSong: p.hasSong, loading: p.loading, connected: p.connected, spectator: !!p.spectator,
+      difficulty: p.difficulty, ready: p.ready, hasSong: p.hasSong, loading: p.loading, connected: p.connected, spectator: !!p.spectator || !!p.wantSpectate,
+      ping: p.host ? 0 : Math.round(p.ping || 0), rating: p.rating || 1000,
       score: Math.max(0, Number(p.lastLive?.score) || Number(p.result?.score) || 0),
     })),
   };
@@ -128,10 +154,12 @@ export function createOnline(library) {
     pushRoom();
   }
 
-  /** Start a match with everyone who has the song. */
+  /** Start a match with everyone who has the song (players who chose to watch spectate). */
   function startMatch() {
-    const lineup = [...room.players.values()].filter((q) => q.connected && q.hasSong);
-    if (!lineup.length || [...room.players.values()].some((q) => q.connected && (!q.hasSong || !q.ready || q.spectator))) return;
+    clearTimeout(autoTimer); room.countdown = 0;
+    const playing = [...room.players.values()].filter((q) => q.connected && !q.wantSpectate);
+    const lineup = playing.filter((q) => q.hasSong);
+    if (!lineup.length || playing.some((q) => !q.hasSong || !q.ready || q.spectator)) return;
     room.phase = 'playing';
     room.startAt = Date.now() + 5000;
     room.matchId = `m${Date.now().toString(36)}`;
@@ -139,8 +167,23 @@ export function createOnline(library) {
     room.lastResults = null;
     room.rematch.clear();
     for (const q of room.players.values()) { q.result = null; q.playing = lineup.includes(q); q.lastLive = null; }
-    broadcast({ t: 'start', matchId: room.matchId, startAt: room.startAt, song: room.song, mode: room.mode, lineup: lineup.map((q) => ({ id: q.id, name: q.name, color: q.color, profileId: q.profileId, instrument: q.instrument, difficulty: q.difficulty, look: q.look })) });
+    room.seed = crypto.randomBytes(4).readUInt32LE(0);
+    broadcast({ t: 'start', matchId: room.matchId, startAt: room.startAt, song: room.song, mode: room.mode, seed: room.seed, opts: room.opts, lineup: lineup.map((q) => ({ id: q.id, name: q.name, color: q.color, profileId: q.profileId, instrument: q.instrument, difficulty: q.difficulty, look: q.look, rig: q.rig })) });
     pushRoom();
+  }
+
+  /** Auto-start: once everyone (not watching) has the song and is ready, count down 3 s and go. */
+  function checkAuto() {
+    if (!room.opts.autoStart || room.phase !== 'lobby' || !room.song) return;
+    const playing = [...room.players.values()].filter((q) => q.connected && !q.wantSpectate);
+    const go = playing.length > 0 && playing.every((q) => q.hasSong && q.ready);
+    if (go && !room.countdown) {
+      room.countdown = Date.now() + 3000;
+      broadcast({ t: 'countdown', at: room.countdown });
+      autoTimer = setTimeout(() => { if (room?.countdown) startMatch(); }, 3000);
+    } else if (!go && room.countdown) {
+      clearTimeout(autoTimer); room.countdown = 0; broadcast({ t: 'countdown', at: 0 });
+    }
   }
 
   function onMessage(p, msg) {
@@ -151,8 +194,36 @@ export function createOnline(library) {
         if (INSTRUMENTS.includes(msg.instrument)) p.instrument = msg.instrument;
         if (DIFFICULTIES.includes(msg.difficulty)) p.difficulty = msg.difficulty;
         if (typeof msg.ready === 'boolean') p.ready = msg.ready;
+        if (typeof msg.spectate === 'boolean') { p.wantSpectate = msg.spectate; if (msg.spectate) p.ready = false; }
+        pushRoom();
+        checkAuto();
+        break;
+      case 'opts': {
+        if (!p.host || room.phase !== 'lobby' || !msg.opts || typeof msg.opts !== 'object') break;
+        const o = msg.opts, cur = room.opts;
+        room.opts = {
+          stage: STAGES.includes(o.stage) ? o.stage : cur.stage,
+          gear: typeof o.gear === 'boolean' ? o.gear : cur.gear,
+          bosses: BOSS_MODES.includes(o.bosses) ? o.bosses : cur.bosses,
+          max: Number.isInteger(o.max) ? Math.max(2, Math.min(MAX_PLAYERS, o.max)) : cur.max,
+          locked: typeof o.locked === 'boolean' ? o.locked : cur.locked,
+          autoStart: typeof o.autoStart === 'boolean' ? o.autoStart : cur.autoStart,
+        };
+        pushRoom();
+        checkAuto();
+        break;
+      }
+      case 'kick': {
+        const q = p.host && room.players.get(String(msg.id || ''));
+        if (!q || q === p) break;
+        if (q.sessionId) room.banned.add(q.sessionId);
+        sendTo(q, { t: 'closed', reason: 'The host removed you from the room' });
+        try { q.ws.close(); } catch { /* gone */ }
+        room.players.delete(q.id);
+        broadcast({ t: 'chat', from: 'Room', color: '#a59d8b', text: `${q.name} was removed by the host` });
         pushRoom();
         break;
+      }
       case 'mode':
         if (!p.host || room.phase !== 'lobby' || !MODES.includes(msg.mode)) break;
         room.mode = msg.mode;
@@ -174,7 +245,7 @@ export function createOnline(library) {
         pushRoom();
         break;
       case 'have':
-        if (room.song && msg.songId === room.song.id) { p.hasSong = !!msg.ok; p.loading = msg.ok ? 1 : Math.max(0, Math.min(1, +msg.progress || 0)); pushRoom(); }
+        if (room.song && msg.songId === room.song.id) { p.hasSong = !!msg.ok; p.loading = msg.ok ? 1 : Math.max(0, Math.min(1, +msg.progress || 0)); pushRoom(); checkAuto(); }
         break;
       case 'start':
         if (!p.host || room.phase !== 'lobby' || !room.song) break;
@@ -223,7 +294,9 @@ export function createOnline(library) {
         break;
       case 'chat': {
         const text = cleanText(msg.text, 200);
-        if (text) broadcast({ t: 'chat', from: p.name, color: p.color, text });
+        if (!text || Date.now() - (p.lastChat || 0) < 700) break; // one line per 0.7 s
+        p.lastChat = Date.now();
+        broadcast({ t: 'chat', from: p.name, color: p.color, text });
         break;
       }
       case 'react':
@@ -246,7 +319,7 @@ export function createOnline(library) {
     internet = wantInternet;
     if (!internet) tunnel.stop();
     hostKey = crypto.randomBytes(16).toString('hex');
-    room = { code: Math.random().toString(36).slice(2, 6).toUpperCase(), phase: 'lobby', song: null, songs: new Set(), players: new Map(), startAt: 0, hostName, mode: 'versus', history: [], rematch: new Set() };
+    room = { code: Math.random().toString(36).slice(2, 6).toUpperCase(), phase: 'lobby', song: null, songs: new Set(), players: new Map(), startAt: 0, hostName, mode: 'versus', history: [], rematch: new Set(), opts: { ...DEFAULT_OPTS }, banned: new Set(), countdown: 0 };
     server = http.createServer(async (req, res) => {
       res.setHeader('Access-Control-Allow-Origin', '*'); // the guests' games fetch the song from another origin
       if (req.method === 'OPTIONS') { res.statusCode = 204; res.setHeader('Access-Control-Allow-Headers', '*'); return res.end(); }
@@ -260,9 +333,23 @@ export function createOnline(library) {
     });
     wss = new WebSocketServer({ server, maxPayload: 256 * 1024 });
     wss.on('error', (e) => console.warn('[online] websocket server error:', e.message)); // never let an error event crash Vite
+    // heartbeat: a connection that misses a ping is dead (closed laptop, dropped tunnel) and gives up its slot;
+    // the pong's round trip is that player's ping in the lobby
+    clearInterval(beat);
+    beat = setInterval(() => {
+      for (const ws of wss?.clients || []) {
+        if (ws.alive === false) { ws.terminate(); continue; }
+        ws.alive = false;
+        ws.pingAt = Date.now();
+        try { ws.ping(); } catch { /* closing */ }
+      }
+      if (room && [...room.players.values()].some((q) => !q.host)) pushRoom();
+    }, BEAT_MS);
     let seq = 0;
     wss.on('connection', (ws, req) => {
       let p = null;
+      ws.alive = true;
+      ws.on('pong', () => { ws.alive = true; if (p) p.ping = p.ping ? p.ping * 0.6 + (Date.now() - ws.pingAt) * 0.4 : Date.now() - ws.pingAt; });
       ws.on('error', () => { /* client vanished */ });
       if (wss.clients.size > MAX_CONNECTIONS) { ws.close(1013, 'busy'); return; }
       // a connection that never says hello doesn't get to hold a slot
@@ -287,11 +374,16 @@ export function createOnline(library) {
           const host = !!msg.hostKey && msg.hostKey === hostKey && ![...room.players.values()].some((q) => q.host && q.connected);
           const sessionId = typeof msg.sessionId === 'string' && /^[a-f0-9-]{36}$/i.test(msg.sessionId) ? msg.sessionId : null;
           const returning = sessionId && [...room.players.values()].find((q) => q.sessionId === sessionId && !q.connected);
-          if (!returning && !host && [...room.players.values()].filter((q) => q.connected).length >= MAX_PLAYERS) { try { ws.send(JSON.stringify({ t: 'closed', reason: `This room is full (${MAX_PLAYERS} players)` })); ws.close(); } catch { /* gone */ } return; }
+          const refuse = (reason) => { try { ws.send(JSON.stringify({ t: 'closed', reason })); ws.close(); } catch { /* gone */ } };
+          if (msg.version && minor(msg.version) !== minor(VERSION)) { refuse(`This room runs STEMSTAGE ${VERSION} and you have ${String(msg.version).slice(0, 12)}: update so you're on the same version`); return; }
+          if (!host && sessionId && room.banned.has(sessionId)) { refuse('The host removed you from this room'); return; }
+          if (!returning && !host && room.opts.locked) { refuse('This room is locked: the host isn\u2019t letting anyone else in'); return; }
+          if (!returning && !host && [...room.players.values()].filter((q) => q.connected).length >= room.opts.max) { refuse(`This room is full (${room.opts.max} players)`); return; }
           p = returning || {
             id: `p${++seq}`, ws, host, connected: true, name: cleanText(msg.name, 24) || 'Player', profileId: cleanProfileId(msg.profileId), look: cleanLook(msg.look),
             color: /^#[0-9a-f]{6}$/i.test(msg.color || '') ? msg.color : COLORS[(seq - 1) % COLORS.length],
             instrument: 'guitar', difficulty: 'medium', ready: false, hasSong: false, loading: 0, result: null, sessionId,
+            rating: Math.max(0, Math.min(4000, Math.round(+msg.rating || 1000))), rig: cleanRig(msg.rig),
           };
           p.ws = ws; p.connected = true;
           p.spectator = room.phase === 'playing';
@@ -312,6 +404,7 @@ export function createOnline(library) {
         if (room.phase === 'playing' && p.playing && !p.result) p.result = p.lastLive || { score: 0, failed: true };
         if (room.phase !== 'playing') room.players.delete(p.id);
         room.rematch.delete(p.id);
+        checkAuto();
         broadcast({ t: 'event', id: p.id, kind: 'left' });
         if (room.phase === 'playing' && [...room.players.values()].filter((q) => q.playing).every((q) => q.result)) finishResults();
         const rest = [...room.players.values()].filter((q) => q.connected);
@@ -336,6 +429,7 @@ export function createOnline(library) {
   }
 
   function stop() {
+    clearInterval(beat); clearTimeout(autoTimer);
     if (!server) { tunnel.stop(); return; }
     for (const p of room.players.values()) { try { sendTo(p, { t: 'closed', reason: 'Host closed the room' }); p.ws.close(); } catch { /* gone */ } }
     wss.close();

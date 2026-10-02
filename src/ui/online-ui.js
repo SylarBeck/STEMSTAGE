@@ -6,6 +6,16 @@ import { getSong, getAudio, coverUrl } from '../storage/library.js';
 import { discord, inviteLink } from '../net/discord.js';
 import { settings } from '../settings.js';
 import { listRooms, announceRoom, closeRoom, newRoomKey, compatible } from '../net/rooms.js';
+import { findMatch, cancelMatch, lobbyStats, nextRating, START_RATING } from '../net/matchmaking.js';
+import { cosmetics } from '../profile/rig.js';
+import { WORLDS, worldUnlocked } from '../game/worlds/index.js';
+import { VENUES, unlocked as venueUnlocked } from '../profile/career.js';
+import { BOSS_INFO } from '../profile/economy.js';
+
+const MM_MODES = [['any', 'Any'], ['versus', 'Versus'], ['battle', 'Battle'], ['band', 'Band']];
+const STAGE_NAME = { arena: 'Metro Arena', garage: 'The Garage', club: 'Basement Club', bar: 'Neon Dive Bar', theater: 'Grand Theater', stadium: 'Skyline Stadium', festival: 'Main Stage Festival', ...Object.fromEntries(Object.entries(WORLDS).map(([k, w]) => [k, w.name])) };
+/** A ping as signal bars (and its colour). */
+const pingBars = (ms) => { const n = !ms ? 4 : ms < 60 ? 4 : ms < 120 ? 3 : ms < 220 ? 2 : 1; return `<span class="ping p${n}" title="${ms ? `${Math.round(ms)} ms` : 'host'}">${[1, 2, 3, 4].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</span>`; };
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -40,13 +50,14 @@ export function installOnline(ui) {
   const st = {
     inst: localStorage.getItem('stemstage.online.inst') || 'guitar', diff: localStorage.getItem('stemstage.online.diff') || 'medium', hostInfo: null, songProgress: null,
     public: localStorage.getItem('stemstage.online.public') === '1', publicKey: null, listedCode: null, pubSent: '', pubAt: 0, rooms: null, roomsAt: 0,
+    mmMode: localStorage.getItem('stemstage.online.mm') || 'any', mm: null, mmRoom: false, countdown: 0,
   };
   const app = ui.app;
 
   const me = () => online.me;
   const identity = () => {
     const p = profiles.current;
-    return { name: p?.name || `Guest ${Math.floor(Math.random() * 900 + 100)}`, color: p?.color || PROFILE_COLORS[Math.floor(Math.random() * PROFILE_COLORS.length)], profileId: p?.id || null, look: p?.look || null };
+    return { name: p?.name || `Guest ${Math.floor(Math.random() * 900 + 100)}`, color: p?.color || PROFILE_COLORS[Math.floor(Math.random() * PROFILE_COLORS.length)], profileId: p?.id || null, look: p?.look || null, rating: p?.rating || START_RATING, rig: p ? cosmetics(p) : null };
   };
 
   async function refreshHost() {
@@ -112,6 +123,19 @@ export function installOnline(ui) {
     connect(code);
   }
   window.__stemstageJoin = (code) => joinFromInvite(code, 'the invite link'); // called by the desktop app
+  // Find match from the website (stemstage://match/<mode>, or ?match= in the browser)
+  window.__stemstageMatch = (mode) => {
+    if (app.game.running) { ui.toast('Finish or quit this song first, then press Find match on the website again', 'err'); return; }
+    if (!MM_MODES.some(([v]) => v === mode)) return;
+    if (online.connected) online.close();
+    st.mmMode = mode;
+    ui.show('online');
+    if (!st.mm) matchmake();
+  };
+  {
+    const q = new URLSearchParams(location.search).get('match');
+    if (q) { history.replaceState(null, '', '/'); setTimeout(() => window.__stemstageMatch(q), 1500); }
+  }
   {
     const q = new URLSearchParams(location.search).get('join');
     if (q) { history.replaceState(null, '', '/'); setTimeout(() => joinFromInvite(q, 'the invite link'), 1200); }
@@ -128,7 +152,7 @@ export function installOnline(ui) {
     $('#ol-join-panel').hidden = connected;
     $('#ol-hist-panel').hidden = !connected;
     refreshHost();
-    if (!connected) { renderBrowse(); ui.applyFocus(false); return; }
+    if (!connected) { renderBrowse(); renderMatchmaking(); renderStats(); ui.applyFocus(false); return; }
     const room = online.room;
     presence();
     $('#ol-room').textContent = `Room ${room.code}`;
@@ -154,7 +178,8 @@ export function installOnline(ui) {
       const status = p.spectator ? '<span class="rd">SPECTATING</span>' : !p.connected ? '<span class="rd">DISCONNECTED</span>' : room.phase === 'playing' ? `<span class="rd ok">${Math.round(p.score || 0).toLocaleString()}</span>` : !song ? '' : p.hasSong ? (p.ready ? '<span class="rd ok">READY</span>' : '<span class="rd">NOT READY</span>') : `<span class="rd">DOWNLOADING ${Math.round((p.loading || 0) * 100)}%</span>`;
       const rec = myProfile && p.id !== online.id ? profiles.versusAgainst(myProfile, p.name) : null;
       const vs = rec ? ` <small class="vs" title="Your versus record against ${esc(p.name)}">you ${rec.w}–${rec.l}${rec.d ? `–${rec.d}` : ''}</small>` : '';
-      return `<div class="ol-player" style="--pc:${p.color}"><i></i><span>${esc(p.name)}${p.host ? ` ${fa('crown', 'host')}` : ''}${p.id === online.id ? ' (you)' : ''}${vs}</span><span>${ICON[p.instrument] || ''} ${p.instrument}</span><span>${p.difficulty}</span>${status || '<span></span>'}</div>`;
+      const kick = online.host && p.id !== online.id ? `<button class="ol-kick" data-nav data-kick="${esc(p.id)}" title="Remove ${esc(p.name)} from the room">${fa('user-xmark')}</button>` : '';
+      return `<div class="ol-player" style="--pc:${p.color}"><i></i><span>${esc(p.name)}${p.host ? ` ${fa('crown', 'host')}` : ''}${p.id === online.id ? ' (you)' : ''}${vs} <small class="ol-rating" title="Skill rating">${Math.round(p.rating || START_RATING)}</small></span><span>${ICON[p.instrument] || ''} ${p.instrument}</span><span>${p.difficulty}</span>${status || '<span></span>'}${pingBars(p.host ? 0 : p.ping)}${kick}</div>`;
     }).join('');
     const mode = room.mode || 'versus';
     $('#ol-pick-mode').innerHTML = MATCH_MODES.map(([v, l]) => `<div class="opt ${v === mode ? 'sel' : ''} ${online.host || v === mode ? '' : 'disabled'}" data-m="${v}">${l}</div>`).join('');
@@ -167,6 +192,10 @@ export function installOnline(ui) {
     $$('#ol-pick-inst [data-i]').forEach((o) => o.addEventListener('click', () => setMine({ instrument: o.dataset.i })));
     $$('#ol-pick-diff [data-d]').forEach((o) => o.addEventListener('click', () => setMine({ difficulty: o.dataset.d })));
     const m = me();
+    $$('[data-kick]').forEach((b) => b.addEventListener('click', () => kickPlayer(b.dataset.kick)));
+    renderHostControls(room);
+    $('#ol-spectate').textContent = m?.spectator ? 'Play' : 'Watch';
+    $('#ol-spectate').style.display = room.phase === 'playing' ? 'none' : '';
     $('#ol-ready').textContent = m?.ready ? 'Not ready' : 'Ready';
     $('#ol-ready').style.display = room.phase === 'playing' ? 'none' : '';
     $('#ol-choose').style.display = online.host ? '' : 'none';
@@ -182,6 +211,77 @@ export function installOnline(ui) {
   function pickMode(m) {
     if (!online.host) { ui.toast('The host picks the match type', 'err'); return; }
     if (MODE_LABEL[m] && online.room?.mode !== m) online.setMode(m);
+  }
+
+  // ---------------------------------------------------------------- host controls (stage, gear, bosses, size, lock, auto-start)
+  function hostStages() {
+    const p = profiles.current;
+    return ['arena', ...VENUES.filter((v) => v.id !== 'arena' && venueUnlocked(p, v)).map((v) => v.id), ...Object.keys(WORLDS).filter((id) => worldUnlocked(p, id))];
+  }
+  function renderHostControls(room) {
+    const el = $('#ol-host-ctl');
+    const o = room.opts;
+    const boss = WORLDS[o.stage]?.boss;
+    if (!online.host) {
+      el.innerHTML = `<div class="ol-opts">${fa('location-dot')} <b>${esc(STAGE_NAME[o.stage] || o.stage)}</b>${boss ? ` · ${fa('dragon')} ${esc(BOSS_INFO[boss].name)} (${o.bosses})` : ''} · gear ${o.gear ? 'on' : 'off'} · ${room.players.length}/${o.max}${o.locked ? ` · ${fa('lock')} locked` : ''}${o.autoStart ? ' · auto-start' : ''}</div>`;
+      return;
+    }
+    const tog = (k, on, label, icon) => `<button class="ol-tog ${on ? 'on' : ''}" data-nav data-opt="${k}">${fa(icon)} ${label}</button>`;
+    el.innerHTML = `<div class="picker row" data-nav data-picker="ol-stage"><label>Stage${boss ? ` <small class="boss-tag" style="--bc:${BOSS_INFO[boss].color}">${fa('dragon')} ${esc(BOSS_INFO[boss].name)}</small>` : ''}</label><div class="picker-options"><div class="opt sel">${esc(STAGE_NAME[o.stage] || o.stage)}</div></div></div>
+      <div class="picker row" data-nav data-picker="ol-bosses"><label>Bosses</label><div class="picker-options">${['random', 'always', 'off'].map((v) => `<div class="opt ${o.bosses === v ? 'sel' : ''}">${v}</div>`).join('')}</div></div>
+      <div class="picker row" data-nav data-picker="ol-max"><label>Room size</label><div class="picker-options"><div class="opt sel">${o.max} players</div></div></div>
+      <div class="ol-togs">${tog('gear', o.gear, 'Gear counts', 'sliders')}${tog('locked', o.locked, 'Lock room', 'lock')}${tog('autoStart', o.autoStart, 'Auto-start', 'forward-fast')}</div>`;
+    $$('[data-opt]', el).forEach((b) => b.addEventListener('click', () => online.setOpts({ [b.dataset.opt]: !o[b.dataset.opt] })));
+  }
+  async function kickPlayer(id) {
+    const p = online.room?.players.find((x) => x.id === id);
+    if (!p || !(await ui.confirmDialog(`Remove ${p.name}?`, 'They leave the room and can\u2019t come back to it.', 'Remove'))) return;
+    online.kick(id);
+  }
+
+  // ---------------------------------------------------------------- matchmaking
+  function renderMatchmaking() {
+    const pick = $('#ol-mm-mode');
+    if (pick) pick.innerHTML = MM_MODES.map(([v, l]) => `<div class="opt ${st.mmMode === v ? 'sel' : ''}" data-mm="${v}">${l}</div>`).join('');
+    $$('[data-mm]').forEach((o) => o.addEventListener('click', () => { st.mmMode = o.dataset.mm; localStorage.setItem('stemstage.online.mm', st.mmMode); renderMatchmaking(); }));
+    $('#ol-find').innerHTML = st.mm ? `${fa('xmark')} Cancel search` : `${fa('magnifying-glass')} Find match`;
+  }
+  async function renderStats() {
+    const s = await lobbyStats();
+    const el = $('#ol-stats');
+    if (!el) return;
+    el.innerHTML = s ? `<span>${fa('door-open')} <b>${s.rooms}</b> open room${s.rooms === 1 ? '' : 's'}</span><span>${fa('users')} <b>${s.players}</b> playing</span><span>${fa('magnifying-glass')} <b>${s.searching}</b> searching</span>` : '';
+  }
+  async function matchmake() {
+    if (st.mm) { st.mm.abort.abort(); return; }
+    const p = profiles.current;
+    const abort = new AbortController();
+    st.mm = { abort, ticket: null };
+    renderMatchmaking();
+    const status = $('#ol-mm-status');
+    status.hidden = false;
+    status.innerHTML = `<i class="spin"></i> Looking for a ${st.mmMode === 'any' ? '' : `${st.mmMode} `}room near your skill (${p?.rating || START_RATING})…`;
+    try {
+      const res = await findMatch({ mode: st.mmMode, rating: p?.rating || START_RATING, signal: abort.signal,
+        onStatus: (s) => { st.mm.ticket = s.ticket; status.innerHTML = `<i class="spin"></i> Searching · ${s.waited} s · ${s.searching} player${s.searching === 1 ? '' : 's'} looking${s.rooms ? ` · ${s.rooms} open room${s.rooms === 1 ? '' : 's'}` : ''}`; } });
+      if (res.code) { status.innerHTML = `${fa('check')} Found a room · joining…`; app.engine.sfxUi('confirm'); joinCode(res.code); }
+      else {
+        // nobody around: open a public matchmaking room the next searchers are sent to
+        status.innerHTML = `${fa('tower-broadcast')} No room yet: opening one for the next players who search…`;
+        st.mmRoom = st.mmMode === 'any' ? 'versus' : st.mmMode;
+        st.public = true;
+        await host(true);
+        if (online.host && st.mmRoom) online.setMode(st.mmRoom);
+      }
+    } catch (e) {
+      if (e.message !== 'cancelled') ui.toast(`Matchmaking: ${e.message}`, 'err');
+      status.hidden = true;
+    } finally {
+      cancelMatch(st.mm?.ticket);
+      st.mm = null;
+      renderMatchmaking();
+      setTimeout(() => { if (!st.mm) status.hidden = true; }, 4000);
+    }
   }
 
   /** Rematch: the lobby button and the one on the results screen show who's in. */
@@ -227,7 +327,7 @@ export function installOnline(ui) {
   function publicSync(force = false) {
     const info = st.hostInfo;
     const room = online.connected && online.host ? online.room : null;
-    const listed = st.public && room && info?.hosting && info.internet && st.code;
+    const listed = st.public && room && info?.hosting && info.internet && st.code && !room.opts?.locked;
     if (!listed) {
       if (st.listedCode) { closeRoom(st.listedCode, st.publicKey); st.listedCode = null; st.pubSent = ''; }
       clearInterval(st.pubTimer); st.pubTimer = null;
@@ -237,6 +337,8 @@ export function installOnline(ui) {
     const body = {
       code: st.code, key: st.publicKey, name: `${online.me?.name || 'STEMSTAGE'}'s room`, host: online.me?.name || '', mode: room.mode || 'versus',
       song: room.song?.title || '', artist: room.song?.artist || '', players: room.players.length, max: room.max || 8, playing: room.phase === 'playing',
+      rating: Math.round(room.players.reduce((s, p) => s + (p.rating || START_RATING), 0) / Math.max(1, room.players.length)),
+      stage: room.opts?.stage || 'arena', gear: !!room.opts?.gear, mm: !!st.mmRoom,
     };
     const sig = JSON.stringify(body);
     if (!force && sig === st.pubSent && Date.now() - st.pubAt < 25000) return;
@@ -280,16 +382,6 @@ export function installOnline(ui) {
     connect(code);
   }
 
-  /** Quick match: the fullest open room in the lobby (or any open room). */
-  async function quickMatch() {
-    await renderBrowse(true);
-    const open = (st.rooms || []).filter((r) => compatible(r.version) && r.players < r.max);
-    const pick = open.sort((a, b) => (a.playing ? 1 : 0) - (b.playing ? 1 : 0) || b.players - a.players)[0];
-    if (!pick) { ui.toast(st.roomsErr ? 'Public rooms can\u2019t be reached right now' : 'No open public rooms right now: host one and make it public', 'err'); return; }
-    ui.toast(`Joining ${pick.name}…`);
-    joinCode(pick.code);
-  }
-
   /** The results screen of an online match: who won, the head-to-head record, and the rematch button. */
   function decorateResults(r) {
     const el = $('#res-verdict');
@@ -308,10 +400,22 @@ export function installOnline(ui) {
       const outcome = r.onlineDraw ? 'draw' : r.onlineWinnerId === online.id ? 'win' : 'loss';
       const winner = everyone.find((p) => p.id === r.onlineWinnerId);
       const opponents = everyone.filter((p) => p.id !== online.id).map((p) => p.name);
+      const firstTime = mine?.profileId && profiles.byId(mine.profileId)?.versus?.last !== r.matchId;
       const rec = mine?.profileId ? profiles.recordVersus(mine.profileId, { matchId: r.matchId, outcome, opponents }) : null;
+      let ratingLine = '';
+      const prof = mine?.profileId && profiles.byId(mine.profileId);
+      if (prof && firstTime) {
+        const opp = (st.lastLineup || []).filter((x) => x.id !== online.id);
+        const avg = opp.length ? opp.reduce((s, x) => s + x.rating, 0) / opp.length : START_RATING;
+        const before = prof.rating || START_RATING;
+        prof.rating = nextRating(before, avg, outcome === 'win' ? 1 : outcome === 'draw' ? 0.5 : 0);
+        profiles.saveSoon();
+        st.ratingLine = ` · rating ${prof.rating} (${prof.rating >= before ? '+' : ''}${prof.rating - before})`;
+      }
+      ratingLine = st.ratingLine || '';
       const vsOne = opponents.length === 1 && mine?.profileId ? profiles.versusAgainst(mine.profileId, opponents[0]) : null;
       const line = vsOne ? `You're ${vsOne.w}–${vsOne.l}${vsOne.d ? `–${vsOne.d}` : ''} against ${esc(opponents[0])}` : rec ? `Your record: ${rec.w}–${rec.l}${rec.d ? `–${rec.d}` : ''}` : 'Sign in to keep a win/loss record';
-      html = `<b class="${outcome}">${outcome === 'win' ? 'YOU WIN' : outcome === 'draw' ? 'DRAW' : `${esc(winner?.name || 'They').toUpperCase()} WINS`}</b><span>${line}${rec && rec.streak > 1 && outcome === 'win' ? ` · ${rec.streak} wins in a row` : ''}</span>`;
+      html = `<b class="${outcome}">${outcome === 'win' ? 'YOU WIN' : outcome === 'draw' ? 'DRAW' : `${esc(winner?.name || 'They').toUpperCase()} WINS`}</b><span>${line}${rec && rec.streak > 1 && outcome === 'win' ? ` · ${rec.streak} wins in a row` : ''}${ratingLine}</span>`;
       el.className = `res-verdict ${outcome}`;
     }
     if (mode === 'band') el.className = 'res-verdict band';
@@ -352,6 +456,7 @@ export function installOnline(ui) {
 
   // match start (everyone in the lineup gets this at the same moment)
   async function onStart(msg) {
+    st.ratingLine = '';
     const mine = msg.lineup.find((p) => p.id === online.id);
     if (!mine) { if (online.me?.spectator) render(); else ui.toast('Match started without you (song still downloading?)', 'err'); return; }
     const [song, audio] = await Promise.all([getSong(msg.song.id), getAudio(msg.song.id)]);
@@ -361,11 +466,12 @@ export function installOnline(ui) {
     ui.stopPreview?.();
     ui.show('hud');
     ui.lastPlay = { online: true };
-    ui.applyVenue(true);
-    ui.applyLooks(msg.lineup.map((r) => ({ instrument: r.instrument, look: r.look, profileId: r.id === online.id ? profiles.current?.id : null })));
+    app.stage.setVenue(msg.opts?.stage || 'arena'); // everyone plays on the host's stage (and meets its boss)
+    ui.applyLooks(msg.lineup.map((r) => ({ instrument: r.instrument, look: r.look, rig: r.rig, profileId: r.id === online.id ? profiles.current?.id : null })));
     const mic = mine.instrument === 'vocals' && settings.vocalMode === 'mic';
-    const cfg = { name: mine.name, color: mine.color, device: 'any', instrument: mine.instrument, difficulty: mine.difficulty, strum: mine.instrument !== 'drums' && ui.strumFor('any'), profileId: profiles.current?.id || null, mic, part: mic ? settings.vocalPart || 0 : 0 };
-    await app.game.start(song, audio, [cfg], { online: { client: online, lineup: msg.lineup, startAt: msg.startAt, matchId: msg.matchId, mode: msg.mode || 'versus' } });
+    const cfg = { name: mine.name, color: mine.color, device: 'any', instrument: mine.instrument, difficulty: mine.difficulty, strum: mine.instrument !== 'drums' && ui.strumFor('any'), profileId: profiles.current?.id || null, mic, part: mic ? settings.vocalPart || 0 : 0, gear: ui.gearFor(profiles.current?.id, mine.instrument, !!msg.opts?.gear) };
+    st.lastLineup = msg.lineup.map((r) => ({ id: r.id, rating: online.room?.players.find((p) => p.id === r.id)?.rating || START_RATING }));
+    await app.game.start(song, audio, [cfg], { online: { client: online, lineup: msg.lineup, startAt: msg.startAt, matchId: msg.matchId, mode: msg.mode || 'versus', seed: msg.seed, bosses: msg.opts?.bosses || 'random' } });
   }
 
   online.on('room', () => {
@@ -407,6 +513,17 @@ export function installOnline(ui) {
     if (ui.screen === 'online') render();
   });
   online.on('reconnect-failed', (reason) => ui.toast(`Could not reconnect: ${reason}`, 'err'));
+  online.on('reconnecting', (n) => { const s = $('#ol-status'); if (s) s.textContent = `Reconnecting (try ${n} of 5)…`; });
+  online.on('countdown', (at) => {
+    st.countdown = at;
+    const el = $('#ol-countdown');
+    clearInterval(st.cdTimer);
+    if (!at) { el.hidden = true; return; }
+    el.hidden = false;
+    const tick = () => { const s = Math.ceil((at - performance.now()) / 1000); el.innerHTML = s > 0 ? `${fa('forward-fast')} Everyone's ready · starting in <b>${s}</b>` : `${fa('play')} Here we go!`; if (s <= 0) clearInterval(st.cdTimer); };
+    tick(); st.cdTimer = setInterval(tick, 200);
+    app.engine.sfxTick(0, true);
+  });
   $$('[data-reaction]').forEach((button) => button.addEventListener('click', () => online.react(button.dataset.reaction)));
 
   $('#ol-chat-input').addEventListener('keydown', (e) => {
@@ -448,6 +565,7 @@ export function installOnline(ui) {
     'ol-invite': () => invitePopup(),
     'ol-leave': () => { if (online.host) { ui.actionHooks['ol-stop'](); return; } online.close(); discord.menus(); render(); },
     'ol-ready': () => setMine({ ready: !me()?.ready }),
+    'ol-spectate': () => online.spectate(!me()?.spectator),
     'ol-choose': () => { ui.mode = 'online-pick'; ui.show('library'); },
     'ol-start': () => online.start(),
     'ol-rematch': () => {
@@ -463,7 +581,7 @@ export function installOnline(ui) {
       refreshHost();
       ui.toast(st.public ? 'Your room is listed in Public rooms' : 'Your room is private again (invite code only)', 'ok');
     },
-    'ol-quick': () => quickMatch(),
+    'ol-quick': () => matchmake(),
     'ol-refresh': () => { delete $('#ol-browse').dataset.html; renderBrowse(true); },
     'ol-chat': () => {
       const el = $('#ol-chat-input');
@@ -476,6 +594,12 @@ export function installOnline(ui) {
     if (which === 'ol-inst') { const avail = online.room?.song?.instruments?.length ? online.room.song.instruments : INSTS; setMine({ instrument: avail[(avail.indexOf(st.inst) + d + avail.length) % avail.length] }); return true; }
     if (which === 'ol-diff') { setMine({ difficulty: DIFFS[Math.max(0, Math.min(3, DIFFS.indexOf(st.diff) + d))] }); return true; }
     if (which === 'ol-mode') { const i = MATCH_MODES.findIndex(([v]) => v === (online.room?.mode || 'versus')); pickMode(MATCH_MODES[(i + d + MATCH_MODES.length) % MATCH_MODES.length][0]); return true; }
+    if (which === 'ol-mm-mode') { const i = MM_MODES.findIndex(([v]) => v === st.mmMode); st.mmMode = MM_MODES[(i + d + MM_MODES.length) % MM_MODES.length][0]; localStorage.setItem('stemstage.online.mm', st.mmMode); renderMatchmaking(); return true; }
+    if (!online.host || !online.room) return false;
+    const o = online.room.opts;
+    if (which === 'ol-stage') { const list = hostStages(); online.setOpts({ stage: list[(Math.max(0, list.indexOf(o.stage)) + d + list.length) % list.length] }); return true; }
+    if (which === 'ol-bosses') { const l = ['random', 'always', 'off']; online.setOpts({ bosses: l[(l.indexOf(o.bosses) + d + 3) % 3] }); return true; }
+    if (which === 'ol-max') { online.setOpts({ max: Math.max(2, Math.min(8, o.max + d)) }); return true; }
     return false;
   });
 

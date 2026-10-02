@@ -1,11 +1,12 @@
 {
   "name": "stemstage",
-  "version": "1.8.9",
+  "version": "2.0.0",
   "private": true,
   "description": "The rhythm game that plays any song: AI (Demucs) splits it into stems and charts guitar, bass, drums, keys and vocals. Desktop app (Tauri), DualSense via pydualsense, Rock Band gear, MIDI.",
   "type": "module",
   "scripts": {
     "tauri": "tauri",
+    "test": "node --test tests/online-room.test.js tests/online-v2.test.js tests/v2.test.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
