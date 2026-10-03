@@ -208,8 +208,9 @@ function buildFigure() {
     const s = add(hair.spiky, new THREE.ConeGeometry(0.025, 0.1 + (k % 3) * 0.02, 5), mats.hair, Math.sin(a) * 0.07 * ring, 0.1 + (1 - ring) * 0.03, Math.cos(a) * 0.07 * ring - 0.01);
     s.quaternion.setFromUnitVectors(V(0, 1, 0), V(s.position.x, s.position.y + 0.04, s.position.z + 0.01).normalize());
   }
-  const afro = new THREE.SphereGeometry(0.2, 36, 24, 0, Math.PI * 2, 0, Math.PI * 0.6); afro.scale(1, 0.88, 0.95); bumpy(afro, 0.012, 55, 5);
-  add(H('afro'), afro, mats.hair, 0, 0.02, -0.03);
+  // big and round, but its lower edge stays above the brows
+  const afro = new THREE.SphereGeometry(0.2, 36, 24, 0, Math.PI * 2, 0, Math.PI * 0.47); afro.scale(1.05, 0.95, 1); bumpy(afro, 0.012, 55, 5);
+  add(H('afro'), afro, mats.hair, 0, 0.065, -0.045);
   add(H('ponytail'), capGeo(0.129, 0.53), mats.hair);
   add(hair.ponytail, tube([V(0, 0.06, -0.12), V(0, 0.0, -0.17), V(0, -0.12, -0.19), V(0, -0.28, -0.16)], 0.03, 14, 8), mats.hair);
   add(hair.ponytail, new THREE.TorusGeometry(0.03, 0.009, 6, 12), mats.leather, 0, 0.045, -0.135).rotation.x = 1.2;
