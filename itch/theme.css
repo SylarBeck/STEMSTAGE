@@ -1,0 +1,277 @@
+/* STEMSTAGE on itch.io: custom CSS for the game page (Edit game → Edit theme → CSS).
+ *
+ * Same look as the game and the website: a dark stage, bone-coloured type, stencil headings with a red pass that
+ * didn't line up, masking-tape labels and polaroid screenshots. Set the theme editor's colours too (itch/README.md):
+ * they carry most of the look on their own, for pages where custom CSS isn't switched on.
+ *
+ * Selectors only use itch's page classes (.inner_column, .formatted_description, .buy_row, .screenshot_list, …),
+ * never #wrapper or body, so they work whether or not itch puts its own prefix in front of each rule.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@500;600;700;800&family=Big+Shoulders+Stencil+Display:wght@900&family=Permanent+Marker&display=swap');
+
+/* ------------------------------------------------------------ the page */
+.inner_column {
+  --ss-bg: #0b0a09;
+  --ss-panel: #12100e;
+  --ss-panel-2: #1a1714;
+  --ss-ink: #ece5d3;
+  --ss-dim: #a59d8b;
+  --ss-faint: #6c6558;
+  --ss-line: rgba(236, 229, 211, 0.12);
+  --ss-red: #df3a2c;
+  --ss-red-deep: #9e1f16;
+  --ss-gold: #f0b429;
+  --ss-paper: #f1ead7;
+  --ss-dark: #15120e;
+  --ss-display: 'Anton', Impact, 'Arial Narrow Bold', sans-serif;
+  --ss-stencil: 'Big Shoulders Stencil Display', 'Anton', Impact, sans-serif;
+  --ss-body: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif;
+  --ss-hand: 'Permanent Marker', 'Segoe Print', cursive;
+  background-color: rgba(18, 16, 14, 0.94);
+  color: var(--ss-ink);
+  font-family: var(--ss-body);
+  border-top: 6px solid var(--ss-red);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65);
+}
+.inner_column a { color: var(--ss-gold); }
+.inner_column a:hover { color: var(--ss-ink); }
+
+/* the banner (Edit theme → Banner) sits edge to edge; without one, the title is the stencil logo */
+.header img { display: block; width: 100%; height: auto; }
+.header .game_title,
+.inner_column h1.game_title {
+  font-family: var(--ss-stencil);
+  font-weight: 900;
+  font-size: clamp(44px, 9vw, 92px);
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--ss-ink);
+  text-shadow: 0.045em 0.045em 0 var(--ss-red);
+}
+
+/* ------------------------------------------------------------ the description */
+.formatted_description {
+  font-family: var(--ss-body);
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #d9d1bf;
+}
+.formatted_description p { margin: 0 0 1em; }
+.formatted_description strong { color: var(--ss-ink); font-weight: 800; }
+.formatted_description em { color: var(--ss-dim); }
+
+/* section headings: a strip of masking tape with marker on it */
+.formatted_description h2 {
+  display: inline-block;
+  margin: 1.6em 0 0.7em -6px;
+  padding: 0.28em 0.9em 0.22em;
+  font-family: var(--ss-hand);
+  font-weight: 400;
+  font-size: 25px;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: var(--ss-dark);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(0, 0, 0, 0.04)), var(--ss-paper);
+  transform: rotate(-1.6deg);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  /* torn tape ends */
+  clip-path: polygon(0 8%, 2% 0, 98% 4%, 100% 0, 99% 50%, 100% 100%, 97% 94%, 3% 100%, 0 92%, 1.5% 50%);
+}
+.formatted_description h2:nth-of-type(even) { transform: rotate(1.2deg); }
+.formatted_description > h2:first-child {
+  /* the first heading is the pitch: the stencil logo style instead of tape */
+  display: block;
+  margin: 0.3em 0 0.5em;
+  padding: 0;
+  font-family: var(--ss-display);
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.02;
+  text-transform: uppercase;
+  color: var(--ss-ink);
+  background: none;
+  box-shadow: none;
+  clip-path: none;
+  transform: none;
+  text-shadow: 0.05em 0.05em 0 var(--ss-red);
+}
+.formatted_description h3 {
+  margin: 1.2em 0 0.4em;
+  font-family: var(--ss-display);
+  font-weight: 400;
+  font-size: 24px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ss-gold);
+}
+
+/* feature lists: red fret markers */
+.formatted_description ul { list-style: none; margin: 0 0 1.2em; padding: 0; }
+.formatted_description ul li {
+  position: relative;
+  margin: 0 0 0.55em;
+  padding: 0 0 0 26px;
+}
+.formatted_description ul li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.5em;
+  width: 12px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--ss-red);
+  box-shadow: 0 0 0 2px rgba(223, 58, 44, 0.25);
+}
+.formatted_description ul li:nth-child(5n + 2)::before { background: #2ed24f; box-shadow: 0 0 0 2px rgba(46, 210, 79, 0.25); }
+.formatted_description ul li:nth-child(5n + 3)::before { background: #ffd21f; box-shadow: 0 0 0 2px rgba(255, 210, 31, 0.25); }
+.formatted_description ul li:nth-child(5n + 4)::before { background: #2f84f0; box-shadow: 0 0 0 2px rgba(47, 132, 240, 0.25); }
+.formatted_description ul li:nth-child(5n + 5)::before { background: #ff8a1a; box-shadow: 0 0 0 2px rgba(255, 138, 26, 0.25); }
+
+/* screenshots in the text: taped-up polaroids */
+.formatted_description img {
+  display: block;
+  box-sizing: border-box;
+  max-width: 100%;
+  height: auto;
+  margin: 1.4em auto 1.8em;
+  padding: 8px 8px 30px;
+  background: #f5f1e6;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.6);
+  transform: rotate(-0.8deg);
+}
+.formatted_description p:nth-of-type(even) img { transform: rotate(0.9deg); }
+
+.formatted_description hr {
+  height: 0;
+  margin: 2.2em 0;
+  border: 0;
+  border-top: 2px dashed rgba(236, 229, 211, 0.22);
+}
+
+/* install table: stencil labels, thin rules */
+.formatted_description table { width: 100%; border-collapse: collapse; margin: 0 0 1em; }
+.formatted_description th,
+.formatted_description td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ss-line);
+  text-align: left;
+  vertical-align: top;
+}
+.formatted_description th {
+  width: 34%;
+  font-family: var(--ss-display);
+  font-weight: 400;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ss-gold);
+}
+
+.formatted_description blockquote {
+  margin: 1.4em 0;
+  padding: 12px 16px;
+  border-left: 5px solid var(--ss-red);
+  background: rgba(223, 58, 44, 0.08);
+  color: var(--ss-dim);
+  font-size: 17px;
+}
+.formatted_description blockquote p { margin: 0; }
+.formatted_description code {
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: var(--ss-panel-2);
+  color: var(--ss-ink);
+  font-size: 0.9em;
+}
+
+/* ------------------------------------------------------------ buttons, download box, uploads */
+.inner_column .button {
+  border: 0;
+  border-radius: 2px;
+  background: var(--ss-red);
+  color: #fff;
+  font-family: var(--ss-body);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: none;
+  box-shadow: 4px 4px 0 var(--ss-red-deep);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.inner_column .button:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ss-red-deep); color: #fff; }
+.inner_column .button:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ss-red-deep); }
+
+.buy_row,
+.purchase_banner,
+.donate_box {
+  background: var(--ss-panel-2);
+  border: 1px solid var(--ss-line);
+  border-top: 4px solid var(--ss-red);
+  color: var(--ss-ink);
+}
+.buy_row .buy_message,
+.purchase_banner .buy_message { color: var(--ss-dim); font-family: var(--ss-body); font-size: 17px; }
+
+.uploads .upload {
+  padding: 10px 12px;
+  border: 1px solid var(--ss-line);
+  border-left: 4px solid var(--ss-gold);
+  background: rgba(26, 23, 20, 0.85);
+}
+.uploads .upload + .upload { margin-top: 8px; }
+.uploads .upload_name .name { font-family: var(--ss-display); font-weight: 400; font-size: 19px; letter-spacing: 0.02em; color: var(--ss-ink); overflow-wrap: anywhere; }
+.uploads .file_size,
+.uploads .upload_date { color: var(--ss-dim); font-family: var(--ss-body); }
+
+/* ------------------------------------------------------------ side column, info panel, comments */
+.screenshot_list img,
+.screenshot_list a img {
+  box-sizing: border-box;
+  padding: 6px 6px 20px;
+  background: #f5f1e6;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+  transform: rotate(-1deg);
+}
+.screenshot_list a:nth-child(even) img { transform: rotate(1.1deg); }
+.screenshot_list a:hover img { transform: rotate(0deg) scale(1.02); }
+
+.more_information_toggle .toggle_info_btn,
+.more_information_toggle a {
+  font-family: var(--ss-body);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ss-gold);
+}
+.game_info_panel_widget { font-family: var(--ss-body); font-size: 17px; color: var(--ss-ink); }
+.game_info_panel_widget td { border-color: var(--ss-line); }
+.game_info_panel_widget td:first-child { color: var(--ss-dim); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+
+.game_comments_widget h2,
+.inner_column .community_post_list_widget h2 {
+  font-family: var(--ss-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--ss-ink);
+  text-shadow: 0.05em 0.05em 0 var(--ss-red);
+}
+
+/* ------------------------------------------------------------ phones */
+@media (max-width: 700px) {
+  .formatted_description { font-size: 18px; }
+  .formatted_description h2 { font-size: 21px; margin-left: 0; }
+  .formatted_description th { width: auto; display: block; padding-bottom: 0; border-bottom: 0; }
+  .formatted_description td { display: block; padding-top: 4px; }
+  .formatted_description img { padding: 6px 6px 22px; }
+}
+
+/* calmer for people who asked their system for less motion */
+@media (prefers-reduced-motion: reduce) {
+  .inner_column .button,
+  .screenshot_list a img { transition: none; }
+  .screenshot_list a:hover img { transform: none; }
+}

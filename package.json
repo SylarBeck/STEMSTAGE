@@ -15,6 +15,7 @@
     "bridge": "powershell -ExecutionPolicy Bypass -File server/start-bridge.ps1",
     "art": "node tools/render-controllers.mjs",
     "brand": "node tools/render-brand.mjs",
+    "itch": "node tools/render-itch.mjs",
     "start": "node server/app.js",
     "desktop:dev": "tauri dev",
     "desktop:build": "node tools/desktop-build.mjs",

@@ -1,0 +1,167 @@
+<!doctype html>
+<!-- Made by tools/render-itch.mjs (npm run itch) from itch/description.html and itch/theme.css. A local look only: -->
+<!-- the page layout below approximates itch.io's, and the fonts come from brand/fonts instead of Google Fonts. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>STEMSTAGE itch page preview</title>
+<style>
+  @font-face { font-family: 'Anton'; src: url('../brand/fonts/Anton-Regular.ttf') format('truetype'); font-weight: 400; }
+  @font-face { font-family: 'Barlow Condensed'; src: url('../brand/fonts/BarlowCondensed-SemiBold.ttf') format('truetype'); font-weight: 500; }
+  @font-face { font-family: 'Barlow Condensed'; src: url('../brand/fonts/BarlowCondensed-SemiBold.ttf') format('truetype'); font-weight: 600; }
+  @font-face { font-family: 'Barlow Condensed'; src: url('../brand/fonts/BarlowCondensed-Bold.ttf') format('truetype'); font-weight: 700; }
+  @font-face { font-family: 'Barlow Condensed'; src: url('../brand/fonts/BarlowCondensed-ExtraBold.ttf') format('truetype'); font-weight: 800; }
+  @font-face { font-family: 'Big Shoulders Stencil Display'; src: url('../brand/fonts/BigShouldersStencilDisplay-Black.ttf') format('truetype'); font-weight: 900; }
+  @font-face { font-family: 'Permanent Marker'; src: url('../brand/fonts/PermanentMarker-Regular.ttf') format('truetype'); font-weight: 400; }
+  /* itch's layout, roughly */
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.4 'Barlow Condensed', sans-serif; }
+  #wrapper { min-height: 100vh; padding: 40px 16px 60px; background: #0b0a09 url('background.png') center top / cover fixed no-repeat; }
+  .inner_column { max-width: 960px; margin: 0 auto; }
+  .header img { max-width: 100%; }
+  .columns { display: flex; gap: 0; }
+  .left_col { flex: 1 1 60%; min-width: 0; padding: 20px 30px 30px; }
+  .right_col { flex: 0 0 34%; padding: 20px 20px 30px 0; }
+  .screenshot_list a { display: block; margin: 0 0 16px; }
+  .screenshot_list img { display: block; width: 100%; }
+  .buy_row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px; margin: 0 0 24px; }
+  .button { display: inline-block; padding: 10px 18px; font-size: 18px; text-decoration: none; cursor: pointer; }
+  .uploads { margin: 26px 0; }
+  .upload { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .upload .info_column { min-width: 0; flex: 1 1 200px; }
+  .upload .download_btn { padding: 7px 14px; font-size: 15px; }
+  .more_information_toggle { margin: 22px 0; }
+  .game_info_panel_widget table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .game_info_panel_widget td { padding: 6px 8px; border-bottom: 1px solid; }
+  .game_comments_widget { padding: 0 30px 30px; }
+  @media (max-width: 700px) {
+    #wrapper { padding: 0 0 40px; }
+    .columns { flex-direction: column; }
+    .left_col { padding: 16px; }
+    .right_col { padding: 0 16px 16px; }
+  }
+</style>
+<link rel="stylesheet" href="theme.css" />
+</head>
+<body>
+<div id="wrapper" class="main wrapper">
+  <div class="inner_column size_large">
+    <div class="header has_image"><img src="banner.png" width="960" alt="STEMSTAGE: any song, any instrument, split by AI" /></div>
+    <div class="columns">
+      <div class="left_col column">
+        <div class="buy_row">
+          <a class="button buy_btn" href="#download">Download</a>
+          <span class="buy_message">Free · Windows and Linux</span>
+        </div>
+        <div class="formatted_description user_formatted">
+          <h2>The rhythm game that plays any song</h2>
+          <p><strong>Drop in a track and STEMSTAGE splits it into stems with AI.</strong> Every part becomes a playable chart: guitar, bass, drums, keys and vocals, from Easy to Expert, with overdrive phrases. Play it on a gamepad, Rock Band gear, a DualSense, a MIDI kit, or your real guitar, bass and keyboard.</p>
+          <p><img src="https://stemstage.varconstint.com/img/v2-bossfight.webp" alt="A boss fight: the Leviathan attacks the guitar highway in the Abyssal Aquarium"></p>
+          
+          <h2>New in 2.0: worlds, bosses and Backstage</h2>
+          <ul>
+          <li><strong>Five worlds, five bosses.</strong> The Abyssal Aquarium, Orbital Nebula, Volcanic Forge, Crystal Aurora and Storm Citadel, each with its own boss. A boss can show up mid-song: hit notes to damage it while it attacks your highway with ink, gravity wells, heat haze, frost and lightning. Bosses never change your score, so the boards stay fair.</li>
+          <li><strong>Backstage.</strong> Build your rock star in a 3D dressing room: 10 hair styles, facial hair, eyewear, hats, jackets, hoodies, coats, LED trim and five stage moves. Then your instruments: guitar and bass bodies, drum kits, keytar and mics, with paint, hardware and LED glow.</li>
+          <li><strong>Gear.</strong> Level up four parts of each instrument and equip up to three pedals: more overdrive, streak shields, a wider timing window, boss damage and more.</li>
+          <li><strong>Stage creator.</strong> Pick backdrops, floors, light rigs, props, atmosphere and the crowd, then play any song on your own stage.</li>
+          <li><strong>Cash.</strong> Every song pays, and bosses pay more. Spend it on wardrobe, upgrades, pedals and stage props.</li>
+          </ul>
+          <p><img src="https://stemstage.varconstint.com/img/v2-backstage-character.webp" alt="Backstage: dressing a band member with a leather jacket and a red guitar"></p>
+          
+          <h2>Any song, any part</h2>
+          <ul>
+          <li><strong>AI stems.</strong> Demucs splits drums, bass, guitar, piano, vocals and the rest on your graphics card (the CPU works too).</li>
+          <li><strong>AI charts.</strong> basic-pitch transcribes the notes, and the auto-charter builds all four difficulties with overdrive phrases.</li>
+          <li><strong>Import from anywhere.</strong> Audio files, a YouTube search or a whole playlist, with cover art and song details looked up for you.</li>
+          <li><strong>Chart editor.</strong> Fix any AI chart by hand while it plays, with a controller, keyboard or mouse.</li>
+          </ul>
+          
+          <h2>Play your way</h2>
+          <ul>
+          <li><strong>Every controller.</strong> Xbox, DualShock 4, Switch Pro, Joy-Con, Rock Band and Guitar Hero guitars and drums, MIDI e-kits and keyboards, and two keyboard layouts.</li>
+          <li><strong>DualSense done properly.</strong> Adaptive triggers that click like frets and buzz on sustains, haptics and the lightbar, over USB or Bluetooth.</li>
+          <li><strong>Real instruments.</strong> Plug in a guitar or bass and read scrolling tablature, or play the keys part on a MIDI keyboard.</li>
+          <li><strong>Sing.</strong> A karaoke pitch track with AI lyrics, and harmony parts for up to three singers.</li>
+          <li><strong>Pro mode.</strong> Tighter timing for players who want it, and more XP for it.</li>
+          </ul>
+          <p><img src="https://stemstage.varconstint.com/img/real-guitar.webp" alt="Real guitar mode: a scrolling tablature of strings and frets"></p>
+          
+          <h2>Play together</h2>
+          <ul>
+          <li><strong>Up to 4 players on one PC</strong>, each with their own highway. Your overdrive brings a failed bandmate back.</li>
+          <li><strong>Online without port forwarding.</strong> Host a room and share the invite code, or press Find match to get matched by mode, skill and region. The song is sent to your friends for you.</li>
+          <li><strong>Versus, Battle or Band.</strong> Highest score wins; overdrive attacks that shake up the leader; or one band score together. Rematch with one press, or watch as a spectator.</li>
+          <li><strong>Public rooms and Discord invites</strong> to find a game.</li>
+          </ul>
+          <p><img src="https://stemstage.varconstint.com/img/v2-world-forge.webp" alt="The Volcanic Forge: the Magma Titan rises over a lava stage"></p>
+          
+          <h2>Climb the world</h2>
+          <ul>
+          <li><strong>World leaderboards</strong> for every song part, all on one ranked chart: the game lines it up with your own copy of the song, so everyone plays the same notes.</li>
+          <li><strong>Weekly challenge and seasons.</strong> One song part a week, and season points for where you place.</li>
+          <li><strong>Boss hall of fame.</strong> The fastest and most boss kills, on the website.</li>
+          <li><strong>Chart library.</strong> Every song players have charted. Players vote better charts in.</li>
+          <li><strong>Tour and career.</strong> Venues from the Garage to a festival main stage, a daily challenge, levels and 34 achievements.</li>
+          </ul>
+          
+          <h2>And the rest</h2>
+          <ul>
+          <li><strong>Practice.</strong> Slow any song down without changing its pitch, and start at any bar.</li>
+          <li><strong>Ghosts and replays.</strong> Watch any run back, or race your best as a ghost.</li>
+          <li><strong>Stream mode.</strong> Twitch chat votes for the next song and requests songs, with an OBS overlay.</li>
+          <li><strong>Accessibility.</strong> Colour-blind palettes, calm visuals, lane assist and auto sustain.</li>
+          <li><strong>Export</strong> to Clone Hero and YARG chart packs.</li>
+          </ul>
+          <p><img src="https://stemstage.varconstint.com/img/v2-backstage-stage.webp" alt="The stage creator: picking a velvet curtain backdrop"></p>
+          
+          <hr>
+          
+          <h2>Install</h2>
+          <table>
+          <tbody>
+          <tr><th>Windows 10 / 11</th><td>Download the installer (<strong>…_x64-setup.exe</strong>) and run it.</td></tr>
+          <tr><th>Linux x86-64</th><td>The <strong>AppImage</strong> (make it executable, then run it), or the <strong>.deb</strong> / <strong>.rpm</strong> package.</td></tr>
+          <tr><th>AI splitter</th><td>Offered during setup: a 3–5 GB download. An NVIDIA graphics card makes splitting about 10× faster.</td></tr>
+          <tr><th>Graphics</th><td>Any graphics card with WebGL 2.</td></tr>
+          </tbody>
+          </table>
+          <p>Everything else comes with the app, and it updates itself when a new version is out.</p>
+          
+          <h2>Free and open source</h2>
+          <p>STEMSTAGE is free and MIT licensed.<br>
+          <a href="https://stemstage.varconstint.com/">Website</a> · <a href="https://stemstage.varconstint.com/play/">Play online and bosses</a> · <a href="https://stemstage.varconstint.com/leaderboard/">World leaderboard</a> · <a href="https://github.com/SylarBeck/STEMSTAGE">Source code</a> · <a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a></p>
+          <blockquote><p>Only import music you have the rights to use. Your songs stay on your PC: online, they're sent only to the friends in your room, and the world leaderboard gets charts and scores, never audio.</p></blockquote>
+          <p><em>Made with three.js, Tauri, Demucs, basic-pitch and faster-whisper. Lyrics from LRCLIB, song details from MusicBrainz.</em></p>
+          
+        </div>
+        <div class="more_information_toggle">
+          <a class="toggle_info_btn" href="#info">More information</a>
+          <div class="game_info_panel_widget"><table><tbody>
+            <tr><td>Status</td><td>In development</td></tr>
+            <tr><td>Platforms</td><td>Windows, Linux</td></tr>
+            <tr><td>Genre</td><td>Rhythm</td></tr>
+            <tr><td>Tags</td><td>Guitar Hero, Rock Band, Music, AI, Multiplayer, Local multiplayer, Open Source</td></tr>
+          </tbody></table></div>
+        </div>
+        <div class="uploads" id="download">
+          <div class="upload"><div class="info_column"><div class="upload_name"><strong class="name">STEMSTAGE_x.y.z_x64-setup.exe</strong> <span class="file_size">40 MB</span></div></div><a class="button download_btn" href="#">Download</a></div>
+          <div class="upload"><div class="info_column"><div class="upload_name"><strong class="name">STEMSTAGE_x.y.z_amd64.AppImage</strong> <span class="file_size">150 MB</span></div></div><a class="button download_btn" href="#">Download</a></div>
+          <div class="upload"><div class="info_column"><div class="upload_name"><strong class="name">STEMSTAGE_x.y.z_amd64.deb</strong> <span class="file_size">70 MB</span></div></div><a class="button download_btn" href="#">Download</a></div>
+        </div>
+      </div>
+      <div class="right_col column">
+        <div class="screenshot_list">
+          <a href="#"><img class="screenshot" src="../site/img/v2-bossfight.webp" alt="v2-bossfight" /></a>
+          <a href="#"><img class="screenshot" src="../site/img/v2-world-aquarium.webp" alt="v2-world-aquarium" /></a>
+          <a href="#"><img class="screenshot" src="../site/img/v2-backstage-character.webp" alt="v2-backstage-character" /></a>
+          <a href="#"><img class="screenshot" src="../site/img/v2-world-nebula.webp" alt="v2-world-nebula" /></a>
+          <a href="#"><img class="screenshot" src="../site/img/gameplay.webp" alt="gameplay" /></a>
+        </div>
+      </div>
+    </div>
+    <div class="game_comments_widget"><h2>Comments</h2></div>
+  </div>
+</div>
+</body>
+</html>
