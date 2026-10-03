@@ -10,7 +10,33 @@ Open **Play → Band**. Each player presses a button on their own controller to 
 2. Friends open **Online → Join**, type the code (spaces or dashes, any case) and press **Join**.
 3. The host picks a song and a **match type**. Friends who don't have the song download it from the host automatically. Then everyone readies up and the host starts the match.
 
-A room holds up to 8 players.
+A room holds up to 8 players. Everyone has to run the same version (2.0.x plays with 2.0.x); a game on another version is told to update.
+
+### Find match
+
+**Online → Join → Find match** (or **Find match** on the website's [Play online](https://stemstage.varconstint.com/play/) page, which opens the game) picks a match type (any, versus, battle, band) and puts you in the best open room: the same version, room for one more, not mid-song, players near your **skill rating**, and on your continent when there's a choice. The search widens the longer it runs. If nobody is around after about 20 seconds, the game opens a public matchmaking room and the next players who search are sent to it.
+
+Your **skill rating** starts at 1000 and goes up or down after every online versus or battle match (Elo, against the average of your opponents). It only steers matchmaking.
+
+### Host controls
+
+The host's lobby has:
+
+| | |
+|---|---|
+| **Stage** | Any venue or world the host has opened. Everyone plays there, and in a world everyone meets its boss at the same moment ([Worlds and Bosses](Worlds-and-Bosses)). |
+| **Bosses** | Random, always or off. |
+| **Room size** | 2–8 players. |
+| **Gear counts** | Whether instrument upgrades and pedals ([Backstage](Backstage)) apply in this room. Off by default, so versus matches are even. |
+| **Lock room** | Nobody new can join (players who drop out can still come back). Locked rooms aren't listed publicly. |
+| **Auto-start** | The match starts by itself 3 seconds after everyone has the song and is ready. |
+| **Kick** | The ✕ next to a player removes them; they can't rejoin this room. |
+
+Every player row shows their **ping** to the host and their skill rating. **Watch** lets a player spectate the next songs instead of playing.
+
+### Dropped connections
+
+The room pings every connection every few seconds and drops ones that stopped answering, so a closed laptop doesn't hold a slot. Your game notices a silent connection within about 10 seconds and reconnects by itself (up to 5 tries, waiting longer each time), back into your seat.
 
 ### Match types
 
@@ -32,7 +58,7 @@ The **This room** panel in the lobby shows how many matches each player has won 
 
 ### Public rooms
 
-By default a room is private: only people with the invite code can join. The host can press **Private room** under the invite code to make it a **Public room**. It's then listed in **Online → Join → Public rooms** in every copy of the game, and on the website at <https://stemstage.varconstint.com/join/>. **Quick match** joins the fullest open room. Rooms from a different version of the game are shown but can't be joined. The listing updates every 30 seconds and disappears when the host stops hosting (or within 90 seconds if the game closes). Rooms on the local network can't be public.
+By default a room is private: only people with the invite code can join. The host can press **Private room** under the invite code to make it a **Public room**. It's then listed in **Online → Join → Public rooms** in every copy of the game, and on the website at <https://stemstage.varconstint.com/play/> with its stage, boss, skill level and region. Rooms from a different version of the game are shown but can't be joined. The listing updates every 30 seconds and disappears when the host stops hosting (or within 90 seconds if the game closes). Rooms on the local network can't be public.
 
 **From Discord:** while you're in a room, friends can press **Join** on your Discord status instead of typing the code (see [Discord](Discord#join-from-discord)).
 

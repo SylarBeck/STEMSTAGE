@@ -30,6 +30,7 @@ npx wrangler d1 execute stemstage --remote --file migrations/0004_rooms.sql     
 npx wrangler d1 execute stemstage --remote --file migrations/0005_challenges.sql     # 1.8.0: weekly challenges
 npx wrangler d1 execute stemstage --remote --file migrations/0006_security.sql       # 1.8.1: verified Discord links, vote + score checks
 npx wrangler d1 execute stemstage --remote --file migrations/0007_song_search.sql    # indexed title/artist search
+npx wrangler d1 execute stemstage --remote --file migrations/0008_v2.sql             # 2.0.0: matchmaking + boss hall of fame
 npx wrangler deploy
 ```
 

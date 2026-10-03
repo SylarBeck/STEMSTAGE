@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- only this site's scripts, the world API and the fonts / icons it loads -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self' https://api.stemstage.varconstint.com http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Play STEMSTAGE online</title>
+  <meta name="description" content="Find a STEMSTAGE match, join an open room, and see who beat the five world bosses fastest." />
+  <meta property="og:title" content="Play STEMSTAGE online" />
+  <meta property="og:description" content="Open rooms, matchmaking and the boss hall of fame for STEMSTAGE 2.0." />
+  <meta property="og:image" content="https://stemstage.varconstint.com/img/v2-bossfight.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#0b0a09" />
+  <link rel="icon" href="../img/favicon.png" />
+  <link rel="apple-touch-icon" href="../img/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,800&family=Big+Shoulders+Stencil+Display:wght@900&family=Permanent+Marker&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <link rel="stylesheet" href="../css/site.css" />
+  <style>
+    .page-head { padding: 34px 0 10px; }
+    .page-head .scrawl { font-size: clamp(18px, 4.6vw, 24px); margin: 14px 0 0 4px; color: var(--ink); opacity: 0.9; }
+    .page-head p { color: var(--dim); max-width: 720px; margin: 14px 0 0; }
+    @media (min-width: 720px) { .page-head { padding: 54px 0 16px; } }
+    .grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; padding-top: 22px; }
+    @media (min-width: 1000px) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); align-items: start; } }
+    .panel h2 { font-family: var(--display); font-weight: 400; font-size: 28px; line-height: 1.05; text-transform: uppercase; margin: 0 0 14px; display: flex; align-items: center; gap: 10px; }
+    .panel h2 i { color: var(--gold); font-size: 22px; }
+    .modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+    .modes button { font: inherit; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; font-size: 15px; padding: 10px 4px; border: 2px solid var(--line-2); background: transparent; color: var(--dim); cursor: pointer; }
+    .modes button[aria-pressed="true"] { border-color: var(--gold); color: var(--ink); background: rgba(240, 180, 41, 0.12); }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+    .stat { padding: 12px; border: 1.5px dashed var(--line-2); text-align: center; }
+    .stat b { display: block; font-family: var(--display); font-weight: 400; font-size: 34px; line-height: 1; }
+    .stat span { color: var(--dim); font-size: 13px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+    .how { margin: 16px 0 0; padding-left: 20px; color: var(--dim); font-size: 17px; }
+    .filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+    .filters select, .filters label { min-width: 0; }
+    .filters label { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--dim); }
+    .rooms { display: grid; gap: 8px; }
+    .room { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 12px 14px; background: rgba(236, 229, 211, 0.04); border-left: 5px solid var(--bc, var(--red)); }
+    .room b { font-family: var(--display); font-weight: 400; font-size: 22px; line-height: 1.1; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .room small { grid-column: 1; color: var(--dim); font-size: 15px; }
+    .room .acts { grid-row: 1 / 3; grid-column: 2; display: flex; gap: 6px; }
+    .room .acts .btn { min-height: 40px; padding: 6px 12px; font-size: 15px; }
+    .room.full, .room.playing { opacity: 0.6; }
+    .tag { display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; padding: 0 6px; border: 1.5px solid currentColor; margin-left: 6px; vertical-align: 3px; }
+    .empty { padding: 16px; border: 1.5px dashed var(--line-2); color: var(--dim); }
+    .section-h { font-family: var(--display); font-weight: 400; font-size: clamp(34px, 6vw, 52px); text-transform: uppercase; margin: 64px 0 6px; line-height: 1; }
+    .bosses { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 18px 0 12px; }
+    @media (max-width: 760px) { .bosses { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    .bosses button { font: inherit; text-align: left; padding: 10px 12px; border: 2px solid var(--line-2); border-top: 5px solid var(--bc); background: transparent; color: var(--ink); cursor: pointer; }
+    .bosses button[aria-pressed="true"] { background: color-mix(in srgb, var(--bc) 16%, transparent); border-color: var(--bc); }
+    .bosses b { display: block; font-weight: 800; font-size: 16px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .bosses small { color: var(--dim); font-size: 14px; }
+    .hof { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    @media (min-width: 900px) { .hof { grid-template-columns: 1fr 1fr; } }
+    .av { width: 26px; height: 26px; border-radius: 50%; vertical-align: middle; margin-right: 8px; object-fit: cover; background: rgba(236,229,211,0.1); display: inline-grid; place-items: center; font-size: 13px; font-weight: 800; }
+    .worlds { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; margin-top: 18px; padding-bottom: 70px; }
+    @media (min-width: 900px) { .worlds { grid-template-columns: 1fr 1fr; } .worlds .world:first-child { grid-column: 1 / -1; } }
+    .world { position: relative; overflow: hidden; border: 1px solid var(--line); border-bottom: 5px solid var(--bc); background: #000; }
+    .world img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; }
+    .world .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 18px 14px; background: linear-gradient(transparent, rgba(0,0,0,0.88)); }
+    .world h3 { font-family: var(--display); font-weight: 400; font-size: clamp(26px, 4vw, 36px); text-transform: uppercase; margin: 0; line-height: 1; }
+    .world p { margin: 4px 0 0; color: #e8e1cf; font-size: 16px; }
+    .world .boss { color: var(--bc); font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="wrap">
+      <a class="brand" href="../">STEMSTAGE</a>
+      <div class="links"><a href="../">Home</a><a class="here" href="./" aria-current="page">Play online</a><a href="../leaderboard/">Leaderboard</a><a href="../charts/">Charts</a><a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a></div>
+      <div class="right">
+        <a class="btn primary nav-dl" href="../#download"><i class="fa-solid fa-download"></i> Download</a>
+        <button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav-panel"><i class="fa-solid fa-bars"></i><span>Menu</span></button>
+      </div>
+    </div>
+    <div class="nav-panel" id="nav-panel">
+      <a href="../">Home</a>
+      <a class="here" href="./">Play online</a>
+      <a href="../leaderboard/">Leaderboard</a>
+      <a href="../charts/">Chart library</a>
+      <hr />
+      <a class="small" href="https://github.com/SylarBeck/STEMSTAGE/wiki/Band-and-Online"><i class="fa-solid fa-book"></i> How online play works</a>
+      <a class="btn primary block" href="../#download"><i class="fa-solid fa-download"></i> Download</a>
+    </div>
+  </nav>
+
+  <main class="wrap">
+    <header class="page-head">
+      <span class="stamp">STEMSTAGE 2.0</span>
+      <h1 class="section-h" style="margin-top:14px">Play online</h1>
+      <div class="scrawl">find a match, join a room, slay a boss</div>
+      <p>Pick a match type and press <b>Find match</b>: STEMSTAGE opens and puts you in the best open room for your skill and region, or opens one for the next players who search. No port forwarding, no accounts.</p>
+    </header>
+
+    <div class="grid">
+      <section class="panel" aria-labelledby="mm-h">
+        <h2 id="mm-h"><i class="fa-solid fa-magnifying-glass"></i> Find a match</h2>
+        <div class="modes" role="group" aria-label="Match type">
+          <button type="button" data-mode="any" aria-pressed="true">Any</button>
+          <button type="button" data-mode="versus" aria-pressed="false">Versus</button>
+          <button type="button" data-mode="battle" aria-pressed="false">Battle</button>
+          <button type="button" data-mode="band" aria-pressed="false">Band</button>
+        </div>
+        <a class="btn primary block pc-only" id="find" href="stemstage://match/any"><i class="fa-solid fa-guitar"></i> Find match in STEMSTAGE</a>
+        <button class="btn primary block phone-only" type="button" data-send><i class="fa-solid fa-paper-plane"></i> Send it to my computer</button>
+        <div class="stats" aria-live="polite">
+          <div class="stat"><b id="s-rooms">–</b><span>Open rooms</span></div>
+          <div class="stat"><b id="s-players">–</b><span>In rooms</span></div>
+          <div class="stat"><b id="s-searching">–</b><span>Searching</span></div>
+        </div>
+        <ol class="how">
+          <li><b>Versus</b>: highest score wins. <b>Battle</b>: your overdrive attacks the leader. <b>Band</b>: one score, and overdrive saves a bandmate.</li>
+          <li>Hosts pick the stage. In a world, its boss can show up for everyone at the same moment.</li>
+          <li>Haven't got it yet? <a href="../#download">Download STEMSTAGE</a> (Windows, Linux), then come back here.</li>
+        </ol>
+      </section>
+
+      <section class="panel" aria-labelledby="rooms-h">
+        <h2 id="rooms-h"><i class="fa-solid fa-door-open"></i> Open rooms</h2>
+        <div class="filters">
+          <select id="f-mode" aria-label="Match type"><option value="">Every match type</option><option value="versus">Versus</option><option value="battle">Battle</option><option value="band">Band</option></select>
+          <select id="f-region" aria-label="Region"><option value="">Everywhere</option></select>
+          <label><input type="checkbox" id="f-open" checked /> Only rooms I can join</label>
+        </div>
+        <div class="rooms" id="rooms"><div class="empty">Looking for rooms…</div></div>
+      </section>
+    </div>
+
+    <h2 class="section-h" id="bosses">Boss hall of fame</h2>
+    <p class="muted">Every world has a boss that can show up in the middle of a song. These are the players who brought them down fastest, and most often.</p>
+    <div class="bosses" id="boss-tabs" role="group" aria-label="Boss"></div>
+    <div class="hof">
+      <section class="panel"><h2><i class="fa-solid fa-stopwatch"></i> Fastest kills</h2><table class="table"><thead><tr><th>#</th><th>Player</th><th>Time</th></tr></thead><tbody id="hof-fast"></tbody></table></section>
+      <section class="panel"><h2><i class="fa-solid fa-skull"></i> Most kills</h2><table class="table"><thead><tr><th>#</th><th>Player</th><th>Kills</th></tr></thead><tbody id="hof-most"></tbody></table></section>
+    </div>
+
+    <h2 class="section-h" id="worlds">The five worlds</h2>
+    <p class="muted">The Abyssal Aquarium is open from the start. Each of the others opens at a level, or as soon as you beat the boss of the world before it.</p>
+    <div class="worlds" id="world-list"></div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <a class="brand" href="../">STEMSTAGE</a>
+      <div class="flinks"><a href="../">Home</a><a href="../#download">Download</a><a href="https://github.com/SylarBeck/STEMSTAGE">GitHub</a><a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a></div>
+    </div>
+  </footer>
+
+  <script src="../js/site.js"></script>
+  <script>
+    // ?api= points the page at a local copy of the API (npx wrangler dev) for testing; localhost only
+    const localApi = new URLSearchParams(location.search).get('api');
+    const API = /^http:\/\/(127\.0\.0\.1|localhost):\d+\/v1$/.test(localApi || '') ? localApi : 'https://api.stemstage.varconstint.com/v1';
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const get = (path) => fetch(`${API}${path}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
+    const MINOR = '2.0';
+    const REGION = { NA: 'North America', SA: 'South America', EU: 'Europe', AS: 'Asia', AF: 'Africa', OC: 'Oceania', AN: 'Antarctica' };
+    const BOSSES = {
+      leviathan: { name: 'The Leviathan', world: 'aquarium', color: '#2fd3ff' },
+      conductor: { name: 'The Void Conductor', world: 'nebula', color: '#b36bff' },
+      titan: { name: 'The Magma Titan', world: 'forge', color: '#ff6a1a' },
+      wyrm: { name: 'The Frost Wyrm', world: 'aurora', color: '#9fe8ff' },
+      thunderbird: { name: 'The Thunderbird', world: 'citadel', color: '#ffe14d' },
+    };
+    const WORLDS = {
+      aquarium: { name: 'Abyssal Aquarium', boss: 'leviathan', open: 'Open from the start', blurb: 'A glass stage on the ocean floor: caustics, kelp forests, jellyfish and a sea serpent a hundred metres long.' },
+      nebula: { name: 'Orbital Nebula', boss: 'conductor', open: 'Level 5, or beat the Leviathan', blurb: 'A holo-deck in orbit by a ringed gas giant. An eye opens between the stars and conducts meteors at you.' },
+      forge: { name: 'Volcanic Forge', boss: 'titan', open: 'Level 9, or beat the Void Conductor', blurb: 'Obsidian over a lava lake under an erupting volcano. The mountain stands up and slams the ground.' },
+      aurora: { name: 'Crystal Aurora', boss: 'wyrm', open: 'Level 13, or beat the Magma Titan', blurb: 'An ice cathedral under the northern lights. A crystal-winged dragon breathes frost across your highway.' },
+      citadel: { name: 'Storm Citadel', boss: 'thunderbird', open: 'Level 17, or beat the Frost Wyrm', blurb: 'Floating ruins above a sea of clouds. A giant eagle of the storm hurls lightning at the stage.' },
+    };
+    const STAGES = { arena: 'Metro Arena', garage: 'The Garage', club: 'Basement Club', bar: 'Neon Dive Bar', theater: 'Grand Theater', stadium: 'Skyline Stadium', festival: 'Main Stage Festival', ...Object.fromEntries(Object.entries(WORLDS).map(([k, w]) => [k, w.name])) };
+
+    // ---- find a match: the button opens the game on stemstage://match/<mode>
+    let mode = 'any';
+    document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+      mode = b.dataset.mode;
+      document.querySelectorAll('[data-mode]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      $('find').href = `stemstage://match/${mode}`;
+    }));
+    document.querySelector('[data-send]')?.addEventListener('click', (e) => window.stemstageSend(e.currentTarget, 'https://stemstage.varconstint.com/play/', 'Play STEMSTAGE online', 'Find a STEMSTAGE match on my computer'));
+
+    // ---- lobby numbers + open rooms, refreshed every 10 s
+    let rooms = [];
+    function renderRooms() {
+      const fm = $('f-mode').value, fr = $('f-region').value, open = $('f-open').checked;
+      const list = rooms.filter((r) => (!fm || r.mode === fm) && (!fr || r.continent === fr) && (!open || (!r.playing && r.players < r.max && String(r.version || '').startsWith(MINOR))));
+      $('rooms').innerHTML = list.map((r) => {
+        const boss = WORLDS[r.stage]?.boss;
+        const color = boss ? BOSSES[boss].color : '#df3a2c';
+        const ok = !r.playing && r.players < r.max && String(r.version || '').startsWith(MINOR);
+        const bits = [`${Number(r.players) || 0}/${Number(r.max) || 8} players`, r.playing ? 'playing now' : 'in the lobby', STAGES[r.stage] || 'Metro Arena'];
+        if (boss) bits.push(`boss: ${BOSSES[boss].name}`);
+        if (r.rating) bits.push(`skill ~${Number(r.rating)}`);
+        if (r.continent && REGION[r.continent]) bits.push(REGION[r.continent]);
+        if (r.song) bits.push(`${r.song}${r.artist ? ` — ${r.artist}` : ''}`);
+        if (!String(r.version || '').startsWith(MINOR)) bits.push(`needs STEMSTAGE ${r.version || 'older'}`);
+        return `<div class="room ${r.playing ? 'playing' : ''} ${r.players >= r.max ? 'full' : ''}" style="--bc:${color}">
+          <b>${esc(r.name)}<span class="tag" style="color:${color}">${esc(r.mode)}</span>${r.mm ? '<span class="tag">matchmaking</span>' : ''}</b>
+          <small>${bits.map(esc).join(' · ')}</small>
+          <div class="acts">${ok ? `<a class="btn primary pc-only" href="stemstage://join/${encodeURIComponent(r.code)}">Join</a>` : ''}<a class="btn" href="../join/?code=${encodeURIComponent(r.code)}" title="Invite page">${'<i class="fa-solid fa-ticket"></i>'}</a></div></div>`;
+      }).join('') || `<div class="empty">${rooms.length ? 'No room matches those filters right now.' : 'No public rooms right now. Press <b>Find match</b>: if nobody is around, the game opens a room the next players are sent to.'}</div>`;
+      const regions = [...new Set(rooms.map((r) => r.continent).filter((c) => REGION[c]))];
+      const sel = $('f-region');
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">Everywhere</option>' + regions.map((c) => `<option value="${c}" ${c === cur ? 'selected' : ''}>${REGION[c]}</option>`).join('');
+    }
+    async function refresh() {
+      try {
+        const [lobby, list] = await Promise.all([get('/lobby'), get('/rooms')]);
+        $('s-rooms').textContent = Number(lobby.rooms) || 0;
+        $('s-players').textContent = Number(lobby.players) || 0;
+        $('s-searching').textContent = Number(lobby.searching) || 0;
+        rooms = Array.isArray(list.rows) ? list.rows.filter((r) => /^[A-Z]{2,20}(-[A-Z]{2,20}){1,9}$/.test(r.code || '')) : [];
+        renderRooms();
+      } catch { $('rooms').innerHTML = '<div class="empty">The room list can\'t be reached right now.</div>'; }
+    }
+    for (const id of ['f-mode', 'f-region', 'f-open']) $(id).addEventListener('change', renderRooms);
+    refresh();
+    setInterval(refresh, 10000);
+
+    // ---- boss hall of fame
+    let boss = location.hash.slice(1) in BOSSES ? location.hash.slice(1) : 'leviathan';
+    const avatar = (r) => (r.avatar && /^https:\/\/cdn\.discordapp\.com\//.test(r.avatar) ? `<img class="av" src="${esc(r.avatar)}" alt="" loading="lazy" />` : `<span class="av">${esc(String(r.player || '?')[0].toUpperCase())}</span>`);
+    async function renderBosses() {
+      let totals = {};
+      try { totals = (await get('/bosses')).bosses || {}; } catch { /* the tabs still work */ }
+      $('boss-tabs').innerHTML = Object.entries(BOSSES).map(([id, b]) => {
+        const t = totals[id] || {};
+        return `<button type="button" style="--bc:${b.color}" data-boss="${id}" aria-pressed="${id === boss}"><b>${esc(b.name)}</b><small>${Number(t.kills) || 0} kill${Number(t.kills) === 1 ? '' : 's'} · ${Number(t.slayers) || 0} slayer${Number(t.slayers) === 1 ? '' : 's'}${t.best ? ` · best ${Number(t.best).toFixed(1)} s` : ''}</small></button>`;
+      }).join('');
+      document.querySelectorAll('[data-boss]').forEach((b) => b.addEventListener('click', () => { boss = b.dataset.boss; renderBosses(); }));
+      try {
+        const board = await get(`/bosses?boss=${boss}&limit=15`);
+        $('hof-fast').innerHTML = (board.fastest || []).map((r, i) => `<tr><td class="pos">${i + 1}</td><td>${avatar(r)}${esc(r.player)}${r.flawless ? ' <span class="tag" style="color:var(--gold)">flawless</span>' : ''}</td><td>${Number(r.seconds).toFixed(2)} s</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Nobody has beaten this boss yet. Be the first.</td></tr>';
+        $('hof-most').innerHTML = (board.most || []).map((r, i) => `<tr><td class="pos">${i + 1}</td><td>${avatar(r)}${esc(r.player)}</td><td>${Number(r.kills) || 0}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No kills yet.</td></tr>';
+      } catch { $('hof-fast').innerHTML = $('hof-most').innerHTML = '<tr><td colspan="3" class="muted">The hall of fame can\'t be reached right now.</td></tr>'; }
+    }
+    renderBosses();
+
+    // ---- the worlds
+    $('world-list').innerHTML = Object.entries(WORLDS).map(([id, w]) => `<figure class="world" style="--bc:${BOSSES[w.boss].color}">
+      <img src="../img/v2-world-${id}.webp" alt="${esc(w.name)}: the stage with ${esc(BOSSES[w.boss].name)} behind the band" loading="lazy" width="1600" height="900" />
+      <figcaption class="cap"><span class="boss">Boss: ${esc(BOSSES[w.boss].name)}</span><h3>${esc(w.name)}</h3><p>${esc(w.blurb)}</p><p class="muted">${esc(w.open)}</p></figcaption></figure>`).join('');
+  </script>
+</body>
+</html>

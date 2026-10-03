@@ -116,6 +116,18 @@
     .note h3 { font-family: var(--body); font-weight: 800; font-size: 17px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); margin-bottom: 6px; }
     .note h3 i { color: var(--gold); margin-right: 6px; }
     @media (min-width: 860px) { .notes { grid-template-columns: repeat(3, 1fr); } }
+    /* ---------- new in 2.0 ---------- */
+    .v2-hero { margin: 0 0 26px; }
+    .v2-hero img { display: block; width: 100%; height: auto; }
+    .v2-grid { display: grid; gap: 14px; }
+    .v2-grid h3 { font-family: var(--display); font-weight: 400; font-size: 26px; text-transform: uppercase; margin: 0 0 8px; }
+    .v2-grid h3 i { color: var(--gold); margin-right: 6px; font-size: 22px; }
+    .v2-grid p { color: var(--dim); margin: 0 0 12px; }
+    @media (min-width: 860px) { .v2-grid { grid-template-columns: repeat(2, 1fr); } .v2-grid article:first-child { grid-column: 1 / -1; } }
+    @media (min-width: 1200px) { .v2-grid { grid-template-columns: repeat(4, 1fr); } .v2-grid article:first-child { grid-column: span 2; grid-row: span 2; } }
+    .v2-shots { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); margin-top: 18px; }
+    .v2-shots img { display: block; width: 100%; height: auto; }
+    @media (min-width: 1000px) { .v2-shots { grid-template-columns: repeat(4, 1fr); } }
   </style>
 </head>
 <body>
@@ -123,10 +135,12 @@
     <div class="wrap">
       <a class="brand" href="#top">STEMSTAGE</a>
       <div class="links">
+        <a href="#v2">New in 2.0</a>
         <a href="#features">Features</a>
         <a class="xl" href="#real">Real instruments</a>
         <a class="xl" href="#friends">Play together</a>
         <a href="#screens">Screenshots</a>
+        <a href="play/">Play online</a>
         <a href="leaderboard/">Leaderboard</a>
         <a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a>
       </div>
@@ -136,10 +150,12 @@
       </div>
     </div>
     <div class="nav-panel" id="nav-panel">
+      <a href="#v2">New in 2.0</a>
       <a href="#features">Features</a>
       <a href="#real">Real instruments</a>
       <a href="#friends">Play together</a>
       <a href="#screens">Screenshots</a>
+      <a href="play/">Play online</a>
       <a href="leaderboard/">Leaderboard</a>
       <hr />
       <a class="small" href="https://github.com/SylarBeck/STEMSTAGE/wiki"><i class="fa-solid fa-book"></i> Wiki</a>
@@ -158,8 +174,8 @@
         <p class="lead">Drop in a track and an AI splits it into stems. Every part becomes a playable chart: guitar, bass, drums, keys and vocals. Play with a controller, Rock Band gear, a DualSense, or your real guitar, bass and keyboard.</p>
         <div class="btn-row">
           <a class="btn primary" id="cta-main" href="#download"><i class="fa-solid fa-download"></i> Download <small id="cta-os">free</small></a>
-          <a class="btn" href="leaderboard/"><i class="fa-solid fa-ranking-star"></i> Leaderboard</a>
-          <a class="btn" href="https://github.com/SylarBeck/STEMSTAGE"><i class="fa-brands fa-github"></i> Source</a>
+          <a class="btn" href="play/"><i class="fa-solid fa-earth-americas"></i> Play online</a>
+          <a class="btn" href="#v2"><i class="fa-solid fa-dragon"></i> New in 2.0</a>
         </div>
         <div class="meta" id="release-meta">Windows 10/11 · Linux (AppImage, .deb, .rpm) · MIT licensed</div>
         <div class="phone-note"><b>On your phone?</b> STEMSTAGE is played on a Windows or Linux PC. Send yourself the link and grab it there.
@@ -171,6 +187,46 @@
       </figure>
     </div>
   </header>
+
+  <section id="v2">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">New in 2.0</div><h2 class="h-display">Worlds, bosses, and a rock star of your own</h2></div>
+      <figure class="v2-hero">
+        <a class="photo taped" href="img/v2-bossfight.webp"><img src="img/v2-bossfight.webp" alt="A boss fight: the Leviathan coils around the guitar highway while its health bar drains" width="1600" height="900" loading="lazy" /></a>
+        <figcaption><span class="scrawl">the Leviathan crashes the show</span></figcaption>
+      </figure>
+      <div class="v2-grid">
+        <article class="panel">
+          <h3><i class="fa-solid fa-dragon"></i> Five worlds, five bosses</h3>
+          <p>Play in an aquarium on the sea floor, a holo-deck in orbit, a forge over a lava lake, an ice cathedral under the aurora, or ruins floating above the clouds. Each has a boss that can show up mid-song and attack your highway. Hit hard with perfect notes, long streaks and overdrive to beat it for cash, pedals, outfits and a trophy.</p>
+          <a class="btn" href="play/#worlds"><i class="fa-solid fa-earth-americas"></i> See the worlds</a>
+        </article>
+        <article class="panel">
+          <h3><i class="fa-solid fa-shirt"></i> Backstage</h3>
+          <p>A dressing room for your band member: ten hair styles, faces, jackets, hoodies, coats, accessories, LED trim and stage moves, every option shown on your character in 3D. Then build your instruments: models, paint, hardware and glowing strings.</p>
+        </article>
+        <article class="panel">
+          <h3><i class="fa-solid fa-sliders"></i> Gear that plays</h3>
+          <p>Upgrade pickups, amps, strings, shells and more with the cash every song pays, and plug in pedals: more overdrive, streak shields, a faster multiplier, extra boss damage. Turn gear off for ranked runs.</p>
+        </article>
+        <article class="panel">
+          <h3><i class="fa-solid fa-helmet-safety"></i> Build your stage</h3>
+          <p>Pick a backdrop, a floor, the light rig, props for the wings and the stage front, something overhead, the atmosphere and the crowd. Then play any song on it.</p>
+        </article>
+        <article class="panel">
+          <h3><i class="fa-solid fa-magnifying-glass"></i> Find a match</h3>
+          <p>Matchmaking by match type, skill rating and region. Hosts choose the stage, bosses and gear rules, lock or size the room, and kick players. Rooms show everyone's ping and recover from dropped connections.</p>
+          <a class="btn primary" href="play/"><i class="fa-solid fa-earth-americas"></i> Play online</a>
+        </article>
+      </div>
+      <div class="v2-shots">
+        <a class="photo" href="img/v2-backstage-character.webp"><img src="img/v2-backstage-character.webp" alt="Backstage: the character editor with tops shown on the character in 3D" width="1600" height="900" loading="lazy" /></a>
+        <a class="photo" href="img/v2-backstage-gear.webp"><img src="img/v2-backstage-gear.webp" alt="Backstage: guitar upgrades and rig stats" width="1600" height="900" loading="lazy" /></a>
+        <a class="photo" href="img/v2-backstage-stage.webp"><img src="img/v2-backstage-stage.webp" alt="The stage creator" width="1600" height="900" loading="lazy" /></a>
+        <a class="photo" href="img/v2-world-forge.webp"><img src="img/v2-world-forge.webp" alt="The Volcanic Forge and the Magma Titan" width="1600" height="900" loading="lazy" /></a>
+      </div>
+    </div>
+  </section>
 
   <section id="how">
     <div class="wrap">

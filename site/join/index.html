@@ -102,7 +102,7 @@
       $('lead').textContent = 'Public STEMSTAGE rooms you can join right now. Got an invite code from a friend? Open their link instead.';
       $('code').hidden = true;
       for (const id of ['open', 'copy', 'send']) $(id).style.display = 'none';
-      document.querySelector('.ticket small').innerHTML = 'Hosting? Make your room public in the game: <b>Online → Host online → Public room</b>. <a href="../">What\'s STEMSTAGE?</a>';
+      document.querySelector('.ticket small').innerHTML = 'Want a match right now? <a href="../play/"><b>Play online → Find match</b></a>. Hosting? Make your room public in the game: <b>Online → Host online → Public room</b>.';
       const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       const localApi = new URLSearchParams(location.search).get('api');
       const API = /^http:\/\/(127\.0\.0\.1|localhost):\d+\/v1$/.test(localApi || '') ? localApi : 'https://api.stemstage.varconstint.com/v1';
@@ -118,6 +118,14 @@
       setInterval(show, 20000);
     } else {
       $('code').textContent = code;
+      // a public room: show what's going on in it (the list only has rooms their host made public)
+      fetch('https://api.stemstage.varconstint.com/v1/rooms').then((r) => r.json()).then((j) => {
+        const r = (j.rows || []).find((x) => x.code === code);
+        if (!r) return;
+        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const STAGE = { aquarium: 'Abyssal Aquarium · the Leviathan', nebula: 'Orbital Nebula · the Void Conductor', forge: 'Volcanic Forge · the Magma Titan', aurora: 'Crystal Aurora · the Frost Wyrm', citadel: 'Storm Citadel · the Thunderbird' };
+        $('lead').innerHTML = `<b>${esc(r.name)}</b>: ${Number(r.players) || 0}/${Number(r.max) || 8} players, ${esc(r.mode)}, ${r.playing ? 'playing right now' : 'in the lobby'}${STAGE[r.stage] ? ` in the ${esc(STAGE[r.stage])}` : ''}${r.song ? ` · ${esc(r.song)}` : ''}.`;
+      }).catch(() => {});
       const deep = `stemstage://join/${code}`;
       $('open').href = deep;
       // try the game straight away on a computer (nothing happens if it isn't installed). Never on a phone:

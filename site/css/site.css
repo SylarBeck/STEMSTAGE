@@ -177,3 +177,8 @@ footer .flinks { display: flex; gap: 6px 18px; flex-wrap: wrap; }
 footer .flinks a { color: var(--ink); font-weight: 700; text-decoration: none; padding: 6px 0; }
 footer .brand { font-size: 26px; }
 @media (min-width: 720px) { footer .wrap { flex-direction: row; align-items: center; justify-content: space-between; } }
+
+/* computers get "open in STEMSTAGE", phones get "send it to my computer" (html.phone is set by js/site.js) */
+.phone-only { display: none !important; }
+html.phone .phone-only { display: flex !important; }
+html.phone .pc-only { display: none !important; }

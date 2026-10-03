@@ -3,11 +3,14 @@
 **Players**
 - [Installation](Installation)
 - [Getting Started](Getting-Started)
+- [Backstage](Backstage)
+- [Worlds and Bosses](Worlds-and-Bosses)
 - [Controllers and DualSense](Controllers-and-DualSense)
 - [Real Instruments](Real-Instruments)
 - [Singing and Lyrics](Singing-and-Lyrics)
 - [Discord](Discord)
 - [World leaderboard](https://stemstage.varconstint.com/leaderboard/)
+- [Play online](https://stemstage.varconstint.com/play/)
 - [Band and Online](Band-and-Online)
 - [Troubleshooting](Troubleshooting)
 

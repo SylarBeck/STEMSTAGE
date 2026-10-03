@@ -96,9 +96,21 @@ Weeks start on Monday 00:00 UTC; week 0 started on 28 September 2026. A season i
 - **The board:** each player's best run submitted that week on the challenge's chart, instrument and difficulty. Runs on other charts don't count.
 - **Points:** a place is worth 100 / 80 / 65 / 55 / 50 points for the top five, then 2 fewer per place down to 10. A season's standings add up its weeks.
 
+## Matchmaking (2.0)
+
+`POST /v1/match` with `{ mode: "any" | "versus" | "battle" | "band", rating, version, ticket?, waited }` → `{ room }` (join it) or `{ ticket, searching, rooms }` (ask again in a few seconds with the same ticket). Rooms are chosen by `cloud/src/match.js`: same minor version, room for one more, not mid-song, the wanted mode, a skill rating within ±200 (+40 per second waited), the same continent when possible, fuller rooms first.
+
+`POST /v1/match/cancel` with `{ ticket }` stops a search. `GET /v1/lobby` → `{ rooms, players, searching, byMode }`.
+
+## Boss hall of fame (2.0)
+
+`POST /v1/bosses` with `{ player, boss, seconds, damage, flawless, song: { title, artist }, instrument, difficulty, mode, version }` records a kill (the same player id + secret as runs) → `{ ok, rank, kills }`. `boss` is `leviathan`, `conductor`, `titan`, `wyrm` or `thunderbird`.
+
+`GET /v1/bosses` → `{ bosses: { <id>: { kills, slayers, best } } }`; `GET /v1/bosses?boss=<id>&limit=` → `{ boss, fastest: [{ player, playerId, avatar, seconds, flawless }], most: [{ player, playerId, avatar, kills }] }`.
+
 ## Public rooms (the game does this)
 
-`POST /v1/rooms` with `{ code, key, name, host, mode, song, artist, players, max, playing, version }` lists a room or refreshes its listing → `{ ok, code, listedFor }`. `code` is the room's invite code (letters and dashes). `key` is a random string the hosting game makes; the first announce registers `sha256(key)`, and later announces need the same key (**403** otherwise). `mode` is `versus`, `battle` or `band`.
+`POST /v1/rooms` with `{ code, key, name, host, mode, song, artist, players, max, playing, version, rating, stage, gear, mm }` lists a room or refreshes its listing → `{ ok, code, listedFor }`. `code` is the room's invite code (letters and dashes). `key` is a random string the hosting game makes; the first announce registers `sha256(key)`, and later announces need the same key (**403** otherwise). `mode` is `versus`, `battle` or `band`.
 
 `POST /v1/rooms/close` with `{ code, key }` takes the listing down → `{ ok, closed }`.
 
