@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- only this site's scripts, the leaderboard API and the fonts / icons it loads (a page can't be made to load or send anything else) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self' https://api.stemstage.varconstint.com https://api.github.com http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>STEMSTAGE Chart Library</title>
+  <meta name="description" content="Every song STEMSTAGE players have charted, with its ranked parts. Import one and play the same chart as everyone else." />
+  <meta property="og:title" content="STEMSTAGE Chart Library" />
+  <meta property="og:description" content="Songs players have charted in STEMSTAGE, the rhythm game that plays any song." />
+  <meta property="og:image" content="https://stemstage.varconstint.com/img/hero.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#0b0a09" />
+  <link rel="icon" href="../img/favicon.png" />
+  <link rel="apple-touch-icon" href="../img/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,800&family=Big+Shoulders+Stencil+Display:wght@900&family=Permanent+Marker&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <link rel="stylesheet" href="../css/site.css" />
+  <style>
+    .page-head { padding: 34px 0 10px; }
+    .page-head .scrawl { font-size: clamp(18px, 4.6vw, 24px); margin: 14px 0 0 4px; color: var(--ink); opacity: 0.9; }
+    .page-head p { color: var(--dim); max-width: 700px; margin: 14px 0 0; }
+    @media (min-width: 720px) { .page-head { padding: 54px 0 16px; } }
+    main.wrap { padding-top: 22px; padding-bottom: 64px; }
+    .search { display: flex; gap: 8px; margin-bottom: 14px; }
+    .search input { flex: 1; min-width: 0; }
+    .songs { list-style: none; margin: 0; padding: 0; }
+    .songs li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .songs li:first-child { border-top: 2px solid var(--line-2); }
+    .songs b { font-family: var(--display); font-weight: 400; font-size: 24px; line-height: 1.1; text-transform: uppercase; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .songs .parts { display: flex; gap: 10px; color: var(--gold); font-size: 18px; justify-self: end; }
+    .songs small { grid-column: 1 / -1; color: var(--dim); font-size: 15px; }
+    .songs a { color: var(--ink); }
+    .more-songs { margin-top: 16px; }
+    .how { color: var(--dim); font-size: 16px; margin: 18px 0 0; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="wrap">
+      <a class="brand" href="../">STEMSTAGE</a>
+      <div class="links"><a href="../">Home</a><a href="../leaderboard/">Leaderboard</a><a class="here" href="./" aria-current="page">Charts</a><a href="../#screens">Screenshots</a><a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a></div>
+      <div class="right">
+        <a class="btn primary nav-dl" href="../#download"><i class="fa-solid fa-download"></i> Download</a>
+        <button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav-panel"><i class="fa-solid fa-bars"></i><span>Menu</span></button>
+      </div>
+    </div>
+    <div class="nav-panel" id="nav-panel">
+      <a href="../">Home</a>
+      <a href="../leaderboard/">Leaderboard</a><a class="here" href="./">Chart library</a>
+      <a href="../#screens">Screenshots</a>
+      <hr />
+      <a class="small" href="https://github.com/SylarBeck/STEMSTAGE/wiki/Leaderboard-API"><i class="fa-solid fa-code"></i> Leaderboard API</a>
+      <a class="small" href="https://github.com/SylarBeck/STEMSTAGE/wiki"><i class="fa-solid fa-book"></i> Wiki</a>
+      <a class="btn primary block" href="../#download"><i class="fa-solid fa-download"></i> Download</a>
+    </div>
+  </nav>
+
+  <header class="page-head">
+    <div class="wrap">
+      <h1 class="torn">Chart library</h1>
+      <div class="scrawl">every song players have charted</div>
+      <p>Each import makes its own AI chart, and players upload theirs. Every song part has one <b>ranked chart</b> that everyone plays: the game downloads it and lines it up with your own copy of the song. Players can fix a chart in the editor and vote it in.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel">
+      <div class="search"><input type="search" id="q" placeholder="Search songs or artists" aria-label="Search songs or artists" /><button class="btn primary" id="go" type="button"><i class="fa-solid fa-magnifying-glass"></i> Search</button></div>
+      <ul class="songs" id="songs"><li class="muted">Loading…</li></ul>
+      <button class="btn more-songs" id="more-songs" type="button" hidden>More songs</button>
+      <p class="how">To play one: in STEMSTAGE open <b>Chart library</b> from the main menu and press <b>Get it</b>. The game finds the song on YouTube, imports it, and plays the ranked chart.</p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <a class="brand" href="../">STEMSTAGE</a>
+      <div class="flinks"><a href="../">Home</a><a href="../#download">Download</a><a href="https://github.com/SylarBeck/STEMSTAGE">GitHub</a><a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a></div>
+    </div>
+  </footer>
+
+  <script src="../js/site.js"></script>
+  <script>
+    // ?api= points the page at a local copy of the API (npx wrangler dev) for testing; localhost only
+    const localApi = new URLSearchParams(location.search).get('api');
+    const API = /^http:\/\/(127\.0\.0\.1|localhost):\d+\/v1$/.test(localApi || '') ? localApi : 'https://api.stemstage.varconstint.com/v1';
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const ICON = { guitar: 'fa-guitar', bass: 'fa-guitar', drums: 'fa-drum', keys: 'fa-music', vocals: 'fa-microphone' };
+    const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    let nextSong = null, searchQuery = '', requestId = 0, searchTimer;
+    async function load(more = false) {
+      const q = $('q').value.trim();
+      if (q && q.length < 2) {
+        ++requestId;
+        $('songs').innerHTML = '<li class="muted">Type at least 2 letters.</li>';
+        $('more-songs').hidden = true;
+        return;
+      }
+      if (!more) { searchQuery = q; nextSong = null; $('songs').innerHTML = '<li class="muted">Loading…</li>'; }
+      const id = ++requestId;
+      $('more-songs').hidden = true;
+      try {
+        const r = await fetch(`${API}/library?${new URLSearchParams({ limit: 30, ...(searchQuery ? { q: searchQuery } : {}), ...(more && nextSong ? { before: nextSong } : {}) })}`);
+        if (!r.ok) throw new Error(r.status);
+        const { rows, next } = await r.json();
+        if (id !== requestId) return;
+        const html = rows.map((s) => `<li><b>${esc(s.title)}</b><span class="parts">${s.parts.map((p) => `<i class="fa-solid ${ICON[p] || 'fa-music'}" title="Ranked ${esc(p)} chart"></i>`).join('')}</span>
+          <small>${esc(s.artist || '')} · ${plural(s.players, 'player')} · ${plural(s.charts, 'chart')} · <a href="../leaderboard/?song=${encodeURIComponent(s.key)}${s.parts[0] ? `&inst=${s.parts[0]}` : ''}">boards</a></small></li>`).join('')
+        $('songs').innerHTML = more ? $('songs').innerHTML + html : html || `<li class="muted">${searchQuery ? 'No charted songs match that search.' : 'No charts yet.'}</li>`;
+        nextSong = next || null;
+        $('more-songs').hidden = !nextSong;
+      } catch { if (id === requestId) $('songs').innerHTML = '<li class="muted">The chart library can\'t be loaded right now.</li>'; }
+    }
+    $('go').addEventListener('click', () => { clearTimeout(searchTimer); load(); });
+    $('q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => load(), 250); });
+    $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(searchTimer); load(); } });
+    $('more-songs').addEventListener('click', () => load(true));
+    load();
+  </script>
+  <script src="../js/auth.js"></script>
+</body>
+</html>
