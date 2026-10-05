@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- only this site's scripts, the leaderboard API and the fonts / icons it loads (a page can't be made to load or send anything else) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self' https://api.stemstage.varconstint.com https://api.github.com http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Logging in · STEMSTAGE</title>
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#0b0a09" />
+  <link rel="icon" href="../img/favicon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Big+Shoulders+Stencil+Display:wght@900&display=swap" rel="stylesheet" />
+  <style>
+    body { margin: 0; min-height: 100svh; display: grid; place-items: center; align-content: center; gap: 18px; background: #0b0a09; color: #ece5d3; font: 600 20px 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif; text-align: center; padding: 16px; }
+    .brand { font: 900 40px 'Big Shoulders Stencil Display', Impact, sans-serif; color: #ece5d3; text-shadow: 3px 3px 0 #df3a2c; text-decoration: none; }
+    p { margin: 0; max-width: 420px; }
+    a { color: #f0b429; }
+  </style>
+</head>
+<body>
+  <a class="brand" href="/">STEMSTAGE</a>
+  <p id="msg">Logging you in…</p>
+  <script>
+    // Discord comes back here: #access_token=…&expires_in=…&state=… (or ?error=… when cancelled)
+    const KEY = 'stemstage.web.discord';
+    const h = new URLSearchParams(location.hash.slice(1));
+    const q = new URLSearchParams(location.search);
+    let pending = null;
+    try { pending = JSON.parse(sessionStorage.getItem(`${KEY}.state`) || 'null'); sessionStorage.removeItem(`${KEY}.state`); } catch { /* storage blocked */ }
+    const back = pending && /^\/[^/]/.test(pending.back || '') ? pending.back : '/';
+    history.replaceState(null, '', '/login/'); // don't leave the token in the address bar or history
+    const fail = (why) => { document.getElementById('msg').innerHTML = `${why} <a href="${back}">Go back</a>`; };
+    // prompt=none fails with "interaction_required" for first-time users: ask Discord again, with the consent screen
+    if (q.get('error') === 'interaction_required' || h.get('error') === 'interaction_required') {
+      const retry = new URLSearchParams({ client_id: '1553872601603117127', response_type: 'token', scope: 'identify', state: pending?.state || '', redirect_uri: /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? `${location.origin}/login/` : 'https://stemstage.varconstint.com/login/' });
+      try { sessionStorage.setItem(`${KEY}.state`, JSON.stringify(pending)); } catch { /* storage blocked */ }
+      location.replace(`https://discord.com/oauth2/authorize?${retry}`);
+    } else if (q.get('error') || h.get('error')) {
+      fail((q.get('error') || h.get('error')) === 'access_denied' ? 'Discord login cancelled.' : 'Discord login didn\'t work.');
+    } else if (!pending || h.get('state') !== pending.state || !h.get('access_token')) {
+      fail('That login link expired.');
+    } else {
+      try {
+        localStorage.setItem(KEY, JSON.stringify({ token: h.get('access_token'), expires: Date.now() + (Number(h.get('expires_in')) || 604800) * 1000 - 60000 }));
+        sessionStorage.removeItem(`${KEY}.me`);
+      } catch { /* storage blocked */ }
+      location.replace(back);
+    }
+  </script>
+</body>
+</html>

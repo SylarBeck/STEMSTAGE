@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- only this site's scripts, the leaderboard API and the fonts / icons it loads (a page can't be made to load or send anything else) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self' https://api.stemstage.varconstint.com https://api.github.com http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>STEMSTAGE — the rhythm game that plays any song</title>
+  <meta name="description" content="Drop in any song: AI splits it into stems and charts guitar, bass, drums, keys and vocals. Play with a controller, Rock Band gear, a DualSense — or your real guitar, bass and keyboard. Free for Windows and Linux." />
+  <meta property="og:title" content="STEMSTAGE — the rhythm game that plays any song" />
+  <meta property="og:description" content="Any song, any instrument, split by AI. Free for Windows and Linux." />
+  <meta property="og:image" content="https://stemstage.varconstint.com/img/hero.webp" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#0b0a09" />
+  <link rel="icon" href="img/favicon.png" />
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,800&family=Big+Shoulders+Stencil+Display:wght@900&family=Permanent+Marker&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <link rel="stylesheet" href="css/site.css" />
+  <style>
+    /* ---------- hero: the stage behind, the logo sprayed on, a photo taped up ---------- */
+    .hero { position: relative; overflow: hidden; padding: 34px 0 56px; border-bottom: 1px solid var(--line); }
+    .hero-bg { position: absolute; inset: 0; background: url('img/stage.webp') center 30% / cover no-repeat; opacity: 0.55; }
+    .hero-bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11,10,9,0.35), rgba(11,10,9,0.75) 60%, var(--bg)), linear-gradient(90deg, rgba(11,10,9,0.85), rgba(11,10,9,0.2) 70%); }
+    .hero .wrap { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; align-items: center; }
+    .logo { font-family: var(--stencil); font-weight: 900; font-size: clamp(60px, 19.5vw, 168px); line-height: 0.86; color: var(--ink); text-shadow: 5px 5px 0 var(--red); letter-spacing: 0.005em; }
+    .tape-line { display: inline-block; margin: 16px 0 26px; padding: 9px min(30px, 5vw) 7px; white-space: nowrap; font-family: var(--hand); font-size: min(23px, 4.1vw); color: var(--dark); background: var(--tape) center / 100% 100%; transform: rotate(-2deg); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5)); }
+    .hero h1 { font-family: var(--display); text-transform: uppercase; font-size: clamp(34px, 8.4vw, 58px); line-height: 1; max-width: 640px; }
+    .hero .lead { color: #ddd5c3; }
+    .hero .btn-row { margin-top: 26px; }
+    .meta { margin-top: 16px; color: var(--dim); font-size: 16px; }
+    .meta b { color: var(--ink); }
+    .hero-shot { margin: 0; }
+    .hero-shot figcaption { margin-top: 14px; text-align: right; }
+    @media (max-width: 559px) { .hero .btn-row .btn { flex: 1 1 100%; } }
+    @media (min-width: 1000px) {
+      .hero { padding: 64px 0 90px; }
+      .hero .wrap { grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 56px; }
+      .hero-shot { transform: rotate(2deg); }
+    }
+    /* phones can't install a PC game: offer to send the link to a computer instead */
+    .phone-note { display: none; margin-top: 18px; padding: 14px 16px; border-left: 5px solid var(--gold); background: rgba(24, 20, 14, 0.92); font-size: 17px; }
+    .phone-note b { color: var(--gold); }
+    .phone-note .btn { margin-top: 12px; }
+    html.phone .phone-note { display: block; }
+
+    /* ---------- how it works: index cards pinned up ---------- */
+    .cards { display: grid; gap: 34px 22px; }
+    .card { position: relative; padding: 30px 22px 22px; }
+    .card .n { position: absolute; top: 12px; right: 16px; font-family: var(--display); font-size: 54px; line-height: 1; color: rgba(21, 18, 14, 0.14); }
+    .card i { font-size: 26px; color: #b3261b; }
+    .card h3 { font-family: var(--display); font-size: 30px; line-height: 1.04; text-transform: uppercase; margin: 12px 0 8px; }
+    .card p { margin: 0; color: #2f291f; font-weight: 600; font-size: 18px; }
+    .cards .card:nth-child(1) { transform: rotate(-1.2deg); } .cards .card:nth-child(2) { transform: rotate(0.8deg); } .cards .card:nth-child(3) { transform: rotate(-0.5deg); }
+    @media (min-width: 860px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+
+    /* ---------- features: a ruled list, not a wall of boxes ---------- */
+    .feats { display: grid; border-top: 2px solid var(--line-2); }
+    .feat { display: grid; grid-template-columns: 34px 1fr; gap: 4px 14px; padding: 16px 4px 16px 0; border-bottom: 1px solid var(--line); }
+    .feat i { grid-row: span 2; font-size: 22px; color: var(--red); padding-top: 3px; text-align: center; }
+    .feat h3 { font-family: var(--body); font-weight: 800; font-size: 21px; letter-spacing: 0.02em; text-transform: uppercase; line-height: 1.15; }
+    .feat p { margin: 0; color: var(--dim); font-size: 17px; }
+    .feat .new { font-size: 11px; padding: 0 6px; margin-left: 6px; color: var(--gold); border-width: 2px; vertical-align: 3px; }
+    @media (min-width: 720px) { .feats { grid-template-columns: 1fr 1fr; column-gap: 40px; } }
+    @media (min-width: 1000px) { .feats { grid-template-columns: repeat(3, 1fr); } }
+
+    /* ---------- split: text + photos ---------- */
+    .split { display: grid; gap: 40px; align-items: center; }
+    .checks { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 12px; }
+    .checks li { display: grid; grid-template-columns: 24px 1fr; gap: 10px; color: #d4ccb9; }
+    .checks i { color: var(--good); margin-top: 5px; }
+    .stack { display: grid; gap: 26px; }
+    @media (min-width: 1000px) { .split { grid-template-columns: 1fr 1.2fr; gap: 64px; } }
+
+    /* ---------- play together ---------- */
+    .together { display: grid; gap: 22px; }
+    @media (min-width: 860px) { .together { grid-template-columns: 1.2fr 1fr; } }
+    .together p { color: var(--dim); margin: 0 0 18px; }
+    .joinform { display: grid; gap: 10px; }
+    .joinform input { width: 100%; font-family: var(--display); font-size: 22px; letter-spacing: 0.04em; text-transform: uppercase; background: var(--paper) center / 320px, #e8e1cf; color: var(--dark); border: none; border-left: 4px dashed rgba(21, 18, 14, 0.4); }
+    .joinform input::placeholder { color: rgba(21, 18, 14, 0.4); }
+    .joinform .err { color: var(--gold); font-size: 16px; min-height: 1.2em; }
+    @media (min-width: 560px) { .joinform { grid-template-columns: 1fr auto; } .joinform .err { grid-column: 1 / -1; } }
+
+    /* ---------- screenshots: swipe on a phone, a wall of prints on a computer ---------- */
+    .shots { display: grid; grid-auto-flow: column; grid-auto-columns: 84%; gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 16px var(--gutter) 22px; margin: 0 calc(var(--gutter) * -1); scrollbar-width: none; overscroll-behavior-x: contain; }
+    .shots::-webkit-scrollbar { display: none; }
+    .shots figure { margin: 0; scroll-snap-align: center; }
+    .shots figcaption { margin-top: 12px; font-family: var(--hand); font-size: 18px; color: var(--ink); transform: rotate(-1.5deg); }
+    .swipe-hint { font-size: 15px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+    @media (min-width: 860px) {
+      .swipe-hint { display: none; }
+      .shots { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); overflow: visible; margin: 0; padding: 10px 0 0; gap: 40px 28px; }
+      .shots figure:nth-child(3n+1) .photo { transform: rotate(-1.4deg); } .shots figure:nth-child(3n+2) .photo { transform: rotate(0.9deg); } .shots figure:nth-child(3n) .photo { transform: rotate(-0.4deg); }
+    }
+
+    /* ---------- download ---------- */
+    .dls { display: grid; gap: 12px; }
+    .dl { position: relative; display: grid; grid-template-columns: 44px 1fr; gap: 2px 14px; align-items: center; padding: 16px 18px; min-height: 76px; color: var(--ink); text-decoration: none; background: var(--grain), rgba(22, 19, 16, 0.95); border: 1px solid var(--line); border-left: 5px solid var(--line-2); }
+    .dl i { grid-row: span 3; font-size: 30px; color: var(--ink); text-align: center; }
+    .dl b { font-family: var(--display); font-weight: 400; font-size: 26px; line-height: 1.05; text-transform: uppercase; }
+    .dl span { color: var(--dim); font-size: 16px; }
+    .dl em { font-style: normal; font-size: 14px; color: var(--faint); overflow-wrap: anywhere; }
+    .dl.mine { border-left-color: var(--red); }
+    .dl.mine::after { content: 'Your PC'; position: absolute; top: 12px; right: 12px; font-weight: 800; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--red); border: 2px solid currentColor; padding: 0 6px; transform: rotate(3deg); }
+    @media (hover: hover) { .dl:hover { background: var(--grain), var(--ink); color: var(--dark); } .dl:hover i { color: var(--dark); } .dl:hover span, .dl:hover em { color: #4b4337; } }
+    @media (min-width: 720px) { .dls { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1100px) { .dls { grid-template-columns: repeat(4, 1fr); } .dl { grid-template-columns: 1fr; padding: 22px 20px; } .dl i { grid-row: auto; text-align: left; margin-bottom: 8px; } }
+    .dl-phone { display: none; margin-bottom: 20px; }
+    html.phone .dl-phone { display: block; }
+    .notes { display: grid; gap: 14px; margin-top: 26px; }
+    .note { padding: 16px 18px; border: 1.5px dashed var(--line-2); color: var(--dim); font-size: 17px; }
+    .note h3 { font-family: var(--body); font-weight: 800; font-size: 17px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); margin-bottom: 6px; }
+    .note h3 i { color: var(--gold); margin-right: 6px; }
+    @media (min-width: 860px) { .notes { grid-template-columns: repeat(3, 1fr); } }
+    /* ---------- new in 2.0 ---------- */
+    .v2-hero { margin: 0 0 26px; }
+    .v2-hero img { display: block; width: 100%; height: auto; }
+    .v2-grid { display: grid; gap: 14px; }
+    .v2-grid h3 { font-family: var(--display); font-weight: 400; font-size: 26px; text-transform: uppercase; margin: 0 0 8px; }
+    .v2-grid h3 i { color: var(--gold); margin-right: 6px; font-size: 22px; }
+    .v2-grid p { color: var(--dim); margin: 0 0 12px; }
+    @media (min-width: 860px) { .v2-grid { grid-template-columns: repeat(2, 1fr); } .v2-grid article:first-child { grid-column: 1 / -1; } }
+    @media (min-width: 1200px) { .v2-grid { grid-template-columns: repeat(4, 1fr); } .v2-grid article:first-child { grid-column: span 2; grid-row: span 2; } }
+    .v2-shots { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); margin-top: 18px; }
+    .v2-shots img { display: block; width: 100%; height: auto; }
+    @media (min-width: 1000px) { .v2-shots { grid-template-columns: repeat(4, 1fr); } }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="wrap">
+      <a class="brand" href="#top">STEMSTAGE</a>
+      <div class="links">
+        <a href="#v2">New in 2.0</a>
+        <a href="#features">Features</a>
+        <a class="xl" href="#real">Real instruments</a>
+        <a class="xl" href="#friends">Play together</a>
+        <a href="#screens">Screenshots</a>
+        <a href="play/">Play online</a>
+        <a href="leaderboard/">Leaderboard</a>
+        <a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a>
+      </div>
+      <div class="right">
+        <a class="btn primary nav-dl" href="#download"><i class="fa-solid fa-download"></i> Download</a>
+        <button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav-panel"><i class="fa-solid fa-bars"></i><span>Menu</span></button>
+      </div>
+    </div>
+    <div class="nav-panel" id="nav-panel">
+      <a href="#v2">New in 2.0</a>
+      <a href="#features">Features</a>
+      <a href="#real">Real instruments</a>
+      <a href="#friends">Play together</a>
+      <a href="#screens">Screenshots</a>
+      <a href="play/">Play online</a>
+      <a href="leaderboard/">Leaderboard</a>
+      <hr />
+      <a class="small" href="https://github.com/SylarBeck/STEMSTAGE/wiki"><i class="fa-solid fa-book"></i> Wiki</a>
+      <a class="small" href="https://github.com/SylarBeck/STEMSTAGE"><i class="fa-brands fa-github"></i> Source on GitHub</a>
+      <a class="btn primary block" href="#download"><i class="fa-solid fa-download"></i> Download</a>
+    </div>
+  </nav>
+
+  <header class="hero" id="top">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="wrap">
+      <div>
+        <div class="logo" aria-hidden="true">STEMSTAGE</div>
+        <div class="tape-line">any song · any instrument · split by AI</div>
+        <h1>The rhythm game that plays any song</h1>
+        <p class="lead">Drop in a track and an AI splits it into stems. Every part becomes a playable chart: guitar, bass, drums, keys and vocals. Play with a controller, Rock Band gear, a DualSense, or your real guitar, bass and keyboard.</p>
+        <div class="btn-row">
+          <a class="btn primary" id="cta-main" href="#download"><i class="fa-solid fa-download"></i> Download <small id="cta-os">free</small></a>
+          <a class="btn" href="play/"><i class="fa-solid fa-earth-americas"></i> Play online</a>
+          <a class="btn" href="#v2"><i class="fa-solid fa-dragon"></i> New in 2.0</a>
+        </div>
+        <div class="meta" id="release-meta">Windows 10/11 · Linux (AppImage, .deb, .rpm) · MIT licensed</div>
+        <div class="phone-note"><b>On your phone?</b> STEMSTAGE is played on a Windows or Linux PC. Send yourself the link and grab it there.
+          <button class="btn block" type="button" data-send><i class="fa-solid fa-paper-plane"></i> Send it to my computer</button></div>
+      </div>
+      <figure class="hero-shot">
+        <a class="photo taped" href="img/overdrive.webp"><img src="img/overdrive.webp" alt="Overdrive on the guitar highway: the board turns gold" width="1280" height="720" /></a>
+        <figcaption><span class="scrawl">overdrive, 2× score</span></figcaption>
+      </figure>
+    </div>
+  </header>
+
+  <section id="v2">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">New in 2.0</div><h2 class="h-display">Worlds, bosses, and a rock star of your own</h2></div>
+      <figure class="v2-hero">
+        <a class="photo taped" href="img/v2-bossfight.webp"><img src="img/v2-bossfight.webp" alt="A boss fight: the Leviathan coils around the guitar highway while its health bar drains" width="1600" height="900" loading="lazy" /></a>
+        <figcaption><span class="scrawl">the Leviathan crashes the show</span></figcaption>
+      </figure>
+      <div class="v2-grid">
+        <article class="panel">
+          <h3><i class="fa-solid fa-dragon"></i> Five worlds, five bosses</h3>
+          <p>Play in an aquarium on the sea floor, a holo-deck in orbit, a forge over a lava lake, an ice cathedral under the aurora, or ruins floating above the clouds. Each has a boss that can show up mid-song and attack your highway. Hit hard with perfect notes, long streaks and overdrive to beat it for cash, pedals, outfits and a trophy.</p>
+          <a class="btn" href="play/#worlds"><i class="fa-solid fa-earth-americas"></i> See the worlds</a>
+        </article>
+        <article class="panel">
+          <h3><i class="fa-solid fa-shirt"></i> Backstage</h3>
+          <p>A dressing room for your band member, now real people made with MakeHuman: two body types, four face shapes, ten hair styles, beards, real tees, shirts, jackets, jeans, skirts, overalls, boots and sneakers in any colour, plus hats, shades and LED trim, every option shown on your character in 3D. Then build your instruments: models, paint, hardware and glowing strings.</p>
+        </article>
+        <article class="panel">
+          <h3><i class="fa-solid fa-sliders"></i> Gear that plays</h3>
+          <p>Upgrade pickups, amps, strings, shells and more with the cash every song pays, and plug in pedals: more overdrive, streak shields, a faster multiplier, extra boss damage. Turn gear off for ranked runs.</p>
+        </article>
+        <article class="panel">
+          <h3><i class="fa-solid fa-helmet-safety"></i> Build your stage</h3>
+          <p>Pick a backdrop, a floor, the light rig, props for the wings and the stage front, something overhead, the atmosphere and the crowd. Then play any song on it.</p>
+        </article>
+        <article class="panel">
+          <h3><i class="fa-solid fa-magnifying-glass"></i> Find a match</h3>
+          <p>Matchmaking by match type, skill rating and region. Hosts choose the stage, bosses and gear rules, lock or size the room, and kick players. Rooms show everyone's ping and recover from dropped connections.</p>
+          <a class="btn primary" href="play/"><i class="fa-solid fa-earth-americas"></i> Play online</a>
+        </article>
+      </div>
+      <div class="v2-shots">
+        <a class="photo" href="img/v2-backstage-character.webp"><img src="img/v2-backstage-character.webp" alt="Backstage: the character editor with tops shown on the character in 3D" width="1600" height="900" loading="lazy" /></a>
+        <a class="photo" href="img/v2-backstage-gear.webp"><img src="img/v2-backstage-gear.webp" alt="Backstage: guitar upgrades and rig stats" width="1600" height="900" loading="lazy" /></a>
+        <a class="photo" href="img/v2-backstage-stage.webp"><img src="img/v2-backstage-stage.webp" alt="The stage creator" width="1600" height="900" loading="lazy" /></a>
+        <a class="photo" href="img/v2-world-forge.webp"><img src="img/v2-world-forge.webp" alt="The Volcanic Forge and the Magma Titan" width="1600" height="900" loading="lazy" /></a>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">How it works</div><h2 class="h-display">Your music, charted in minutes</h2></div>
+      <div class="cards">
+        <div class="card paper taped"><span class="n">1</span><i class="fa-solid fa-compact-disc"></i><h3>Drop in any song</h3><p>An audio file, a folder, or a YouTube search or playlist. Title, artist and cover art are filled in for you.</p></div>
+        <div class="card paper taped"><span class="n">2</span><i class="fa-solid fa-scissors"></i><h3>AI splits it into stems</h3><p>Demucs separates drums, bass, guitar, piano and vocals on your GPU. basic-pitch transcribes the notes and Whisper hears the lyrics.</p></div>
+        <div class="card paper taped"><span class="n">3</span><i class="fa-solid fa-guitar"></i><h3>Play any part</h3><p>Four difficulties with overdrive phrases for every instrument. Solo, as a four-piece band, or online with friends.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">Features</div><h2 class="h-display">Everything the band needs</h2></div>
+      <div class="feats">
+        <div class="feat"><i class="fa-solid fa-layer-group"></i><h3>Any song, any part</h3><p>Demucs <code>htdemucs_6s</code> stems, neural note transcription, and an auto-charter that builds Easy to Expert.</p></div>
+        <div class="feat"><i class="fa-solid fa-guitar"></i><h3>Real instruments <span class="stamp new">New</span></h3><p>Plug in a real guitar or bass and read scrolling tablature, or play keys on a MIDI keyboard with notes falling onto a piano.</p></div>
+        <div class="feat"><i class="fa-solid fa-gamepad"></i><h3>DualSense, done properly</h3><p>Adaptive triggers that click like frets, haptics, lightbar and player LEDs over USB and Bluetooth, with near-zero input lag.</p></div>
+        <div class="feat"><i class="fa-solid fa-microphone-lines"></i><h3>Sing, with checked lyrics <span class="stamp new">New</span></h3><p>Karaoke pitch scoring with AI lyrics, cross-checked against the LRCLIB lyrics database so misheard words get fixed.</p></div>
+        <div class="feat"><i class="fa-brands fa-discord"></i><h3>Discord <span class="stamp new">New</span></h3><p>Link your profile, show what you're playing, and let friends press Join to hop into your online room.</p></div>
+        <div class="feat"><i class="fa-solid fa-drum"></i><h3>Every controller</h3><p>Xbox, DualShock, Switch Pro, Joy-Con, Rock Band and Guitar Hero guitars and drums, MIDI kits, keyboard. Each gets its own profile.</p></div>
+        <div class="feat"><i class="fa-solid fa-people-group"></i><h3>Band &amp; online</h3><p>Up to four local players, or online rooms with an invite code and no port forwarding. Songs are sent to your friends for you.</p></div>
+        <div class="feat"><i class="fa-solid fa-ticket"></i><h3>Tour &amp; career</h3><p>Seven venues from the garage to a festival main stage, daily challenges, XP, 34 achievements and a <a href="leaderboard/">world leaderboard</a>.</p></div>
+        <div class="feat"><i class="fa-solid fa-ghost"></i><h3>Ghosts &amp; replays</h3><p>Every run is recorded. Watch it back, or race your best as a ghost.</p></div>
+        <div class="feat"><i class="fa-solid fa-pen-ruler"></i><h3>Chart editor</h3><p>Fix the AI's charts with a controller, keyboard or mouse, with live playback and undo.</p></div>
+        <div class="feat"><i class="fa-brands fa-twitch"></i><h3>Stream mode</h3><p>Twitch chat votes for the next song and requests tracks, and an OBS overlay shows it all.</p></div>
+        <div class="feat"><i class="fa-solid fa-universal-access"></i><h3>Accessible</h3><p>Colour-blind palettes, calm visuals, lane assist for one-handed play, auto sustain and a bigger HUD.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="real">
+    <div class="wrap split">
+      <div>
+        <div class="kicker">Real instrument mode</div>
+        <h2 class="h-display">Learn it on the real thing</h2>
+        <p class="lead">Guitar, bass and keys can be played on the real instrument. STEMSTAGE listens to your audio interface or MIDI keyboard and scores every note.</p>
+        <ul class="checks">
+          <li><i class="fa-solid fa-check"></i><span><b>Tablature</b> for guitar and bass: string and fret for every note, fingered the way a player would, with chords, sustains and bar lines.</span></li>
+          <li><i class="fa-solid fa-check"></i><span><b>Keyboard</b> for keys, with notes falling onto the keys you need to press.</span></li>
+          <li><i class="fa-solid fa-check"></i><span>Shows what you're playing live: green when it's right, gold when it isn't.</span></li>
+          <li><i class="fa-solid fa-check"></i><span>Octave-free scoring, and input latency learned while you play.</span></li>
+        </ul>
+      </div>
+      <div class="stack">
+        <a class="photo tilt-l" href="img/real-guitar.webp"><img src="img/real-guitar.webp" alt="Scrolling guitar tablature above the highway" loading="lazy" width="1280" height="720" /></a>
+        <a class="photo tilt-r" href="img/real-keys.webp"><img src="img/real-keys.webp" alt="Piano keyboard with falling notes above the highway" loading="lazy" width="1280" height="720" /></a>
+      </div>
+    </div>
+  </section>
+
+  <section id="friends">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">Play together</div><h2 class="h-display">Join a friend's room</h2></div>
+      <div class="together">
+        <div class="panel">
+          <h3>Got an invite code?</h3>
+          <p>Type the words your friend sent you, like <b>POTTER-SIMON-FLORAL-EDGES</b>. STEMSTAGE opens straight into their room, or you can download it first.</p>
+          <form class="joinform" id="joinform" autocomplete="off">
+            <input type="text" id="joincode" name="code" placeholder="Invite code" aria-label="Invite code" spellcheck="false" autocapitalize="characters" enterkeyhint="go" />
+            <button class="btn primary" type="submit"><i class="fa-solid fa-right-to-bracket"></i> Join</button>
+            <div class="err" id="joinerr" role="status"></div>
+          </form>
+        </div>
+        <div class="panel">
+          <h3>Hosting?</h3>
+          <p>In the game open <b>Online → Host online</b>, then press <b>Invite friends</b> to copy a link. Paste it in Discord: anyone can click it, even friends who don't have STEMSTAGE yet.</p>
+          <a class="btn" href="leaderboard/"><i class="fa-solid fa-ranking-star"></i> World leaderboard</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">Screenshots</div><h2 class="h-display">See it on stage</h2><div class="swipe-hint" aria-hidden="true">Swipe <i class="fa-solid fa-arrow-right-long"></i></div></div>
+      <div class="shots">
+        <figure><a class="photo" href="img/gameplay.webp"><img src="img/gameplay.webp" alt="Guitar highway" loading="lazy" width="1280" height="720" /></a><figcaption>guitar highway + streak lights</figcaption></figure>
+        <figure><a class="photo" href="img/menu.webp"><img src="img/menu.webp" alt="Main menu" loading="lazy" width="1280" height="720" /></a><figcaption>the main menu</figcaption></figure>
+        <figure><a class="photo" href="img/drums.webp"><img src="img/drums.webp" alt="Drums with cymbal gems" loading="lazy" width="1280" height="720" /></a><figcaption>drums with cymbal gems</figcaption></figure>
+        <figure><a class="photo" href="img/setlist.webp"><img src="img/setlist.webp" alt="Setlist" loading="lazy" width="1280" height="720" /></a><figcaption>your setlist, charted by AI</figcaption></figure>
+        <figure><a class="photo" href="img/band.webp"><img src="img/band.webp" alt="Band lobby" loading="lazy" width="1280" height="720" /></a><figcaption>band lobby, up to 4 players</figcaption></figure>
+        <figure><a class="photo" href="img/controllers.webp"><img src="img/controllers.webp" alt="Controller hub" loading="lazy" width="1280" height="720" /></a><figcaption>a profile for every controller</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">Download</div><h2 class="h-display">Free for Windows &amp; Linux</h2><p class="lead" id="dl-lead">The latest release, straight from GitHub. The Windows app and the Linux AppImage update themselves.</p></div>
+      <div class="dl-phone panel"><h3>You're on a phone</h3><p class="muted" style="margin:0 0 14px">These installers are for Windows and Linux computers. Send the page to yourself and download it there.</p><button class="btn primary block" type="button" data-send><i class="fa-solid fa-paper-plane"></i> Send it to my computer</button></div>
+      <div class="dls" id="downloads">
+        <a class="dl" data-os="windows" data-match="setup\.exe$" href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><i class="fa-brands fa-windows"></i><b>Windows</b><span>Installer for Windows 10 and 11</span><em>.exe</em></a>
+        <a class="dl" data-os="linux" data-match="\.AppImage$" href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><i class="fa-brands fa-linux"></i><b>Linux · AppImage</b><span>Any distro: make it executable and run</span><em>.AppImage</em></a>
+        <a class="dl" data-os="debian" data-match="\.deb$" href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><i class="fa-brands fa-ubuntu"></i><b>Ubuntu / Debian</b><span>.deb package</span><em>.deb</em></a>
+        <a class="dl" data-os="fedora" data-match="\.rpm$" href="https://github.com/SylarBeck/STEMSTAGE/releases/latest"><i class="fa-brands fa-fedora"></i><b>Fedora / openSUSE</b><span>.rpm package</span><em>.rpm</em></a>
+      </div>
+      <div class="notes">
+        <div class="note"><h3><i class="fa-solid fa-circle-check"></i> One-click install</h3>The installer sets up the game, the DualSense controller bridge and (if you want it) the AI splitter. Nothing else to install.</div>
+        <div class="note"><h3><i class="fa-solid fa-microchip"></i> The AI splitter</h3>A 3–5 GB download during setup (or later from Settings). An NVIDIA GPU makes splitting fast; without one, a built-in splitter is used.</div>
+        <div class="note"><h3><i class="fa-solid fa-book"></i> Help</h3>Installation, controllers, Discord and troubleshooting are in the <a href="https://github.com/SylarBeck/STEMSTAGE/wiki">wiki</a>.</div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div><a class="brand" href="#top">STEMSTAGE</a><div style="margin-top:8px">MIT licensed · Font Awesome icons (CC BY 4.0) · Anton, Barlow Condensed, Big Shoulders Stencil (OFL) and Permanent Marker (Apache 2.0)</div></div>
+      <div class="flinks">
+        <a href="https://github.com/SylarBeck/STEMSTAGE">GitHub</a>
+        <a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a>
+        <a href="https://github.com/SylarBeck/STEMSTAGE/releases">Releases</a>
+        <a href="https://github.com/SylarBeck/STEMSTAGE/issues">Report a bug</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/site.js"></script>
+  <script>
+    // Latest release → direct download links, sizes and the right button for this visitor's OS
+    const ua = navigator.userAgent;
+    const os = window.stemstagePhone ? null : /Windows/i.test(ua) ? 'windows' : /Ubuntu|Debian|Mint|Pop!_OS/i.test(ua) ? 'debian' : /Fedora|openSUSE|Red Hat/i.test(ua) ? 'fedora' : /Linux|X11/i.test(ua) ? 'linux' : null;
+    const osName = { windows: 'for Windows', linux: 'for Linux', debian: 'for Ubuntu / Debian', fedora: 'for Fedora' };
+    if (os) {
+      document.getElementById('cta-os').textContent = osName[os];
+      document.querySelector(`.dl[data-os="${os}"]`)?.classList.add('mine');
+    }
+    if (window.stemstagePhone) document.getElementById('cta-os').textContent = 'for PC';
+    document.querySelectorAll('[data-send]').forEach((b) => b.addEventListener('click', () => window.stemstageSend(b, 'https://stemstage.varconstint.com/#download', 'STEMSTAGE', 'STEMSTAGE, the rhythm game that plays any song. Download it on your computer (Windows or Linux):')));
+    const mb = (b) => `${(b / 1048576).toFixed(0)} MB`;
+    fetch('https://api.github.com/repos/SylarBeck/STEMSTAGE/releases/latest')
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((rel) => {
+        const assets = rel.assets || [];
+        document.getElementById('release-meta').innerHTML = `<b>${rel.name || rel.tag_name}</b> · ${new Date(rel.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} · Windows &amp; Linux · MIT licensed`;
+        document.getElementById('dl-lead').textContent = `${rel.name || rel.tag_name}, straight from GitHub. The Windows app and the Linux AppImage update themselves.`;
+        for (const el of document.querySelectorAll('.dl')) {
+          const a = assets.find((x) => new RegExp(el.dataset.match).test(x.name) && !/\.sig$/.test(x.name));
+          if (!a) continue;
+          el.href = a.browser_download_url;
+          el.querySelector('em').textContent = `${a.name} · ${mb(a.size)}`;
+          if (el.dataset.os === os) document.getElementById('cta-main').href = a.browser_download_url;
+        }
+      })
+      .catch(() => { /* keep the links to the releases page */ });
+
+    // "Join a friend's room": the code → the invite page (which opens the game or offers the download)
+    document.getElementById('joinform').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const code = document.getElementById('joincode').value.trim().replace(/[\s_]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+      if (!/^[A-Za-z]+(-[A-Za-z]+){1,9}$/.test(code)) { document.getElementById('joinerr').textContent = 'An invite code is a few words joined by dashes, like POTTER-SIMON-FLORAL-EDGES'; return; }
+      location.href = `join/?code=${encodeURIComponent(code.toUpperCase())}`;
+    });
+  </script>
+  <script src="js/auth.js"></script>
+</body>
+</html>
