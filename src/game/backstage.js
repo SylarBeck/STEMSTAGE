@@ -13,9 +13,10 @@ const PLACE = { guitar: [0, 0], bass: [0, 0], vocals: [0, -0.15], drums: [0, -0.
 // camera framings: target (relative to the turntable) and distance
 const SHOTS = {
   full: { t: V(0, 1.2, 0), d: 4.6, h: 0.25 },
-  head: { t: V(0, 2.18, 0), d: 1.25, h: 0.02 },
-  torso: { t: V(0, 1.7, 0), d: 2.2, h: 0.08 },
+  head: { t: V(0, 2.08, 0), d: 1.15, h: 0.02 },
+  torso: { t: V(0, 1.62, 0), d: 2.2, h: 0.08 },
   legs: { t: V(0, 0.8, 0), d: 2.6, h: 0.2 },
+  feet: { t: V(0, 0.4, 0), d: 1.7, h: 0.35 },
   instrument: { t: V(0.1, 1.45, 0.25), d: 2.0, h: 0.15 },
   drums: { t: V(0, 1.2, 0.3), d: 4.2, h: 0.5 },
   keys: { t: V(0, 1.4, 0.3), d: 3.0, h: 0.35 },
@@ -299,15 +300,19 @@ export class Backstage {
     return this.members[part];
   }
 
-  /** Show the band member at one part (guitar, bass, drums, keys, vocals). */
-  setPart(part) {
+  /**
+   * Show the band member at one part (guitar, bass, drums, keys, vocals). gear: show the drum kit and keyboard stand
+   * (instrument editing); without them the drummer and keys player stand, so nothing hides the character.
+   */
+  setPart(part, gear = this.gear ?? false) {
     this.part = part;
+    this.gear = gear;
     this.member(part);
     for (const [k, m] of Object.entries(this.members)) {
       const on = k === part;
       m.g.visible = on;
-      if (m.kit) m.kit.group.visible = on;
-      if (m.keys) m.keys.group.visible = on;
+      if (m.kit) m.kit.group.visible = on && gear;
+      if (m.keys) m.keys.group.visible = on && gear;
       if (m.micStand) m.micStand.visible = on;
     }
   }
@@ -316,6 +321,19 @@ export class Backstage {
     const m = this.member();
     m.setLook(look);
     m.setRig(rig);
+  }
+
+  /**
+   * Where a framing looks: the member's own head, chest, knees or feet when it's loaded (bodies differ in height),
+   * else the framing's fixed point.
+   */
+  aim(key, sh = SHOTS[key]) {
+    const f = this.member()?.fig;
+    const bone = f?.retarget && { head: f.head, torso: f.spine, legs: f.legs[0].knee, feet: f.legs[0].ankle }[key];
+    if (!bone) return sh.t;
+    const p = bone.getWorldPosition(this._aim ||= V());
+    const lift = { head: 0.1, torso: 0.38, legs: 0.05, feet: 0.05 }[key];
+    return p.set(sh.t.x, p.y + lift, sh.t.z);
   }
 
   /** Swoop the camera to a framing: full | head | torso | legs | instrument (instrument picks the part's own). */
@@ -365,7 +383,7 @@ export class Backstage {
     // springs: camera framing, pop, punch-in, flash
     const sh = SHOTS[this.shot];
     const k = 1 - Math.exp(-dt * 4.5);
-    this.camT.lerp(sh.t, k);
+    this.camT.lerp(this.aim(this.shot, sh), k);
     this.camD += (sh.d - this.camD) * k;
     this.camH += (sh.h - this.camH) * k;
     this.punch = Math.max(0, this.punch - dt * 1.4);
@@ -464,8 +482,9 @@ export class Backstage {
       animateMember(m, { bp: 0.6, hb: 0, energy: 0.2, od: false, t: 1, pulse: 0 });
       const sh = SHOTS[job.framing] || SHOTS.full;
       const dd = sh.d * (job.framing === 'head' ? 0.95 : 0.9);
-      cam.position.set(sh.t.x + Math.sin(0.25) * dd, sh.t.y + sh.h * dd + 0.02, sh.t.z + Math.cos(0.25) * dd);
-      cam.lookAt(sh.t);
+      const at = this.aim(job.framing, sh);
+      cam.position.set(at.x + Math.sin(0.25) * dd, at.y + sh.h * dd + 0.02, at.z + Math.cos(0.25) * dd);
+      cam.lookAt(at);
       cam.aspect = w / h; cam.updateProjectionMatrix();
       gl.setViewport(0, 0, w, h);
       gl.setScissor(0, 0, w, h);

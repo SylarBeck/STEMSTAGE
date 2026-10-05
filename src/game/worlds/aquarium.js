@@ -90,7 +90,7 @@ export function buildAquarium() {
   group.add(kelpMesh);
 
   // coral reef along the front of the stage and the sides: brain coral, tube coral with glowing tips, fans
-  const brainGeo = new THREE.SphereGeometry(1, 24, 16);
+  const brainGeo = new THREE.SphereGeometry(1, 16, 11);
   { const p = brainGeo.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const k = 1 + 0.08 * Math.sin(x * 9 + Math.sin(z * 7) * 2) * Math.sin(y * 8); p.setXYZ(i, x * k, y * k * 0.7, z * k); } brainGeo.computeVertexNormals(); }
   const coralCols = [0xff7a6a, 0xff9ad0, 0xffc26a, 0xb48cff, 0x6affd0];
   const brain = instances(brainGeo, std(0xffffff, 0.75), 70, (i, d) => {
@@ -125,7 +125,7 @@ export function buildAquarium() {
 
   // schools of fish swimming on loops (all on the GPU)
   const fishGeo = (() => {
-    const body = new THREE.SphereGeometry(0.22, 10, 8); body.scale(1.6, 0.6, 0.35);
+    const body = new THREE.SphereGeometry(0.22, 8, 6); body.scale(1.6, 0.6, 0.35);
     const tail = new THREE.ConeGeometry(0.16, 0.3, 4); tail.rotateZ(Math.PI / 2); tail.translate(-0.45, 0, 0); tail.scale(1, 1, 0.3);
     const g = new THREE.BufferGeometry();
     const a = body.toNonIndexed(), b = tail.toNonIndexed();

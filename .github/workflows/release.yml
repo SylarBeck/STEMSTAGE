@@ -69,13 +69,20 @@ jobs:
           tagName: v__VERSION__
           releaseName: STEMSTAGE v__VERSION__
           releaseBody: |
+            **STEMSTAGE 2.0.1** — real people on stage.
+            - **New band members**: every character is now a real, fully rigged person made with MakeHuman: two body types, four face shapes, builds and heights, ten hair styles, beards, and real clothes (tees, long sleeves, shirts, blouses, jackets, suits, jeans, skirts, overalls, six kinds of shoes) in any colour. Nobody's clothes clip and nobody goes without them.
+            - **Instrument animations redone**: hands grip the guitar neck and strum over the strings, play the keys palms-down, hold the mic to the mouth, and drum on a proper right-handed kit.
+            - **Smoother**: shaders for worlds and bosses compile while the song loads (no freeze when a boss appears), a lighter crowd, and an automatic render scale that keeps the frame rate up on laptops and integrated graphics.
+            - **Backstage**: matches the rest of the game; body, face, bottoms and shoes have their own pickers.
+            Plays online with everyone on 2.0.
+
             **STEMSTAGE 2.0** — the biggest update yet.
             - **Backstage**: a new screen to build your rock star (detailed, animated characters: hair, faces, clothes, accessories, LED trim, stage moves) and your instruments (models, paint, hardware, LED glow), with live 3D previews of every item.
             - **Gear**: upgrade pickups, amps, strings and more with cash, and equip pedals that change how you play (overdrive, sustain, streak shields, timing, multiplier, boss damage). Gear runs stay off the world leaderboard; turn gear off for ranked play.
             - **Five worlds with bosses**: Abyssal Aquarium (the Leviathan), Orbital Nebula (the Void Conductor), Volcanic Forge (the Magma Titan), Crystal Aurora (the Frost Wyrm) and Storm Citadel (the Thunderbird). Bosses show up mid-song, attack your highway, and drop cash, pedals, wardrobe pieces and trophies.
             - **Stage creator**: build your own stages from backdrops, floors, light rigs, props, atmosphere and colours.
             - **Online**: Find match (skill rating, region, mode), host controls (stage, bosses, gear, room size, lock, auto-start, kick), ping per player, spectating, faster recovery from dropped connections, version checks.
-            Online play needs everyone on 2.0.
+            Online play needs everyone on 2.0 or later.
 
             **Windows:** download `STEMSTAGE_*_x64-setup.exe` and run it.
             **Linux:** `STEMSTAGE_*_amd64.AppImage` (any distro: `chmod +x` and run), or the `.deb` (Ubuntu / Debian) / `.rpm` (Fedora / openSUSE) package.

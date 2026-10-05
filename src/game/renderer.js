@@ -129,6 +129,9 @@ export class Renderer {
     this.composer.addPass(this.fxPass);
     this.composer.addPass(new OutputPass());
     this.time = 0;
+    // Auto render scale: when frames run long the 3D drops resolution in steps (and comes back when there's room),
+    // so integrated graphics hold their frame rate. Only with Settings → Render scale on Auto.
+    this.dyn = { scale: 1, acc: 0, n: 0, slow: 0, fast: 0, last: 0 };
     this.setQuality(quality);
     window.addEventListener('resize', () => this.resize());
     this.resize();
@@ -143,6 +146,7 @@ export class Renderer {
 
   setHighways(list) {
     this.hwyPass.highways = list;
+    for (const h of list) if (h.scene && h.camera) this.warm(h.scene, h.camera);
     this._layout();
   }
 
@@ -155,6 +159,7 @@ export class Renderer {
 
   setQuality(q, bloom = true) {
     this.quality = q;
+    this.dyn.scale = 1;
     this.bloom.enabled = bloom && q !== 'low';
     this.sanitize.enabled = this.bloom.enabled;
     this.fxPass.uniforms.uGrain.value = q === 'low' || !settings.filmGrain ? 0 : 0.012;
@@ -181,7 +186,7 @@ export class Renderer {
     const w = window.innerWidth, h = window.innerHeight;
     const scale = Number(settings.renderScale);
     const pr = Number.isFinite(scale) && scale >= 50 && scale <= 200
-      ? scale / 100 : Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.quality] || 1.25);
+      ? scale / 100 : Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.quality] || 1.25) * this.dyn.scale;
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
     this.composer.setPixelRatio(pr);
@@ -191,7 +196,38 @@ export class Renderer {
     this._layout();
   }
 
+  /**
+   * Compile every material in a scene, hidden ones too (a world's boss, pyro, effects), so nothing stalls the first
+   * time it appears mid-song. Synchronous: call it while a loading message is up.
+   */
+  warm(scene = this.stage.scene, camera = this.stage.camera) {
+    const hidden = [];
+    scene.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+    try { this.renderer.compile(scene, camera); } catch (e) { console.warn('[renderer] warm-up', e); }
+    for (const o of hidden) o.visible = false;
+  }
+
+  /** The auto render-scale governor (see the constructor). */
+  _govern(now) {
+    const d = this.dyn;
+    const gap = d.last ? now - d.last : 0;
+    d.last = now;
+    if (settings.renderScale !== 'auto' || document.hidden || gap <= 0 || gap > 250) return;
+    d.acc += gap; d.n++;
+    if (d.acc < 1000) return;
+    const avg = d.acc / d.n;
+    d.acc = 0; d.n = 0;
+    const cap = Number(settings.frameLimit);
+    const budget = Number.isFinite(cap) && cap >= 1 ? 1000 / cap : 1000 / 60;
+    if (avg > budget * 1.18) { d.slow++; d.fast = 0; } else if (avg < budget * 1.04) { d.fast++; d.slow = 0; } else { d.slow = d.fast = 0; }
+    let next = d.scale;
+    if (d.slow >= 2 && d.scale > 0.55) next = Math.max(0.55, d.scale - (avg > budget * 1.6 ? 0.15 : 0.08));
+    else if (d.fast >= 6 && d.scale < 1) next = Math.min(1, d.scale + 0.05);
+    if (next !== d.scale) { d.scale = +next.toFixed(2); d.slow = d.fast = 0; this.resize(); }
+  }
+
   render(dt = 0.016) {
+    this._govern(performance.now());
     this.time += dt;
     this.fxPass.uniforms.uTime.value = this.time;
     if (!this.hwyPass.highways.length) this.setFx({ aberration: 0, shock: -1, od: 0 });

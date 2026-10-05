@@ -15,7 +15,9 @@ Moving over any card **tries it on**: the 3D preview shows it right away. Press 
 
 ## Character
 
-Presets, the part you stand at on stage, body (build, height, skin), hair (10 styles, 10 colours), face (facial hair, eyewear), headwear, tops (T-shirt, tank, leather jacket, hoodie, long coat, waistcoat) in two colours, trousers and shoes, accessories (chain, scarf, shoulder spikes, cape, frost wings), LED trim and a **stage move** (headbanger, groover, jumper, power stance, showboat). Your character plays your part in every song and appears in your friends' games online.
+Presets, the part you stand at on stage, body (two body types, build, height, skin), face (four face shapes, facial hair, eyewear), hair (10 styles, 10 colours), headwear, tops (T-shirt, sport top, long sleeve, pinstripe shirt, blouse, jacket, suit jacket), bottoms (jeans, suit trousers, skirt, overalls) and shoes (sneakers, runners, boots, dress shoes, brogues, hikers), each in any colour, accessories (chain, scarf, shoulder spikes, cape, frost wings), LED trim and a **stage move** (headbanger, groover, jumper, power stance, showboat). Your character plays your part in every song and appears in your friends' games online.
+
+The people, hair and clothes are [MakeHuman](http://www.makehumancommunity.org/) models (CC0), made with MPFB in Blender by `tools/mpfb/build_band.py`. Every outfit has a top, bottoms and shoes: there is no way to take them off.
 
 ## Instruments
 

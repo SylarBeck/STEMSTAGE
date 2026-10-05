@@ -4,7 +4,7 @@
 // randomize and "strike a pose". Controller-first like every other screen.
 import { profiles, levelInfo } from '../profile/profiles.js';
 import {
-  PARTS, SKINS, HAIR_COLORS, OUTFITS, GLOWS as LOOK_GLOWS, HAIR_STYLES, FACIAL, EYEWEAR, HEADWEAR, TOPS, EXTRAS, BUILDS, HEIGHTS, MOVES,
+  PARTS, SKINS, HAIR_COLORS, OUTFITS, GLOWS as LOOK_GLOWS, HAIR_STYLES, FACIAL, EYEWEAR, HEADWEAR, TOPS, EXTRAS, BUILDS, HEIGHTS, MOVES, BODIES, FACES, LEGS, KICKS,
   LABEL, PRESETS, WARDROBE_REQ, wardrobeId, cleanLook, fromPreset, lockedPieces,
 } from '../profile/looks.js';
 import {
@@ -42,17 +42,17 @@ const COMP_ICON = { odGain: 'bolt', odTime: 'hourglass-half', sustain: 'wave-squ
 const CHAR_CATS = [
   { id: 'presets', name: 'Presets', icon: 'wand-magic-sparkles', shot: 'full', blurb: 'Start from a famous look, then make it yours.', sections: [{ kind: 'presets' }] },
   { id: 'part', name: 'Position', icon: 'guitar', shot: 'full', blurb: 'Where you stand when the band plays.', sections: [{ field: 'part', label: 'On stage at', values: PARTS, kind: 'part' }] },
-  { id: 'body', name: 'Body', icon: 'person', shot: 'full', blurb: 'Build, height and skin tone.', sections: [{ field: 'skin', label: 'Skin tone', values: SKINS, kind: 'swatch' }, { field: 'build', label: 'Build', values: BUILDS, kind: 'thumb' }, { field: 'height', label: 'Height', values: HEIGHTS, kind: 'thumb' }] },
+  { id: 'body', name: 'Body', icon: 'person', shot: 'full', blurb: 'Body type, build, height and skin tone.', sections: [{ field: 'body', label: 'Body', values: BODIES, kind: 'thumb' }, { field: 'skin', label: 'Skin tone', values: SKINS, kind: 'swatch' }, { field: 'build', label: 'Build', values: BUILDS, kind: 'thumb' }, { field: 'height', label: 'Height', values: HEIGHTS, kind: 'thumb' }] },
   { id: 'hair', name: 'Hair', icon: 'scissors', shot: 'head', blurb: 'Ten cuts, ten colours.', sections: [{ field: 'hair', label: 'Style', values: HAIR_STYLES, kind: 'thumb' }, { field: 'hairColor', label: 'Colour', values: HAIR_COLORS, kind: 'swatch' }] },
-  { id: 'face', name: 'Face', icon: 'face-smile', shot: 'head', blurb: 'Facial hair and eyewear.', sections: [{ field: 'facial', label: 'Facial hair', values: FACIAL, kind: 'thumb' }, { field: 'eyes', label: 'Eyewear', values: EYEWEAR, kind: 'thumb' }] },
+  { id: 'face', name: 'Face', icon: 'face-smile', shot: 'head', blurb: 'Face shape, facial hair and eyewear.', sections: [{ field: 'face', label: 'Face', values: FACES, kind: 'thumb' }, { field: 'facial', label: 'Facial hair', values: FACIAL, kind: 'thumb' }, { field: 'eyes', label: 'Eyewear', values: EYEWEAR, kind: 'thumb' }] },
   { id: 'head', name: 'Headwear', icon: 'hat-cowboy', shot: 'head', blurb: 'Hats, crowns, horns and halos.', sections: [{ field: 'head', label: 'Headwear', values: HEADWEAR, kind: 'thumb' }] },
-  { id: 'top', name: 'Tops', icon: 'shirt', shot: 'torso', blurb: 'Jackets, hoodies and coats, in two colours.', sections: [{ field: 'topStyle', label: 'Style', values: TOPS, kind: 'thumb' }, { field: 'top', label: 'Main colour', values: OUTFITS, kind: 'swatch' }, { field: 'accent', label: 'Second colour', values: OUTFITS, kind: 'swatch' }] },
-  { id: 'legs', name: 'Legs & shoes', icon: 'shoe-prints', shot: 'legs', blurb: 'Trousers and boots.', sections: [{ field: 'pants', label: 'Trousers', values: OUTFITS, kind: 'swatch' }, { field: 'shoes', label: 'Shoes', values: OUTFITS, kind: 'swatch' }] },
+  { id: 'top', name: 'Tops', icon: 'shirt', shot: 'torso', blurb: 'Tees, shirts, blouses and jackets. The second colour is for hats and accessories.', sections: [{ field: 'topStyle', label: 'Style', values: TOPS, kind: 'thumb' }, { field: 'top', label: 'Main colour', values: OUTFITS, kind: 'swatch' }, { field: 'accent', label: 'Second colour', values: OUTFITS, kind: 'swatch' }] },
+  { id: 'legs', name: 'Legs & shoes', icon: 'shoe-prints', shot: 'legs', blurb: 'Jeans, skirts, overalls, boots and sneakers.', sections: [{ field: 'legs', label: 'Bottoms', values: LEGS, kind: 'thumb' }, { field: 'pants', label: 'Colour', values: OUTFITS, kind: 'swatch' }, { field: 'kicks', label: 'Shoes', values: KICKS, kind: 'thumb' }, { field: 'shoes', label: 'Shoe colour', values: OUTFITS, kind: 'swatch' }] },
   { id: 'extras', name: 'Extras', icon: 'gem', shot: 'torso', blurb: 'Accessories and LED trim that glows on stage.', sections: [{ field: 'extra', label: 'Accessory', values: EXTRAS, kind: 'thumb' }, { field: 'glow', label: 'LED trim', values: LOOK_GLOWS, kind: 'swatch' }] },
   { id: 'moves', name: 'Stage moves', icon: 'person-running', shot: 'full', blurb: 'How you move when the music hits.', sections: [{ field: 'move', label: 'Move', values: MOVES, kind: 'move' }] },
 ];
 const MOVE_ICON = { headbang: 'head-side-virus', sway: 'water', bounce: 'arrows-up-down', power: 'person-burst', spin: 'arrows-spin' };
-const FIELD_SHOT = { hair: 'head', facial: 'head', eyes: 'head', head: 'head', topStyle: 'torso', extra: 'torso', build: 'full', height: 'full' };
+const FIELD_SHOT = { hair: 'head', facial: 'head', eyes: 'head', head: 'head', face: 'head', topStyle: 'torso', extra: 'torso', build: 'full', height: 'full', body: 'full', legs: 'legs', kicks: 'feet' };
 
 const instCats = (part) => [
   { id: 'model', name: 'Model', icon: part === 'drums' ? 'drum' : part === 'keys' ? 'music' : part === 'vocals' ? 'microphone' : 'guitar', shot: 'instrument', blurb: 'The instrument itself.', sections: [{ rig: 'shape', label: 'Model', values: SHAPES[part], kind: 'thumb' }] },
@@ -87,7 +87,7 @@ export function installCreator(ui) {
   // ---------------------------------------------------------------- the 3D model
   function showModel(lk = look(), rig = null) {
     const part = shownPart();
-    bs.setPart(part);
+    bs.setPart(part, st.mode === 'instrument');
     bs.dress(lk, rig || rigFor(part));
   }
   function frame(shot) {
@@ -544,10 +544,10 @@ export function installCreator(ui) {
     };
     const lk = look();
     const nl = cleanLook({
-      ...lk, preset: null, skin: pickFree('skin', SKINS), build: pickFree('build', BUILDS), height: pickFree('height', HEIGHTS),
+      ...lk, preset: null, body: pickFree('body', BODIES), face: pickFree('face', FACES), skin: pickFree('skin', SKINS.slice(0, 6)), build: pickFree('build', BUILDS), height: pickFree('height', HEIGHTS),
       hair: pickFree('hair', HAIR_STYLES), hairColor: pickFree('hairColor', HAIR_COLORS), facial: pickFree('facial', FACIAL), eyes: pickFree('eyes', EYEWEAR),
       head: Math.random() < 0.4 ? pickFree('head', HEADWEAR) : 'none', topStyle: pickFree('topStyle', TOPS), top: pickFree('top', OUTFITS), accent: pickFree('accent', OUTFITS),
-      pants: pickFree('pants', OUTFITS), shoes: pickFree('shoes', OUTFITS), extra: Math.random() < 0.5 ? pickFree('extra', EXTRAS) : 'none', move: pickFree('move', MOVES),
+      pants: pickFree('pants', OUTFITS), shoes: pickFree('shoes', OUTFITS), legs: pickFree('legs', LEGS), kicks: pickFree('kicks', KICKS), extra: Math.random() < 0.5 ? pickFree('extra', EXTRAS) : 'none', move: pickFree('move', MOVES),
     });
     profiles.setLook(p.id, nl);
     bs.pose();

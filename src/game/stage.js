@@ -374,12 +374,13 @@ export class Stage {
 
   _crowd() {
     const n = CROWD_COUNT[this.quality] || 950;
-    const body = new THREE.CapsuleGeometry(0.22, 0.75, 3, 7).translate(0, 0.6, 0);
-    const head = new THREE.SphereGeometry(0.17, 8, 6).translate(0, 1.32, 0);
-    const armL = new THREE.CapsuleGeometry(0.06, 0.55, 2, 5).translate(-0.26, 1.35, 0);
+    // silhouettes in the dark: low-poly and Lambert-lit (hundreds of them, every frame)
+    const body = new THREE.CapsuleGeometry(0.22, 0.75, 2, 6).translate(0, 0.6, 0);
+    const head = new THREE.SphereGeometry(0.17, 7, 5).translate(0, 1.32, 0);
+    const armL = new THREE.CapsuleGeometry(0.06, 0.55, 1, 4).translate(-0.26, 1.35, 0);
     const armR = armL.clone().translate(0.52, 0, 0);
     const geo = mergeGeometries([body, head, armL, armR]);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0.05 });
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
     this.crowdUniforms = {
       uCrowdTime: { value: 0 }, uCrowdBeat: { value: 0 },
       uCrowdJump: { value: 0 }, uCrowdOD: { value: 0 },
@@ -414,7 +415,7 @@ export class Stage {
          mvPosition.xyz += vec3(sin(uCrowdTime * 0.5 + aCrowdPhase) * 0.05, jump, 0.0);`,
       ));
     };
-    mat.customProgramCacheKey = () => 'crowd-gpu-animation-v1';
+    mat.customProgramCacheKey = () => 'crowd-gpu-animation-v2';
     this.crowd = new THREE.InstancedMesh(geo, mat, n);
     this.crowdData = [];
     const c = new THREE.Color();

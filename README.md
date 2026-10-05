@@ -29,9 +29,15 @@
   <img src="docs/screenshots/controllers.png" width="49%" alt="Controllers hub with a DualSense" />
 </p>
 
+## New in 2.0.1
+
+- **Real people on stage** — every band member is a fully rigged MakeHuman person (made with MPFB in Blender: `tools/mpfb/build_band.py`): two body types, four face shapes, three builds, three heights, ten hair styles, beards, and real clothes (tees, long sleeves, shirts, blouses, jackets, suits, jeans, skirts, overalls, six kinds of shoes) in any colour. Covered skin is never drawn, so nothing clips; every look always wears a top, bottoms and shoes.
+- **Instrument animations redone** — each hand aims a real grip: under the guitar neck and over the strings, palms down on the keys, around the mic at the mouth, sticks on a right-handed drum kit.
+- **Smoother** — world and boss shaders compile while the song loads, a lighter crowd, and Settings → Video → Render scale **Auto** now lowers the 3D resolution when frames run long and brings it back when there's room.
+
 ## New in 2.0
 
-- **Backstage** — a full screen to build your rock star and your instruments, in a 3D dressing room: sculpted, jointed characters (10 hair styles, facial hair, eyewear, hats, jackets, hoodies, coats, accessories, LED trim, five stage moves) and instruments (guitar / bass bodies, drum kits, keytar, mics; paint, hardware, LED glow). Every item card is a live 3D photo, and moving over one tries it on.
+- **Backstage** — a full screen to build your rock star and your instruments, in a 3D dressing room: real, rigged characters (bodies, faces, 10 hair styles, facial hair, eyewear, hats, tops, bottoms, shoes, accessories, LED trim, five stage moves) and instruments (guitar / bass bodies, drum kits, keytar, mics; paint, hardware, LED glow). Every item card is a live 3D photo, and moving over one tries it on.
 - **Gear** — level up four components per instrument with cash and equip up to three pedals: more overdrive, longer overdrive, sustain points, a calmer crowd, streak shields, a wider timing window, a faster multiplier, boss damage. Gear runs earn XP and cash but stay off the world leaderboard (Settings → Gameplay → Gear modifiers).
 - **Five worlds, five bosses** — the Abyssal Aquarium, Orbital Nebula, Volcanic Forge, Crystal Aurora and Storm Citadel, each a full 3D world with its own boss (the Leviathan, the Void Conductor, the Magma Titan, the Frost Wyrm, the Thunderbird). A boss can show up in the middle of a song: hit notes to damage it while it attacks your highway (ink, bubbles, gravity wells, heat haze, frost, lightning…). Beat it for cash, XP, its pedal, wardrobe pieces, the next world and a trophy for your stage. Scores aren't changed, so boards stay fair.
 - **Stage creator** — Backstage → Stages: backdrops, floors, light rigs (truss, lasers, disco), props for the wings, upstage, the stage front and overhead, atmosphere, crowd and colours. Play any song on your own stage.

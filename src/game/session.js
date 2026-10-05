@@ -44,6 +44,8 @@ export class Session {
    *   replay: a recorded run to play back (cfgs[0] is built from it); ghost: a recorded run to race
    */
   async start(song, audio, cfgs, opts = {}) {
+    // the venue and its boss are set up by now: compile their shaders before the countdown, not mid-song
+    this.renderer.warm?.();
     this.song = song; this.audio = audio; this.cfgs = cfgs; this.opts = opts;
     this.practice = opts.practice || null;
     this.online = opts.online || null;

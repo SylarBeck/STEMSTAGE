@@ -4,6 +4,7 @@ import { createDemo } from './audio/pipeline.js';
 import { getSong, getAudio, listSongs, initScores, storageMode, migrateFromBrowser, songsFolder } from './storage/library.js';
 import { Stage } from './game/stage.js';
 import { Backstage } from './game/backstage.js';
+import { loadHuman } from './game/human.js';
 import { Renderer } from './game/renderer.js';
 import { Session } from './game/session.js';
 import { Hud } from './ui/hud.js';
@@ -14,6 +15,9 @@ import { dualsense } from './input/dualsense.js';
 import { profiles } from './profile/profiles.js';
 import { discord } from './net/discord.js';
 import { Capacitor } from '@capacitor/core';
+
+// the band's bodies download while the menus come up
+loadHuman('m'); loadHuman('f');
 
 const DEMO_ID = 'demo-neon-overdrive';
 
