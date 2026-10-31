@@ -92,14 +92,16 @@ h2.h-display { font-size: clamp(38px, 9vw, 64px); }
 .nav-panel hr { width: 100%; border: 0; border-top: 2px solid var(--line); margin: 12px 0; }
 .nav-panel .btn { margin-top: 14px; font-family: var(--body); font-weight: 800; font-size: 20px; letter-spacing: 0.08em; padding: 12px 20px; color: #fff5ea; }
 body.menu-open { overflow: hidden; }
-@media (min-width: 1000px) {
+/* the links fit in the bar from 1200 px (with the login and Download buttons); below that, the Menu button */
+@media (min-width: 1200px) {
   .menu-btn, .nav-panel, .nav.open .nav-panel { display: none; }
   .nav .links { display: flex; gap: 4px; margin-left: 18px; }
   .nav .links a { padding: 6px 10px; color: var(--dim); text-decoration: none; font-weight: 800; font-size: 17px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
   .nav .links a:hover, .nav .links a.here { color: var(--ink); box-shadow: inset 0 -3px 0 var(--red); }
   .nav-dl { display: inline-flex; min-height: 40px; padding: 6px 14px; font-size: 16px; }
 }
-@media (min-width: 1000px) and (max-width: 1239px) { .nav .links a.xl { display: none; } }
+/* the extra links only fit beside the login and Download buttons on a wide screen */
+@media (min-width: 1200px) and (max-width: 1759px) { .nav .links a.xl { display: none; } }
 
 /* ---------- sections ---------- */
 body > section { padding: 64px 0; position: relative; }

@@ -46,6 +46,12 @@ Pro runs get 25% more XP, and PRO shows in the song title and on your results. R
 
 F11 or Alt+Enter toggles fullscreen in the desktop app.
 
+## Runs and Discover
+
+**Runs** (main menu) is a roguelike night built from your own songs: climb eight floors to the headliner with three hearts, perks and curses. See [Runs](Runs).
+
+**Discover** (main menu) builds setlists from your library and plays, suggests songs like the ones you play, and shows your stats. See [Discover](Discover).
+
 ## Tour, career and challenges
 
 **Tour** takes you through seven venues, from the Garage to a festival main stage, unlocked by stars. Each gig is played in its own venue. The stage really changes: a brick-walled garage with a handful of friends, a hazy club and dive bar, a theatre with a red curtain, and an arena, stadium and festival under the night sky. Once a venue is unlocked you can play everything there (*Settings → Video → Venue*). The **daily challenge** keeps a day streak.

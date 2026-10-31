@@ -3,6 +3,10 @@
 **Players**
 - [Installation](Installation)
 - [Getting Started](Getting-Started)
+- [Live Notes](Live-Notes)
+- [Sections, Solos and Freestyle](Sections-Solos-and-Freestyle)
+- [Runs](Runs)
+- [Discover](Discover)
 - [Backstage](Backstage)
 - [Worlds and Bosses](Worlds-and-Bosses)
 - [Controllers and DualSense](Controllers-and-DualSense)

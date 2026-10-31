@@ -56,7 +56,8 @@
     .ss-menu a:hover, .ss-menu .ss-item:hover { background: #ece5d3; color: #15120e; }
     .ss-menu small { display: block; color: #a59d8b; padding: 4px 10px 8px; font: 500 15px 'Barlow Condensed', system-ui, sans-serif; }
     .ss-menu hr { border: 0; border-top: 1px solid rgba(236,229,211,0.12); margin: 6px 0; }
-    @media (max-width: 999px) {
+    .ss-auth .ss-name { max-width: 9em; overflow: hidden; text-overflow: ellipsis; }
+    @media (max-width: 1199px) {
       .ss-auth .ss-name { display: none; } .ss-auth > button.me { padding: 3px; }
       /* phones: the avatar sits mid-bar, so a menu hung off it would run off the left edge. Drop it full width under the nav instead */
       .ss-menu { position: fixed; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); top: calc(var(--nav-h, 60px) + env(safe-area-inset-top) + 6px); width: auto; max-height: calc(100svh - var(--nav-h, 60px) - 24px); overflow-y: auto; }

@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <!-- only this site's scripts, the world API and the fonts / icons it loads -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self' https://api.stemstage.varconstint.com http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self' https://api.stemstage.varconstint.com https://api.github.com http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Play STEMSTAGE online</title>
   <meta name="description" content="Find a STEMSTAGE match, join an open room, and see who beat the five world bosses fastest." />
   <meta property="og:title" content="Play STEMSTAGE online" />
-  <meta property="og:description" content="Open rooms, matchmaking and the boss hall of fame for STEMSTAGE 2.0." />
+  <meta property="og:description" content="Open rooms, matchmaking and the boss hall of fame for STEMSTAGE." />
   <meta property="og:image" content="https://stemstage.varconstint.com/img/v2-bossfight.webp" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="theme-color" content="#0b0a09" />
@@ -51,6 +51,7 @@
     .section-h { font-family: var(--display); font-weight: 400; font-size: clamp(34px, 6vw, 52px); text-transform: uppercase; margin: 64px 0 6px; line-height: 1; }
     .bosses { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 18px 0 12px; }
     @media (max-width: 760px) { .bosses { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 419px) { .bosses { grid-template-columns: repeat(2, minmax(0, 1fr)); } .bosses b, .bosses small { overflow-wrap: anywhere; } .bosses button:last-child:nth-child(odd) { grid-column: 1 / -1; } }
     .bosses button { font: inherit; text-align: left; padding: 10px 12px; border: 2px solid var(--line-2); border-top: 5px solid var(--bc); background: transparent; color: var(--ink); cursor: pointer; }
     .bosses button[aria-pressed="true"] { background: color-mix(in srgb, var(--bc) 16%, transparent); border-color: var(--bc); }
     .bosses b { display: block; font-weight: 800; font-size: 16px; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -91,7 +92,7 @@
 
   <main class="wrap">
     <header class="page-head">
-      <span class="stamp">STEMSTAGE 2.0</span>
+      <span class="stamp" id="ver-stamp">STEMSTAGE 3.0</span>
       <h1 class="section-h" style="margin-top:14px">Play online</h1>
       <div class="scrawl">find a match, join a room, slay a boss</div>
       <p>Pick a match type and press <b>Find match</b>: STEMSTAGE opens and puts you in the best open room for your skill and region, or opens one for the next players who search. No port forwarding, no accounts.</p>
@@ -159,7 +160,12 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const get = (path) => fetch(`${API}${path}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
-    const MINOR = '2.0';
+    // rooms can be joined by the current release's major.minor (a newer release replaces this as soon as GitHub answers)
+    let MINOR = '3.0';
+    fetch('https://api.github.com/repos/SylarBeck/STEMSTAGE/releases/latest').then((r) => (r.ok ? r.json() : null)).then((rel) => {
+      const m = /^v?(\d+)\.(\d+)/.exec(rel?.tag_name || '');
+      if (m) { MINOR = `${m[1]}.${m[2]}`; $('ver-stamp').textContent = `STEMSTAGE ${MINOR}`; renderRooms(); }
+    }).catch(() => {});
     const REGION = { NA: 'North America', SA: 'South America', EU: 'Europe', AS: 'Asia', AF: 'Africa', OC: 'Oceania', AN: 'Antarctica' };
     const BOSSES = {
       leviathan: { name: 'The Leviathan', world: 'aquarium', color: '#2fd3ff' },

@@ -23,6 +23,14 @@ The DualSense is driven by the **controller bridge** (`server/controller_bridge.
 - **Haptics:** hits, misses and overdrive. *Haptic strength* sets how strong.
 - **Lightbar:** follows your multiplier and overdrive. Player LEDs show your band slot.
 
+### Feel the band (3.0)
+
+*Settings → Controllers → Feel the band: Off, Soft (default) or Strong.*
+
+- **Rumble:** while you play, the kick drum comes through the controller's strong motor and the bass line through the weak one. It works on any controller that rumbles.
+- **Wired DualSense with controller audio:** feels your whole part through its haptic actuators instead, so it isn't doubled.
+- **Triggers:** the DualSense adaptive triggers push back harder for strong notes and lighter for soft ones.
+
 ### Input lag (fixed in 1.4.0)
 Before 1.4.0, a Bluetooth DualSense could lag by 30–120 ms. pydualsense read one input report and then wrote one output report in lockstep, and a Bluetooth write takes longer than the gap between input reports, so reports queued up in the HID buffer. The bridge now reads on its own thread and writes from a second thread, only when the output changes. Button presses are also time-stamped when the bridge reads them, not when the game's render thread gets to them. Measured on a Bluetooth DualSense: median lag went from 34 ms to under 1 ms, and the worst case from 124 ms to 13 ms. See [Controller Bridge Protocol](Controller-Bridge-Protocol).
 
