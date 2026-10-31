@@ -31,7 +31,7 @@ flowchart LR
 |---|---|---|
 | `/api/library` | `server/library.js` | Songs on disk (WAV stems + `song.json`), scores |
 | `/api/yt` | `server/extras.js` | yt-dlp search and download |
-| `/api/meta` | `server/extras.js` | `/lookup`: MusicBrainz + iTunes metadata · `/lyrics`: LRCLIB lyrics |
+| `/api/meta` | `server/extras.js` | `/lookup`: MusicBrainz + iTunes metadata · `/lyrics`: LRCLIB lyrics · `/similar`: artists like this one and their best-known songs (Deezer, for Discover) |
 | `/api/data` | `server/extras.js` | Profiles, plays, setlists, replays (JSON in the data folder) |
 | `/api/online` | `server/online.js` + `tunnel.js` | Online rooms (port 5180), Cloudflare quick tunnel |
 | `/api/stream` | `server/stream.js` | Twitch chat relay + OBS overlay |
@@ -44,12 +44,13 @@ Every API answers only to requests from the local machine (`isLocal`).
 | Folder | |
 |---|---|
 | `main.js` | `App`: engine, stage, renderer, HUD, session, UI; the frame loop |
-| `game/` | `session.js` (a song being played: players, band, online, replays, Rich Presence), `player.js` (judging, scoring, overdrive), `highway.js` + `renderer.js` + `stage.js` (three.js), `vocals.js` (singing), `real.js` (real instrument scoring), **`real-view.js`** (tablature + keyboard views, fingering), `replay.js` |
-| `audio/` | `engine.js` (Web Audio stems), `pipeline.js` (import → split → chart → save; lyrics), `charter.js`, `transcription.js`, `pitch.js` (YIN mic input), **`lyrics-align.js`** (Whisper ↔ LRCLIB alignment), `stretch.js` |
+| `game/` | `session.js` (a song being played: players, band, online, replays, Rich Presence), `player.js` (judging, scoring, overdrive), `highway.js` + `renderer.js` + `stage.js` (three.js), `vocals.js` (singing), `real.js` (real instrument scoring), **`real-view.js`** (tablature + keyboard views, fingering), `replay.js`, **`sections.js`** (song sections from the charts), **`runs.js`** (Runs: map, perks, curses, results), **`fidelity.js`** (stage reflections, shadows, stems moving the stage) |
+| `audio/` | `engine.js` (Web Audio stems), `pipeline.js` (import → split → chart → save; lyrics), `charter.js`, `transcription.js`, `pitch.js` (YIN mic input), **`lyrics-align.js`** (Whisper ↔ LRCLIB alignment), `stretch.js`, **`live-notes.js`** (live notes: the stem sliced per note), **`freestyle.js`** (freestyle solos: key, sampler, grading) |
 | `input/` | `input.js` (keyboard, gamepads, MIDI → game events), `bindings.js` (config profiles), `dualsense.js` (bridge client) |
 | `net/` | `online.js` (rooms), **`discord.js`** (linking, presence, Rich Presence) |
 | `profile/` | `profiles.js` (profiles, XP, achievements, Discord link), `career.js` |
-| `ui/` | `ui.js` (screens, navigation, settings), `social.js` (profiles, career, leaderboards), `hud.js`, controllers hub, editor, tour, setlists, stream, updates |
+| `ui/` | `ui.js` (screens, navigation, settings), `social.js` (profiles, career, leaderboards), `hud.js`, controllers hub, editor, tour, setlists, stream, updates, **`runs-ui.js`**, **`discover-ui.js`** |
+| `storage/` | `library.js` (songs, scores, data), **`insights.js`** (difficulty ratings, keys, smart setlists, play stats) |
 
 ## A song's life
 

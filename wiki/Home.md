@@ -4,12 +4,20 @@
 
 🌐 Website: <https://stemstage.varconstint.com/> · ⬇ [Latest release](https://github.com/SylarBeck/STEMSTAGE/releases/latest)
 
+## New in 3.0
+
+**You hear what you play, and no night is the same twice.** [Live notes](Live-Notes) play your part note by note as you hit it. [Runs](Runs) is a roguelike climb through your own songs. [Discover](Discover) builds setlists from your library and finds songs like yours. Songs now have [sections, solos and freestyle](Sections-Solos-and-Freestyle). The stage reflects its lights and moves with the music, and your controller rumbles with the kick and the bass. Online play needs everyone on 3.0.
+
 ## For players
 
 | Page | What's in it |
 |---|---|
 | [Installation](Installation) | The one-click installer for Windows and Linux: game, controller bridge and AI splitter |
 | [Getting Started](Getting-Started) | Your first song, importing music, instruments and difficulties, menu buttons |
+| [Live Notes](Live-Notes) | Your part plays note by note as you hit it: early, late, held, bent or not at all |
+| [Sections, Solos and Freestyle](Sections-Solos-and-Freestyle) | Song sections, solo bonuses, drum fills, big rock endings, practice from a section, freestyle solos |
+| [Runs](Runs) | The roguelike mode: the map, hearts, perks, curses, the daily run |
+| [Discover](Discover) | Smart setlists, songs like the ones you play, your stats |
 | [Controllers and DualSense](Controllers-and-DualSense) | Supported devices, config profiles, adaptive triggers |
 | [Real Instruments](Real-Instruments) | Play the guitar, bass or keys part on the real instrument: reading the tab and keyboard |
 | [Singing and Lyrics](Singing-and-Lyrics) | Microphone setup, AI lyrics and the online lyrics check |

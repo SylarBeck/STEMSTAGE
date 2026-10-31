@@ -6,6 +6,8 @@ Open **Play → Band**. Each player presses a button on their own controller to 
 
 ## Online
 
+> **3.0:** rooms only take players on the same version (major.minor), so online play needs everyone on 3.0. In online matches [live notes](Live-Notes) is on for your part unless someone else plays the same instrument, and freestyle solos are off.
+
 1. The host opens **Online → Host online**. After a few seconds an invite code appears, for example `POTTER-SIMON-FLORAL-EDGES`. Press **Copy invite** and send it to your friends.
 2. Friends open **Online → Join**, type the code (spaces or dashes, any case) and press **Join**.
 3. The host picks a song and a **match type**. Friends who don't have the song download it from the host automatically. Then everyone readies up and the host starts the match.
