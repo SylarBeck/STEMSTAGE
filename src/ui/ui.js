@@ -13,6 +13,8 @@ import { installOnline } from './online-ui.js';
 import { installControllers } from './controllers-ui.js';
 import { installSetlists } from './setlists-ui.js';
 import { installTour } from './tour-ui.js';
+import { installRuns } from './runs-ui.js';
+import { installDiscover } from './discover-ui.js';
 import { installChartLibrary } from './chartlib-ui.js';
 import { installEditor } from './editor-ui.js';
 import { installStream } from './stream-ui.js';
@@ -30,6 +32,8 @@ import { checkForUpdates, autoCheck } from './updates.js';
 import { padName, isDualSensePad, srcKey } from '../input/input.js';
 import { bindings } from '../input/bindings.js';
 import { PLAYER_COLORS } from '../game/player.js';
+import { detectSections, sectionAt } from '../game/sections.js';
+import { rating } from '../storage/insights.js';
 import { fa, instIcon, stars as starsHtml, starsOnly, achIcon } from './icons.js';
 import { pickGhost, replaysFor, loadReplay, saveReplay } from '../game/replay.js';
 import { worldCharts, partChart, prepareRankedCharts, ensureFingerprint, useWorldChart, useOwnChart, allowRanked, voteChart, shareChart } from '../net/charts.js';
@@ -51,21 +55,11 @@ const SORTS = [['recent', 'Recent'], ['title', 'Title'], ['artist', 'Artist'], [
 const SPEEDS = [0.5, 0.6, 0.7, 0.8, 0.9, 1];
 const SCREEN_LABEL = {
   menu: 'Main menu', library: 'Setlist', import: 'Import song', settings: 'Settings', band: 'Band', controller: 'Controllers', howto: 'How to play',
-  profiles: 'Profiles', career: 'Career', leaderboard: 'Leaderboards', chartlib: 'Chart library', setlists: 'Setlists', marathon: 'Marathon', tour: 'Tour', editor: 'Chart editor', stream: 'Stream', online: 'Online', practice: 'Practice', songinfo: 'Song info', results: 'Results',
+  profiles: 'Profiles', career: 'Career', leaderboard: 'Leaderboards', chartlib: 'Chart library', setlists: 'Setlists', marathon: 'Marathon', tour: 'Tour', runs: 'Runs', discover: 'Discover', editor: 'Chart editor', stream: 'Stream', online: 'Online', practice: 'Practice', songinfo: 'Song info', results: 'Results',
   calibrate: 'Calibration', pause: 'Paused', creator: 'Backstage',
 };
 const CHROME_OFF = new Set(['title', 'hud', 'calibrate']);
 
-/** 1..7 difficulty rating from note density (peak notes/second over 4 s windows). */
-function rating(notes) {
-  if (!notes?.length) return 0;
-  let peak = 0;
-  for (let i = 0, j = 0; i < notes.length; i++) {
-    while (notes[j].t < notes[i].t - 4) j++;
-    peak = Math.max(peak, (i - j + 1) / 4);
-  }
-  return Math.max(1, Math.min(7, Math.round(Math.log2(peak + 1) * 2.1)));
-}
 // shown the Rock Band way: a tier name and five dots (Warmup has none, Impossible turns them red)
 const TIERS = ['', 'Warmup', 'Apprentice', 'Solid', 'Moderate', 'Challenging', 'Nightmare', 'Impossible'];
 const ratingHtml = (r) => (r ? `<span class="rating ${r >= 7 ? 'max' : ''}" title="${TIERS[r]}">${[1, 2, 3, 4, 5].map((k) => `<i class="${k < r ? 'on' : ''}"></i>`).join('')}</span>` : '');
@@ -81,10 +75,12 @@ const SETTINGS_SCHEMA = [
   { key: 'strumMode', label: 'Strum mode', desc: 'Auto = each controller profile decides (on for guitars). On / Off override every profile', type: 'choice', options: ['auto', 'on', 'off'] },
   { key: 'ghost', label: 'Ghost race', desc: 'Race an earlier run in solo play: your own best, or the top run on this PC', type: 'choice', options: ['off', 'best', 'top'] },
   { key: 'leftyFlip', label: 'Lefty flip', desc: 'Mirror the highway (profiles can override this per controller)', type: 'toggle' },
+  { key: 'freestyle', label: 'Freestyle solos', desc: 'In a guitar or keys solo the notes drop away and you improvise: your frets play the song\'s own guitar or keys in its key, graded on groove, flow and melody. Freestyle runs pay cash but stay off the leaderboards', type: 'toggle' },
   { key: 'gearMods', label: 'Gear modifiers', desc: 'Instrument upgrades and pedals (Backstage) change how you play. Gear runs earn XP and cash but stay off the world leaderboard: turn this off for ranked runs', type: 'toggle' },
   { key: 'bosses', label: 'World bosses', desc: 'In the five worlds a boss can show up in the middle of a song. Random: in some songs. Always: in every song that is long enough', type: 'choice', options: ['random', 'always', 'off'], labels: { random: 'Random', always: 'Always', off: 'Off' } },
   { key: 'bossHazards', label: 'Boss hazards', desc: 'Full: boss attacks cover, sway and mirror your highway. Mild: lighter, cosmetic only', type: 'choice', options: ['full', 'mild'], labels: { full: 'Full', mild: 'Mild' } },
   { group: 'Audio' },
+  { key: 'liveNotes', label: 'Live notes', desc: 'You hear what you play: each note of your part sounds when you hit it (early, late or not at all), a missed note rings out, and whammy bends held notes. Off: your part plays along and drops out while you miss', type: 'toggle' },
   { key: 'masterVolume', label: 'Master volume', type: 'range', min: 0, max: 1, step: 0.05, fmt: 'pct' },
   { key: 'playerVolume', label: 'Played instruments', type: 'range', min: 0, max: 1.5, step: 0.05, fmt: 'pct' },
   { key: 'bandVolume', label: 'Band', type: 'range', min: 0, max: 1.5, step: 0.05, fmt: 'pct' },
@@ -102,7 +98,7 @@ const SETTINGS_SCHEMA = [
   { action: 'calibrate', label: 'Calibrate audio offset', desc: 'Tap along to a click track to measure your latency' },
   { group: 'Video' },
   { key: 'fullscreen', label: 'Fullscreen', desc: 'Start in fullscreen (F11 / Alt+Enter toggles it in the desktop app)', type: 'toggle' },
-  { key: 'quality', label: 'Graphics quality', desc: 'Resolution, crowd size, bloom, film grain', type: 'choice', options: ['low', 'high', 'ultra'] },
+  { key: 'quality', label: 'Graphics quality', desc: 'Resolution, crowd size, bloom, film grain. High adds reflections of the stage lights; Ultra adds soft shadows from the key light', type: 'choice', options: ['low', 'high', 'ultra'] },
   { key: 'renderScale', label: '3D resolution', desc: 'Lower it for more FPS; menus and text stay sharp. Auto follows graphics quality', type: 'choice', options: ['auto', '75', '100', '125', '150'], labels: { auto: 'Auto', 75: '75%', 100: '100%', 125: '125%', 150: '150%' } },
   { key: 'antialiasing', label: 'Edge smoothing', desc: 'Smooth jagged edges on the stage and highway', type: 'choice', options: ['off', '2x', '4x'], labels: { off: 'Off', '2x': '2×', '4x': '4×' } },
   { key: 'frameLimit', label: 'Frame rate limit', desc: 'Display follows V-sync; 30 or 60 can reduce heat and power use. Input still updates every frame', type: 'choice', options: ['display', '30', '60', '120'], labels: { display: 'Display', 30: '30 FPS', 60: '60 FPS', 120: '120 FPS' } },
@@ -116,6 +112,7 @@ const SETTINGS_SCHEMA = [
   { group: 'Controllers' },
   { key: 'triggerIntensity', label: 'Adaptive trigger strength', desc: 'DualSense trigger effects. 0% turns them off everywhere', type: 'range', min: 0, max: 1.5, step: 0.1, fmt: 'pct' },
   { key: 'rumbleIntensity', label: 'Haptic strength', desc: 'DualSense haptics and gamepad rumble', type: 'range', min: 0, max: 1.5, step: 0.1, fmt: 'pct' },
+  { key: 'feelBand', label: 'Feel the band', desc: 'The kick drum and the bass line rumble in your controller while you play (a wired DualSense with controller audio feels your whole part instead)', type: 'choice', options: ['off', 'soft', 'strong'], labels: { off: 'Off', soft: 'Soft', strong: 'Strong' } },
   { key: 'lightbar', label: 'Lightbar effects', type: 'toggle' },
   { key: 'dualsenseAudio', label: 'DualSense stem audio', desc: 'USB: play your stem through your controller speaker and drive its audio haptics', type: 'toggle' },
   { action: 'chooseDualSenseAudio', label: 'Assign DualSense audio output', desc: 'Pick the USB output for each controller. Your browser may ask for microphone permission to show audio device names; the mic is stopped immediately.' },
@@ -221,6 +218,8 @@ export class UI {
     this.controllers = installControllers(this);
     this.setlists = installSetlists(this);
     this.tour = installTour(this);
+    this.runs = installRuns(this);
+    installDiscover(this);
     installChartLibrary(this);
     this.editor = installEditor(this);
     this.stream = installStream(this);
@@ -240,7 +239,8 @@ export class UI {
     search.addEventListener('input', () => { this.search = search.value; this.renderLibrary(); });
     search.addEventListener('keydown', (e) => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); search.blur(); } });
     $('#yt-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.action('yt-search'); } });
-    $('#pr-start-range').addEventListener('input', (e) => { this.practice.startPct = +e.target.value; this._renderPracticeStart(); });
+    $('#pr-start-range').addEventListener('input', (e) => { this.practice.at = null; this.practice.startPct = +e.target.value; this._renderPracticeStart(); });
+    $$('#screen-practice .pr-step').forEach((b) => b.addEventListener('click', () => this._stepPracticeSection(+b.dataset.step)));
   }
 
   /** Text fields: typing with a keyboard, on-screen keyboard with a controller. */
@@ -499,8 +499,8 @@ export class UI {
     if (dir === 'back') {
       eng.sfxUi('back');
       const back = {
-        library: this.mode === 'band' ? 'band' : this.mode === 'online-pick' ? 'online' : this.mode === 'setlist-add' ? 'setlists' : 'menu', import: 'menu', setlists: 'menu', tour: 'menu', stream: 'menu', settings: 'menu', controller: 'menu',
-        howto: 'menu', band: 'menu', creator: 'menu', results: this.lastPlay?.online ? 'online' : 'library', menu: 'title', profiles: 'menu',
+        library: this.mode === 'band' ? 'band' : this.mode === 'online-pick' ? 'online' : this.mode === 'setlist-add' ? 'setlists' : 'menu', import: 'menu', setlists: 'menu', tour: 'menu', runs: 'menu', discover: 'menu', stream: 'menu', settings: 'menu', controller: 'menu',
+        howto: 'menu', band: 'menu', creator: 'menu', results: this.lastPlay?.online ? 'online' : this.lastPlay?.run ? 'runs' : 'library', menu: 'title', profiles: 'menu',
         career: 'menu', leaderboard: 'menu', chartlib: 'menu', online: 'menu', practice: 'library', songinfo: 'library',
       };
       if (this.screen === 'library' && this.mode === 'online-pick') this.mode = 'solo';
@@ -820,6 +820,12 @@ export class UI {
         body = `<div class="hero-k">Tour</div><h2>${fa('star')} ${stars} <small>/ ${TOUR_MAX}</small></h2><div class="xpbar"><div style="width:${Math.round((stars / TOUR_MAX) * 100)}%"></div></div>${ch ? `<p><b>Daily challenge${dailyDone(p) ? ' ✓' : ''}</b><br>${esc(ch.title)} · ${ch.instrument} · ${esc(ch.text)}</p>` : ''}`;
         break;
       }
+      case 'discover': body = '<div class="hero-k">Discover</div><h2>Your library, thinking</h2><p>Setlists the game builds from your songs, songs like the ones you play, and your playing in numbers.</p>'; break;
+      case 'runs': {
+        const run = p?.run && !p.run.over ? p.run : null, rs = p?.runs;
+        body = `<div class="hero-k">Runs</div><h2>${run ? `Floor ${run.at ? run.at.f + 1 : 0} of 8` : 'A different night every time'}</h2><p>${run ? `${run.hearts} heart${run.hearts === 1 ? '' : 's'} · $${run.cash} run cash · ${run.perks.length} perk${run.perks.length === 1 ? '' : 's'}` : 'Climb eight floors of your own songs to the headliner: perks, curses, three hearts.'}</p>${rs ? `<p class="dim">${rs.won} won · ${rs.played} played</p>` : ''}`;
+        break;
+      }
       case 'stream': body = `<div class="hero-k">Stream mode</div><h2>Let chat play along</h2><p>Twitch chat votes for songs, requests with !sr and hypes the crowd. OBS overlay included.</p>${settings.twitchChannel ? `<p class="dim">Channel: #${esc(settings.twitchChannel)}</p>` : ''}`; break;
       case 'setlists': {
         const lists = this.setlists.lists();
@@ -1102,7 +1108,8 @@ export class UI {
     }
     if (which === 'import-tab') { if (document.documentElement.classList.contains('ios-touch')) return; this.importTab = this.importTab === 'file' ? 'youtube' : 'file'; this.renderImportTab(); return; }
     if (which === 'pr-speed') { const i = SPEEDS.indexOf(this.practice.speed); this.practice.speed = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, i + d))]; this._renderPractice(); return; }
-    if (which === 'pr-start') { this.practice.startPct = Math.max(0, Math.min(95, this.practice.startPct + d * 5)); $('#pr-start-range').value = this.practice.startPct; this._renderPracticeStart(); return; }
+    if (which === 'pr-start') { this.practice.at = null; this.practice.startPct = Math.max(0, Math.min(95, this.practice.startPct + d * 5)); $('#pr-start-range').value = this.practice.startPct; this._renderPracticeStart(); return; }
+    if (which === 'pr-section') { this._stepPracticeSection(d); return; }
     if ((m = /^slot-(\w+)-(\d)$/.exec(which))) { this._slotCycle(this.party[+m[2]], m[1], d); return; }
     if (which === 'instrument' && this.selected) {
       const ok = INSTRUMENTS.filter((i) => this.selected.charts[i.id]?.available).map((i) => i.id);
@@ -1175,6 +1182,11 @@ export class UI {
       const p = profiles.current;
       cfgs = [{ name: p?.name || 'P1', color: p?.color, profileId: p?.id || null, device: 'any', instrument: this.instrument, difficulty: this.difficulty, strum: this.instrument !== 'drums' && this.strumFor('any'), ...this.deviceCfg('any'), mic: this.instrument === 'vocals' && settings.vocalMode === 'mic', part: this.instrument === 'vocals' && settings.vocalMode === 'mic' ? settings.vocalPart || 0 : 0, real: this.realMode(this.instrument), gear: this.gearFor(p?.id, this.instrument) }];
     }
+    // a Runs node (ui/runs-ui.js): the run's perks are the gear, its curses ride along, the headliner may have a world and its boss
+    const run = this.runPlay || null;
+    this.runPlay = null;
+    this._runVenue = run?.venue || null;
+    if (run && cfgs.length === 1) cfgs = [{ ...cfgs[0], gear: run.mods, run: { curses: run.curses } }];
     this.app.engine.unlock();
     this.toast(`Loading ${s.title}...`);
     const [song, audio] = await Promise.all([getSong(s.id), getAudio(s.id)]);
@@ -1186,14 +1198,15 @@ export class UI {
     this.stopPreview();
     const ghost = opts.ghost !== undefined ? opts.ghost
       : cfgs.length === 1 ? await pickGhost(settings.ghost, s.id, cfgs[0].instrument, cfgs[0].difficulty, cfgs[0].profileId) : null;
-    this.lastPlay = { mode: this.mode, ghost };
+    this.lastPlay = { mode: this.mode, ghost, run: !!run };
     this.show('hud');
-    await this.app.game.start(song, audio, cfgs, { ghost });
+    await this.app.game.start(song, audio, cfgs, { ghost, ...(run?.bosses ? { bosses: run.bosses } : {}) });
   }
 
   // ---------------------------------------------------------------- venues
   /** The venue the stage shows: a tour gig plays in its own venue; otherwise Settings → Venue, once the tour has opened it. */
   venueId(forGame = false) {
+    if (forGame && this._runVenue) return this._runVenue;
     const gig = forGame && /^tour-(.+)$/.exec(this.marathon?.list?.id || '')?.[1];
     if (gig) return gig;
     const want = settings.venue;
@@ -1514,6 +1527,7 @@ export class UI {
   }
 
   _practiceStartTime() {
+    if (this.practice.at != null) return this.practice.at;
     const s = this.selected;
     const t = (this.practice.startPct / 100) * s.duration;
     const beats = s.beats || [];
@@ -1525,6 +1539,22 @@ export class UI {
   _renderPracticeStart() {
     const t = this._practiceStartTime();
     $('#pr-start-label').textContent = `${fmtTime(t)} (${this.practice.startPct}%)`;
+    const secs = detectSections(this.selected);
+    const sec = sectionAt(secs, t + 0.05);
+    $('#pr-section-label').textContent = secs.length ? (sec ? sec.name : 'Before the first section') : 'No sections found';
+  }
+
+  /** Practice: jump the start to the previous / next song section (game/sections.js). */
+  _stepPracticeSection(d) {
+    const s = this.selected, secs = detectSections(s);
+    if (!secs.length) return;
+    const t = this._practiceStartTime();
+    const cur = secs.findIndex((x) => t + 0.05 >= x.start && t + 0.05 < x.end);
+    const next = Math.max(0, Math.min(secs.length - 1, (cur < 0 ? (d > 0 ? -1 : 0) : cur) + d));
+    this.practice.at = secs[next].start;
+    this.practice.startPct = Math.max(0, Math.min(95, Math.round((secs[next].start / s.duration) * 100)));
+    $('#pr-start-range').value = this.practice.startPct;
+    this._renderPracticeStart();
   }
 
   async startPractice() {
@@ -2252,7 +2282,10 @@ export class UI {
     const cv = coverUrl(r.song);
     $('#res-cover').style.background = cv ? `url('${cv}') center/cover` : this.art(r.song);
     $('[data-action="retry"]').textContent = r.mode === 'online' ? 'Back to lobby' : r.mode === 'replay' ? 'Watch again' : r.practice ? 'Practice again' : 'Play again';
-    if (!opts.rerender && r.mode !== 'replay') { this.social.recordResults(r); this.tour.onResult(r); }
+    if (!opts.rerender && r.mode !== 'replay') { this.social.recordResults(r); this.tour.onResult(r); this.runs.onResult(r); }
+    // a Runs gig: back to the map, not the same song again
+    $('#res-run').hidden = !this.lastPlay?.run;
+    $('#screen-results [data-action="retry"]').hidden = !!this.lastPlay?.run;
     if (!opts.rerender) this.stream.onResults(r);
     if (r.mode === 'replay') $('#res-progress').innerHTML = '<div class="small-note">Replay — nothing saved.</div>';
     // keep every finished run as a replay (the store prunes to recent runs + bests)
@@ -2295,6 +2328,14 @@ export class UI {
       ];
       $('#res-grid').innerHTML = cells.map(([l, v]) => `<div class="res-cell"><b>${v}</b><span>${l}</span></div>`).join('');
     }
+    // v3: how each solo went, the big rock ending, and what they paid
+    const events = band ? [] : [
+      ...(solo.solos || []).map((x) => [x.pct >= 1 ? 'star' : 'guitar', esc(x.name), x.pct >= 1 ? 'Perfect' : `${Math.round(x.pct * 100)}%`]),
+      ...(solo.freestyle || []).map((x) => ['wand-magic-sparkles', 'Freestyle', `${Math.round(x.grade * 100)}%`]),
+      ...(solo.breHits ? [['fire', 'Big rock ending', `${solo.breHits} hits`]] : []),
+      ...(solo.eventCash ? [['coins', 'Bonus', `+$${solo.eventCash}`]] : []),
+    ];
+    $('#res-events').innerHTML = events.map(([icon, label, v]) => `<span class="res-event">${fa(icon)} ${label} <b>${v}</b></span>`).join('');
     $('#res-players').innerHTML = band ? r.players.map((p, i) => `
       <div class="res-player" style="--pc:${p.color}">
         <b>${r.mode === 'online' && r.matchMode !== 'band' ? `#${i + 1} ` : ''}${esc(p.name)}</b> <small>${INST_ICON[p.instrument] || ''} ${p.instrument} · ${p.difficulty}${p.remote ? ' · online' : ''}</small>

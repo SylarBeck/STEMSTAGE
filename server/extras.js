@@ -312,6 +312,29 @@ export function createMeta() {
     return result;
   }
 
+  // "Because you play …" (the library brain): artists like this one — Deezer's related artists, no key needed — and
+  // two of each one's best-known songs
+  async function similar(artist) {
+    const key = `similar:${artist.toLowerCase()}`;
+    if (cache.has(key)) return cache.get(key);
+    const dz = async (path) => {
+      const r = await fetch(`https://api.deezer.com${path}`, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
+      if (!r.ok) throw new Error(`Deezer ${r.status}`);
+      const j = await r.json();
+      if (j.error) throw new Error(j.error.message || 'Deezer error');
+      return j;
+    };
+    const found = (await dz(`/search/artist?q=${encodeURIComponent(artist)}&limit=1`)).data?.[0];
+    const out = { artist: found?.name || artist, songs: [] };
+    if (found) {
+      const related = (await dz(`/artist/${found.id}/related?limit=6`)).data || [];
+      const tops = await Promise.all(related.slice(0, 6).map((a) => dz(`/artist/${a.id}/top?limit=2`).then((t) => [a, t.data || []]).catch(() => [a, []])));
+      for (const [a, tracks] of tops) for (const t of tracks) out.songs.push({ artist: a.name, title: t.title_short || t.title, duration: t.duration || 0 });
+    }
+    cache.set(key, out);
+    return out;
+  }
+
   return async function handler(req, res) {
     try {
       if (!isLocal(req)) return send(res, 403, { error: 'local only' });
@@ -321,6 +344,11 @@ export function createMeta() {
         if (!title) return send(res, 400, { error: 'title required' });
         const p = (k) => (url.searchParams.get(k) || '').trim();
         return send(res, 200, await lyrics(p('artist'), title, p('album'), +p('duration') || 0));
+      }
+      if (url.pathname.replace(/\/$/, '') === '/similar') {
+        const artist = (url.searchParams.get('artist') || '').trim();
+        if (!artist) return send(res, 400, { error: 'artist required' });
+        return send(res, 200, await similar(artist));
       }
       if (url.pathname.replace(/\/$/, '') === '/lookup') {
         const title = (url.searchParams.get('title') || '').trim();

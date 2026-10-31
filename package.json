@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "tauri": "tauri",
-    "test": "node --test tests/online-room.test.js tests/online-v2.test.js tests/v2.test.js tests/looks-models.test.js",
+    "test": "node --test tests/online-room.test.js tests/online-v2.test.js tests/v2.test.js tests/looks-models.test.js tests/live-notes.test.js tests/sections.test.js tests/freestyle.test.js tests/runs.test.js tests/insights.test.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

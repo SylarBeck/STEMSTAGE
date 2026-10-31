@@ -7,6 +7,8 @@ export const DEFAULTS = {
   leftyFlip: false,
   ghost: 'best',         // off | best (your best run) | top (best run on this PC) — solo ghost race
   audioOffset: 0,        // ms, positive = audio heard later
+  freestyle: false,      // guitar / keys solos drop their notes and you improvise with the song's own instrument (unranked)
+  liveNotes: true,       // you hear what you play: your part sounds note by note as you hit it (off: classic drop-outs)
   masterVolume: 0.9,
   bandVolume: 0.85,
   playerVolume: 1.0,
@@ -34,6 +36,7 @@ export const DEFAULTS = {
   fullscreen: true,      // start fullscreen (desktop app + browser)
   triggerIntensity: 1.0, // 0..1.5
   rumbleIntensity: 1.0,  // 0..1.5
+  feelBand: 'soft',      // off | soft | strong: the kick and the bass line in the controller's rumble
   lightbar: true,
   dualsenseAudio: true, // route each wired player's stem to the USB speaker + audio haptic channels
   dualsenseAudioSinks: {}, // controller slot -> selected four-channel audio output device ID

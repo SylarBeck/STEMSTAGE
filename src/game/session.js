@@ -14,6 +14,9 @@ import { runJob } from '../audio/pipeline.js';
 import { Recorder, Replayer, buildReplay, ghostAt } from './replay.js';
 import { discord } from '../net/discord.js';
 import { planBoss, BossFight } from './boss.js';
+import { detectSections } from './sections.js';
+import { Freestyle, estimateKey, laneNotes, pickSamples, gradeFreestyle } from '../audio/freestyle.js';
+import { transientEnvelope, attackTimes } from '../audio/live-notes.js';
 
 const SHOTS = ['wide', 'left', 'player', 'right', 'low', 'drums', 'wide', 'player'];
 const stretchInWorker = (L, R, rate, onProgress) => runJob('stretch', { L: L.slice(), R: R.slice(), rate }, undefined, onProgress);
@@ -54,6 +57,8 @@ export class Session {
     this.ghost = !this.replay && cfgs.length === 1 ? opts.ghost || null : null;
     this.solo = cfgs.length === 1;
     this.startTime = this.practice ? Math.max(0, this.practice.startAt || 0) : 0;
+    this.sections = detectSections(song);
+    this.secIdx = -1;
     this.hud.setMulti(!this.solo);
     this.hud.clearPlayers();
     this.players = cfgs.map((cfg, i) => {
@@ -72,6 +77,8 @@ export class Session {
 
     const lastEnd = Math.max(0, ...this.players.flatMap((p) => p.notes.map((n) => n.t + (n.len || 0))));
     this.endTime = Math.min(song.duration, Math.max(lastEnd + 5, this.startTime + 20));
+    // the big rock ending: the band rings out after the last note and every hit fires up the stage
+    this.bre = !this.practice && this.endTime - lastEnd >= 2.5 ? { start: lastEnd + 0.15, end: this.endTime - 1, shown: false, done: false } : null;
     this.beatPtr = 0; this.lastBeat = -1;
     this.countdownShown = new Set();
     this.failedAll = false;
@@ -89,6 +96,8 @@ export class Session {
       opts.onStatus?.(`Preparing ${Math.round(this.practice.speed * 100)}% speed audio (pitch preserved)...`);
       await this.engine.stretchTo(this.practice.speed, stretchInWorker, (p) => opts.onStatus?.(`Time-stretching audio ${Math.round(p * 100)}%`));
     }
+    this._liveNotes();
+    this._freestyle(song);
     this.renderer.setHighways(this.players.map((p) => p.highway).filter(Boolean));
     this.input.setGame(cfgs.map((c) => ({ device: c.device, mode: c.instrument === 'drums' ? 'drums' : 'five' })));
     this.stage.setShot('wide');
@@ -112,6 +121,46 @@ export class Session {
   }
 
   /**
+   * Live notes: a stem with exactly one player on it (no bandmate or online player sharing it) plays only what
+   * that player hits. Real instruments and singing keep the classic stem.
+   */
+  _liveNotes() {
+    const remote = new Set(this.online ? this.online.lineup.filter((r) => r.id !== this.online.client.id).map((r) => r.instrument) : []);
+    for (const p of this.players) {
+      p.live = null;
+      if (settings.liveNotes === false || p.constructor !== Player || remote.has(p.inst)) continue;
+      if (this.players.some((q) => q !== p && STEM_FOR[q.inst] === STEM_FOR[p.inst])) continue;
+      // a group's onset in the stem (charter's o; up to half an eighth-note step off the grid)
+      const onset = (g) => { const o = g.notes.find((n) => n.o != null)?.o; return o != null && Math.abs(o - g.t) <= 0.15 ? o : null; };
+      // a freestyle solo starts on silence: the stem's own solo stops there (the player's notes replace it)
+      const cuts = (p.freestyle || []).map((w) => w.start);
+      p.live = this.engine.liveStem(STEM_FOR[p.inst], p.groups.map((g) => g.t), p.groups.map((g) => g.notes.some((n) => n.len > 0)), p.groups.map(onset), cuts);
+    }
+  }
+
+  /**
+   * Freestyle solos (audio/freestyle.js): a player whose solo notes dropped away gets an instrument made from their
+   * stem — its clean single notes from the whole expert chart, pitched to a pentatonic scale in the song's key.
+   */
+  _freestyle(song) {
+    for (const p of this.players) {
+      p.sampler = null;
+      if (!p.freestyle?.length) continue;
+      const stem = STEM_FOR[p.inst], buffer = this.engine.buffers?.[stem], out = this.engine.stemChains.get(stem)?.filter;
+      if (!buffer || !out) continue;
+      const expert = song.charts[p.inst].notes.expert;
+      const groups = [];
+      for (const n of expert) { const g = groups.at(-1); if (g && Math.abs(g.t - n.t) < 1e-4) g.notes.push(n); else groups.push({ t: n.t, notes: [n] }); }
+      const env = p.live?.env || transientEnvelope(buffer.getChannelData(0), buffer.getChannelData(1));
+      const at = attackTimes(env, groups.map((g) => g.t), this.engine.rate || 1, buffer.sampleRate, groups.map((g) => g.notes.find((n) => n.o != null)?.o ?? null));
+      const w = p.freestyle[0];
+      const solo = expert.filter((n) => n.t >= w.start && n.t < w.end && n.m != null).map((n) => n.m).sort((a, b) => a - b);
+      const center = solo.length ? solo[solo.length >> 1] : 64;
+      p.sampler = new Freestyle(this.engine, buffer, out, pickSamples(groups, (k) => at[k], buffer.duration), laneNotes(estimateKey(expert), center));
+    }
+  }
+
+  /**
    * A world's boss may show up in this song (game/boss.js). Online, the room's seed decides, so everyone gets the
    * same boss at the same time; practice and replays never have one.
    */
@@ -123,7 +172,7 @@ export class Session {
     world?.boss?.reset();
     if (!world?.bossId || this.practice || this.replay) return;
     const seed = this.online?.seed ?? opts.seed ?? ((Math.random() * 2 ** 32) >>> 0);
-    const mode = this.online?.bosses ?? settings.bosses ?? 'random';
+    const mode = this.online?.bosses ?? opts.bosses ?? settings.bosses ?? 'random';
     const plan = planBoss({ bossId: world.bossId, song, notes: this.players.map((p) => p.notes || []), seed, mode, startTime: this.startTime });
     if (!plan) return;
     let remoteNotes = 0;
@@ -239,6 +288,7 @@ export class Session {
     this.hud.clearPlayers();
     this.hud.remote(null);
     this.hud.ghost(null);
+    this.hud.solo(null);
     this.hud.replayBadge(false);
     this.hud.bossHide();
     this.stage.world?.boss?.reset();
@@ -354,6 +404,7 @@ export class Session {
         }
       }
       if (this.boss) this.boss.update(t);
+      this._sectionTick(t);
       if (t > this.endTime) this._finish();
     }
     const b0 = beats[this.beatPtr], b1 = beats[this.beatPtr + 1] || b0 + 0.5;
@@ -366,6 +417,7 @@ export class Session {
       p.update(t, dt, bl, frame);
       if (live && p.recorder) { p.recorder.whammy(p.whammy(), t); p.recorder.sample(t, p.score, p.streak); }
     }
+    if (live) this._feelBand(t, now);
     if (this.ghost && live) {
       const g = ghostAt(this.ghost.timeline, t);
       this.hud.ghost({ name: this.ghost.name, score: g.score, delta: Math.floor(this.players[0].score) - g.score });
@@ -387,7 +439,7 @@ export class Session {
     const insts = new Set(this.players.map((p) => p.inst));
     if (this.online) for (const r of this.online.lineup) insts.add(r.instrument);
     for (const inst of insts) {
-      let on = this.players.some((p) => p.inst === inst && p.audible && !p.failed);
+      let on = this.players.some((p) => p.inst === inst && p.audible && !p.failed && !p.free); // a freestyle replaces the stem
       if (!on && this.online) {
         on = this.online.lineup.some((r) => {
           if (r.id === this.online.client.id || r.instrument !== inst) return false;
@@ -416,21 +468,95 @@ export class Session {
     const density = Math.min(1, upcoming / 12);
     const focusPlayer = this.players.find((p) => p.odActive) || this.players[0];
     return {
-      mode: 'game', beat: this.beatPtr + beatFrac, beatHit, bass: lv.bass, mid: lv.mid, high: lv.high, spectrum: lv.spectrum,
+      mode: 'game', stems: this.engine.stemLevels(t), beat: this.beatPtr + beatFrac, beatHit, bass: lv.bass, mid: lv.mid, high: lv.high, spectrum: lv.spectrum,
       od: anyOD, intensity: Math.min(1, 0.35 * density + lv.level * 1.4 + (anyOD ? 0.3 : 0)), rock, focus: focusPlayer.inst === 'vocals' ? 'guitar' : focusPlayer.inst,
     };
+  }
+
+  /**
+   * Feel the band (v3): the kick drum in the controller's strong motor and the bass line in the weak one, from the
+   * song's stem envelopes. A wired DualSense already plays the part through its haptic actuators, so it's left out.
+   */
+  _feelBand(t, now) {
+    if (settings.feelBand === 'off' || now - (this.lastFeel || 0) < 50) return;
+    this.lastFeel = now;
+    const lv = this.engine.stemLevels(t);
+    if (!lv) return;
+    const k = settings.feelBand === 'strong' ? 1 : 0.55;
+    for (const p of this.players) {
+      if (!p.dsOwner || p.failed || p.cfg.rumble === false || p._ds?.audioHapticPulse) continue;
+      const strong = Math.min(255, lv.kick * 190 * k), weak = Math.min(255, lv.bass * 110 * k);
+      if (strong > 16 || weak > 16) p.rumble(strong, weak, 70);
+    }
+  }
+
+  breOn(t) { return !!this.bre && t >= this.bre.start && t < this.bre.end; }
+
+  /** Song sections: a solo starts (its player's counter) and ends (its score); the big rock ending. */
+  _sectionTick(t) {
+    let i = this.secIdx;
+    if (i < 0 || t < this.sections[i]?.start || t >= this.sections[i]?.end) i = this.sections.findIndex((s) => t >= s.start && t < s.end);
+    if (i !== this.secIdx) {
+      if (this.sections[this.secIdx]?.kind === 'solo') {
+        for (const p of this.players) {
+          if (p.free) {
+            const w = p.free;
+            p.free = null;
+            p.sampler?.stop();
+            w.grade = gradeFreestyle(w.presses, this.song.beats, w.start, w.end).grade;
+            p.hud.callout(`FREESTYLE ${Math.round(w.grade * 100)}%`, w.grade >= 0.8 ? '#f6c945' : '#ece5d3');
+          }
+          if (!p.solo) continue;
+          const pct = p.endSolo();
+          if (pct !== null) p.hud.callout(pct >= 1 ? 'PERFECT SOLO!' : `SOLO ${Math.round(pct * 100)}%`, pct >= 1 ? '#f6c945' : '#ece5d3');
+        }
+      }
+      this.secIdx = i;
+      const s = this.sections[i];
+      if (s?.kind === 'solo' && t < s.end - 2) {
+        for (const p of this.players) {
+          if (p.inst !== s.inst || !p.startSolo || p.failed) continue;
+          const w = p.freestyle?.find((x) => x.start === s.start);
+          if (w) { p.free = w; p.hud.callout('FREESTYLE SOLO!', '#f0b429'); continue; }
+          p.startSolo(s);
+          p.hud.callout(`${s.name.toUpperCase()}!`, '#f0b429');
+        }
+      }
+    }
+    if (this.solo) {
+      const p = this.players[0], s = p.solo, w = p.free;
+      this.hud.solo(w ? { name: 'Freestyle', value: `${w.presses.length} note${w.presses.length === 1 ? '' : 's'}`, pct: gradeFreestyle(w.presses, this.song.beats, w.start, Math.min(t, w.end)).grade }
+        : s ? { name: s.sec.name, value: `${s.hits}/${s.total}`, pct: s.total ? s.hits / s.total : 0 } : null);
+    }
+    const b = this.bre;
+    if (b && !b.shown && t >= b.start) {
+      b.shown = true;
+      this.hud.callout('BIG ROCK ENDING!', '#f2861c');
+      this.stage.pyro(settings.calmVisuals ? 0.35 : 1);
+      this.engine.cheer(0.8);
+    }
+    if (b && b.shown && !b.done && t >= b.end) {
+      b.done = true;
+      const hits = this.players.reduce((sum, p) => sum + (p.breHits || 0), 0);
+      if (hits) {
+        this.hud.callout(`ENDING · ${hits} HITS!`, '#f6c945');
+        this.stage.pyro(settings.calmVisuals ? 0.4 : 1.4);
+        this.engine.cheer(1.3);
+      }
+    }
   }
 
   async _finish() {
     if (this.finished) return;
     this.finished = true;
+    this.hud.solo(null);
     for (const p of this.players) { p.activeSus.clear(); p.dispose?.(); }
     const players = this.players.map((p) => p.result());
     const replays = this.players.map((p, i) => (p.recorder ? buildReplay(this.song, p, p.recorder, players[i]) : null));
     if (!this.practice && !this.replay) {
       for (const r of players) {
         r.prevBest = getBest(this.song.id, r.instrument, r.difficulty);
-        r.newBest = !r.failed && !r.assist && saveBest(this.song.id, r.instrument, r.difficulty, { score: r.score, stars: r.stars, gold: r.gold, accuracy: r.accuracy });
+        r.newBest = !r.failed && !r.assist && !r.freestyle && saveBest(this.song.id, r.instrument, r.difficulty, { score: r.score, stars: r.stars, gold: r.gold, accuracy: r.accuracy });
       }
     }
     const failed = this.failedAll;

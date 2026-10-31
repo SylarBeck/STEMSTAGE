@@ -6,6 +6,7 @@ import { Stage } from './game/stage.js';
 import { Backstage } from './game/backstage.js';
 import { loadHuman } from './game/human.js';
 import { Renderer } from './game/renderer.js';
+import { Fidelity } from './game/fidelity.js';
 import { Session } from './game/session.js';
 import { Hud } from './ui/hud.js';
 import { Diagnostics } from './ui/diagnostics.js';
@@ -38,6 +39,7 @@ class App {
     this.renderer.setQuality(settings.quality, settings.bloom);
     this.renderer.setAntialiasing(settings.antialiasing);
     this.backstage = new Backstage(this.renderer.renderer);
+    this.fidelity = new Fidelity(this.stage, this.renderer.renderer); // v3: reflections, shadows, stems move the world
     this.hud = new Hud();
     this.diagnostics = new Diagnostics();
     this.game = new Session({
@@ -49,6 +51,7 @@ class App {
     this.menuBeatIdx = -1;
     onSettingsChange((key) => {
       if (key === 'quality' || key === 'bloom' || key === 'filmGrain') this.renderer.setQuality(settings.quality, settings.bloom);
+      if (key === 'quality') this.fidelity.setQuality(settings.quality);
       if (key === 'renderScale') this.renderer.resize();
       if (key === 'antialiasing') this.renderer.setAntialiasing(settings.antialiasing);
       if (key === 'quality') this.ui.toast('Crowd size updates after a reload');
@@ -185,7 +188,7 @@ class App {
     }
     const f = this.game.update(dt) || this.menuFeatures();
     if (this.backstage.active) this.backstage.update(dt, f); // the creator: the stage isn't on screen
-    else this.stage.update(dt, f);
+    else { this.stage.update(dt, f); this.fidelity.frame(dt, f); }
     this.ds.tick(now);
     this.ui.frame();
     const cap = Number(settings.frameLimit);

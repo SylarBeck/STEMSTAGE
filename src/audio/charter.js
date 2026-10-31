@@ -428,14 +428,31 @@ function assignLanes(notes) {
 }
 
 // ---------------------------------------------------------------- quantise + reduce
+export const SNAP_TOLERANCE = 0.02;
+
+/**
+ * A note's grid position (beats): the coarsest step — the song's subdivision, then twice as fine, sextuplets or
+ * 32nds, 12ths, 48ths — that keeps it within 20 ms of its sound. Charts stay readable where the playing is on the
+ * grid and stay on the sound where it isn't (a loose groove, a beat tracker a little off).
+ */
+export function snapToGrid(grid, t, sub) {
+  const pos = grid.pos(t);
+  for (const s of [sub, sub * 2, sub === 3 ? 6 : 8, 12, 48]) {
+    const q = Math.round(pos * s) / s;
+    if (Math.abs(grid.time(q) - t) <= SNAP_TOLERANCE) return q;
+  }
+  return Math.round(pos * 48) / 48;
+}
+
 function quantize(notes, grid, sub) {
   const byKey = new Map();
   for (const nt of notes) {
-    const q = Math.round(grid.pos(nt.t) * sub) / sub;
+    const q = snapToGrid(grid, nt.t, sub);
     const key = `${q}:${nt.lane}`;
     const prev = byKey.get(key);
     if (prev && prev.s >= nt.s) continue;
-    const out = { ...nt, q, t: grid.time(q) };
+    // o: where the note really starts in the stem (live notes cut the stem there; t is on the grid)
+    const out = { ...nt, q, t: grid.time(q), o: +nt.t.toFixed(4) };
     if (nt.len) {
       const qe = Math.round(grid.pos(nt.t + nt.len) * sub) / sub;
       out.len = Math.max(0, grid.time(qe) - out.t);
@@ -524,7 +541,7 @@ function reduceMelodic(expertGroups, diff, grid) {
     let lanes = [primary.lane, ...sorted.slice(1).map((n) => n.lane)];
     if (cfg.lanes < 5) lanes = lanes.map((l) => Math.round((l * (cfg.lanes - 1)) / 4));
     lanes = [...new Set(lanes)].slice(0, cfg.chord);
-    for (const lane of lanes) out.push({ t: g.t, q: g.q, lane, len: primary.len || 0, s: primary.s, m: primary.m });
+    for (const lane of lanes) out.push({ t: g.t, q: g.q, lane, len: primary.len || 0, s: primary.s, m: primary.m, o: primary.o });
   }
   finalizeSustains(out, grid, cfg.susMin);
   return out;
@@ -722,7 +739,7 @@ export function buildCharts({ stems, duration, aiNotes = null }, onProgress = ()
       markPhrases(notes[d], phrases);
       notes[d] = notes[d].map((n) => ({
         t: +n.t.toFixed(4), lane: n.lane, len: +(n.len || 0).toFixed(4), s: +n.s.toFixed(3),
-        m: Math.round(n.m ?? 60), p: n.p, q: +n.q.toFixed(4),
+        m: Math.round(n.m ?? 60), p: n.p, q: +n.q.toFixed(4), ...(n.o != null ? { o: +n.o.toFixed(4) } : {}),
       }));
     }
     charts[inst] = {

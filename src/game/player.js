@@ -40,6 +40,13 @@ export class Player {
     this.gear = cleanMods(this.rules.gear) || cleanMods({});
     const base = this.rules.pro ? PRO_WINDOWS : WINDOWS;
     this.win = this.gear.window ? { ...base, good: base.good + this.gear.window } : base;
+    // freestyle solos are for a song played start to finish on your own: never online or in practice
+    if (this.rules.freestyle && (session.online || session.practice)) this.rules = { ...this.rules, freestyle: false };
+    // a Runs curse on this song (game/runs.js): sudden death and unplugged change the rules (replays keep them)
+    this.curses = new Set(cfg.run?.curses || []);
+    if (this.curses.has('sudden')) this.rules = { ...this.rules, noFail: false, sudden: true };
+    if (this.curses.has('nood')) this.rules = { ...this.rules, noOD: true };
+    if (this.curses.has('mirror')) this.lefty = !this.lefty;
     this.replayer = cfg.replayer || null;
   }
 
@@ -59,12 +66,26 @@ export class Player {
       });
       this.notes.forEach((n, i) => { n.i = i; });
     }
+    // freestyle solos (rules.freestyle): a guitar or keys solo's notes drop away and the player improvises
+    this.freestyle = [];
+    this.free = null;
+    if (this.rules.freestyle && (this.inst === 'guitar' || this.inst === 'keys')) {
+      for (const s of this.s.sections || []) {
+        if (s.kind !== 'solo' || s.inst !== this.inst || s.start < startTime) continue;
+        const inside = (n) => n.t >= s.start && n.t < s.end;
+        const removed = this.notes.filter(inside).length;
+        if (removed < 8) continue;
+        this.freestyle.push({ start: s.start, end: s.end, name: s.name, removed, presses: [], grade: null });
+        this.notes = this.notes.filter((n) => !inside(n));
+      }
+      this.notes.forEach((n, i) => { n.i = i; });
+    }
     // chord groups + hammer-on/pull-off flags for strum mode
     this.groups = [];
     for (const n of this.notes) {
       const g = this.groups[this.groups.length - 1];
       if (g && Math.abs(g.t - n.t) < 1e-4) g.notes.push(n);
-      else this.groups.push({ t: n.t, notes: [n], judged: false });
+      else this.groups.push({ t: n.t, notes: [n], judged: false, k: this.groups.length });
       n.group = this.groups[this.groups.length - 1];
     }
     if (this.strum) {
@@ -76,6 +97,14 @@ export class Player {
         const bl = (beats[bi + 1] - beats[bi]) || 0.5;
         g.hopo = g.notes.length === 1 && p.notes.length === 1 && g.notes[0].lane !== p.notes[0].lane && g.t - p.t <= bl * 0.36;
         if (g.hopo) g.notes[0].hopo = true;
+      }
+    }
+    // drum fills: with overdrive ready, the first notes of each new section (game/sections.js) launch it
+    if (this.drums && this.rules.fills) {
+      for (const s of (this.s.sections || []).slice(1)) {
+        if (s.kind === 'solo') continue;
+        const g = this.groups.find((x) => x.t >= s.start - 0.05);
+        if (g && g.t < s.start + 1) for (const n of g.notes) n.fill = true;
       }
     }
     this.laneNotes = [[], [], [], [], []];
@@ -94,6 +123,7 @@ export class Player {
     this.rock = 0.5;
     this.failed = false;
     this.audible = true;
+    this.solo = null; this.solos = []; this.breHits = 0;
     this.stats = { perfect: 0, great: 0, good: 0, miss: 0 };
     this.lastMissSfx = 0;
     this.lastSusRumble = 0;
@@ -101,8 +131,8 @@ export class Player {
     this.trigTemp = [null, null];
     this.trigSus = [null, null];
     this.onFire = false;
-    this.highway.configure({ instrument: this.inst, lefty: this.lefty, speed: 8 + settings.noteSpeed * 2.4, accent: ACCENT[this.inst] });
-    this.highway.fog = false;
+    this.highway.configure({ instrument: this.inst, lefty: this.lefty, speed: 8 + settings.noteSpeed * 2.4 + (this.curses?.has('speed') ? 7 : 0), accent: ACCENT[this.inst] });
+    this.highway.fog = !!this.curses?.has('fog');
     this._attacks = {};
     this.highway.resetScroll();
     this._baseTriggers();
@@ -125,6 +155,8 @@ export class Player {
   // ---------------------------------------------------------------- input
   handle(ev, t) {
     if (this.failed && ev.type !== 'od') return;
+    if ((ev.type === 'press' || ev.type === 'strum') && this.s.breOn?.(t)) { this.frenzy(ev.lane ?? 2); return; }
+    if (this.free && ev.type !== 'od') { this._freestyleInput(ev, t); return; }
     if (ev.type === 'press') this.press(ev.lane, t);
     else if (ev.type === 'release') this.release(ev.lane, t);
     else if (ev.type === 'strum') this.strumAt(t);
@@ -231,6 +263,7 @@ export class Player {
     this.score += 50 * this.mult * (this.odActive ? 2 : 1);
     this.rock = Math.min(1, this.rock + (this.odActive ? 0.02 : 0.012) * (1 + this.gear.crowd * 0.5));
     this.audible = true;
+    this.live?.hit(n.group.k, n.t + delta);
     this.highway.hitFx(n.lane, j);
     this.hud.judge(j.toUpperCase(), JUDGE_COLOR[j]);
     if (STREAK_CALLOUTS.has(this.streak)) {
@@ -239,6 +272,8 @@ export class Player {
       if (this.streak >= 100) this.s.stage.sparks();
     }
     if (n.sus) { n.sus.held = true; n.sus.last = n.t + delta; this.activeSus.add(n); this._setSusTrigger(n, true); }
+    if (this.solo && n.t >= this.solo.sec.start && n.t < this.solo.sec.end) this.solo.hits++;
+    if (n.fill && this.od >= 0.5 && !this.odActive) this.activateOD();
     this.s.boss?.hit(this, j);
     if (n.p >= 0 && !this.phraseFailed.has(n.p)) {
       const h = (this.phraseHits.get(n.p) || 0) + 1;
@@ -261,6 +296,7 @@ export class Player {
   miss(n) {
     n.missed = n.judged = true;
     if (n.group && n.group.notes.every((x) => x.judged)) n.group.judged = true;
+    if (n.group?.judged && !n.group.notes.some((x) => x.hit)) this.live?.miss(n.group.k);
     if (n.sus) n.sus.dead = true;
     this.stats.miss++;
     this.s.boss?.miss(this);
@@ -269,7 +305,7 @@ export class Player {
       this.hud.callout('SHIELD!', '#2fd3ff');
     } else this.streak = 0;
     this._updateMult();
-    this.rock = Math.max(0, this.rock - MISS_PENALTY[this.diff] * (1 - this.gear.crowd));
+    this.rock = Math.max(0, this.rock - MISS_PENALTY[this.diff] * (1 - this.gear.crowd) * (this.rules.sudden ? 3 : 1));
     if (n.p >= 0) this.phraseFailed.add(n.p);
     this.audible = false;
     const now = performance.now();
@@ -285,6 +321,48 @@ export class Player {
     if (this.rock <= 0 && !this.rules.noFail) this.fail();
   }
 
+  /** This part's solo starts (session, from the song's sections): count what's hit until it ends. */
+  startSolo(sec) {
+    this.solo = { sec, hits: 0, total: this.notes.filter((n) => n.t >= sec.start && n.t < sec.end).length };
+  }
+
+  /** The solo is over: its share of notes hit (null when it had none). */
+  endSolo() {
+    const s = this.solo;
+    this.solo = null;
+    if (!s?.total) return null;
+    const pct = s.hits / s.total;
+    this.solos.push({ name: s.sec.name, pct, total: s.total });
+    return pct;
+  }
+
+  /**
+   * Freestyle solo input: tap mode plays a fret as it's pressed, strum mode plays the held frets on a strum (and a
+   * fret pressed while a note rings, like a hammer-on). Every played note is kept for the grade.
+   */
+  _freestyleInput(ev, t) {
+    const fs = this.sampler, w = this.free;
+    if (!fs) return;
+    const play = (lane) => {
+      if (!fs.noteOn(lane)) return;
+      w.presses.push({ t, lane });
+      this.highway.hitFx(lane, 'great');
+      this.rumble(0, 70, 35);
+    };
+    if (ev.type === 'release') { fs.noteOff(ev.lane); return; }
+    if (ev.type === 'strum') { const held = [0, 1, 2, 3, 4].filter((l) => this.rawHeld(l)); held.forEach(play); return; }
+    if (ev.type === 'press' && (!this.strum || fs.voices.size)) play(ev.lane);
+  }
+
+  /** Big rock ending: every hit in the ring-out after the last note fires up the stage. */
+  frenzy(lane) {
+    if (this.breHits >= 120) return;
+    this.breHits++;
+    this.highway?.hitFx(lane, 'perfect');
+    this.rumble(80, 170, 60);
+    if (this.breHits % 4 === 0) this.s.stage.pyro(settings.calmVisuals ? 0.15 : 0.3);
+  }
+
   _updateMult() {
     this.mult = Math.min(this.maxMult, 1 + Math.floor(this.streak / (this.gear.multStep || 10)));
   }
@@ -298,7 +376,7 @@ export class Player {
   }
 
   activateOD() {
-    if (this.odActive || this.od < 0.5 || this.failed) return;
+    if (this.odActive || this.od < 0.5 || this.failed || this.rules.noOD) return;
     this.odActive = true;
     this.odActivations++;
     this.engine.sfxOverdrive();
@@ -314,6 +392,7 @@ export class Player {
     this.failed = true;
     this.odActive = false;
     this.audible = false;
+    this.live?.quiet();
     for (const n of this.activeSus) this._endSustain(n, false);
     this.hud.setFailed(true);
     this.s.onPlayerFailed(this);
@@ -369,6 +448,20 @@ export class Player {
       : [Trigger.weapon(2, 5, ds.scaleT(5)), Trigger.weapon(2, 5, ds.scaleT(5))];
     this.trigSus = [null, null];
     this.trigTemp = [null, null];
+    this._trigStr = null; // per-note tension (_noteTriggers) starts over
+  }
+
+  /** The triggers push back harder for the next note when it's a strong one (its charted strength s). */
+  _noteTriggers(t) {
+    const g = this.groups;
+    this._tp ||= 0;
+    while (this._tp < g.length && (g[this._tp].judged || g[this._tp].t < t - this.win.good)) this._tp++;
+    const s = g[this._tp] ? Math.max(...g[this._tp].notes.map((n) => n.s ?? 0.8)) : 0.8;
+    const str = Math.round(3 + Math.min(1.25, s) * 4) + (this.drums ? 1 : 0);
+    if (str === this._trigStr) return;
+    this._trigStr = str;
+    const fx = this.drums ? Trigger.weapon(3, 6, this.ds.scaleT(str)) : Trigger.weapon(2, 5, this.ds.scaleT(str));
+    this.trigBase = [fx, fx];
   }
 
   _setSusTrigger(n, on) {
@@ -390,6 +483,10 @@ export class Player {
     if (completed) n.sus.done = true; else n.sus.dead = true;
     this.activeSus.delete(n);
     this._setSusTrigger(n, false);
+    // live notes: a sustain held to its end rings on unbent; let go of too soon, it stops
+    if (this.live && ![...this.activeSus].some((x) => x.group === n.group)) {
+      if (completed) this.live.bend(n.group.k, 0); else this.live.release(n.group.k);
+    }
   }
 
   applyDs(now, beatHit, beatFrac) {
@@ -422,6 +519,8 @@ export class Player {
     const now = performance.now();
     this._bl = bl;
     if (!frame.finished && !this.failed) {
+      this.live?.update();
+      if (this.free) this.sampler?.bend(this.whammy());
       for (let lane = 0; lane < 5; lane++) {
         const list = this.laneNotes[lane];
         let p = this.ptr[lane];
@@ -437,6 +536,7 @@ export class Player {
         this._susScore(n, Math.min(t, n.t + n.len));
         if (t >= n.t + n.len) { this._endSustain(n, true); continue; }
         this.highway.sustainSparks(n.lane);
+        this.live?.bend(n.group.k, whammy);
         if (n.p >= 0 && !this.phraseFailed.has(n.p) && whammy > 0.25) this.od = Math.min(1, this.od + dt * 0.035);
         if (this.dsOwner && now - this.lastSusRumble > 45) { this.rumble(0, 40 + whammy * 60, 60); this.lastSusRumble = now; }
       }
@@ -446,13 +546,13 @@ export class Player {
       }
     }
     this.onFire = !this.failed && this.mult >= this.maxMult;
-    if (this.dsOwner && !frame.finished) this.applyDs(now, frame.beatHit, frame.beatFrac);
+    if (this.dsOwner && !frame.finished) { this._noteTriggers(t); this.applyDs(now, frame.beatHit, frame.beatFrac); }
 
     const held = [0, 1, 2, 3, 4].map((l) => this.isHeld(l));
     this.highway.update(t, dt, {
       notes: this.notes, beats: frame.beats, downbeat: frame.downbeat, held, od: this.odActive,
       odReady: !this.odActive && this.od >= 0.5, onFire: this.onFire, failed: this.failed,
-      danger: this.rock < 0.25 ? 1 : 0, whammy: this.whammy(), beatHit: frame.beatHit,
+      danger: this.rock < 0.25 ? 1 : 0, whammy: this.whammy(), beatHit: frame.beatHit, fillReady: this.drums && this.od >= 0.5 && !this.odActive,
       mult: this.mult, maxMult: this.maxMult, streak: this.streak,
       odPhraseAlive: (p) => !this.phraseFailed.has(p), cameraShake: settings.cameraShake && !settings.calmVisuals,
     });
@@ -478,11 +578,18 @@ export class Player {
     const th = [0.2, 0.5, 1.0, 1.7, 2.5].map((x) => x * k);
     const stars = this.failed ? 0 : th.filter((x) => ratio >= x).length;
     const gold = !this.failed && ratio >= 3.4 * k;
+    // solos and the big rock ending pay cash (the score stays comparable on the boards)
+    const soloCash = this.solos.reduce((s, x) => s + Math.round(x.total * x.pct * x.pct * 1.5), 0)
+      + this.freestyle.reduce((s, w) => s + Math.round(w.removed * (w.grade || 0) * 1.5), 0);
+    const breCash = this.failed ? 0 : Math.min(60, this.breHits);
     return {
       index: this.index, name: this.cfg.name, color: this.cfg.color || PLAYER_COLORS[this.index], device: this.cfg.device, profileId: this.cfg.profileId || null,
       instrument: this.inst, difficulty: this.diff, score: Math.floor(this.score), stars, gold, accuracy, hits, total,
       maxStreak: this.maxStreak, ...this.stats, odActivations: this.odActivations, failed: this.failed, strum: this.strum, assist: this.assisted, pro: !!this.rules.pro,
       gear: changesPlay(this.gear), cashBonus: this.gear.cash || 0,
+      solos: this.solos.map((x) => ({ name: x.name, pct: +x.pct.toFixed(3) })), breHits: this.breHits, eventCash: soloCash + breCash,
+      run: !!this.cfg.run,
+      freestyle: this.freestyle.length ? this.freestyle.map((w) => ({ name: w.name, grade: +(w.grade || 0).toFixed(3) })) : null,
     };
   }
 }
