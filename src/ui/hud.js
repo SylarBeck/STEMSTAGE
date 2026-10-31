@@ -77,6 +77,8 @@ export class Hud extends HudBase {
     st.setProperty('--trk-l', `${(a.l * k).toFixed(1)}px`);
     st.setProperty('--trk-r', `${(a.r * k).toFixed(1)}px`);
     st.setProperty('--trk-y', `${(a.y * k).toFixed(1)}px`);
+    // the score column sits left of the highway: on a narrow window (4:3) it shrinks instead of running off the edge
+    st.setProperty('--hud-fit', Math.max(0.55, Math.min(1, (a.l * k - 34 - 12) / 200)).toFixed(3));
   }
 
   frame(dt, s) {
@@ -124,6 +126,30 @@ export class Hud extends HudBase {
     const d = el.querySelector('.hg-delta');
     d.innerHTML = `${fa(g.delta >= 0 ? 'caret-up' : 'caret-down')} ${Math.abs(g.delta).toLocaleString()}`;
     d.className = `hg-delta ${g.delta >= 0 ? 'ahead' : 'behind'}`;
+  }
+
+  /**
+   * Solo counter under the song title while this part's solo plays (null hides it).
+   * s: { name, value, pct } — value: what's shown big ("12/20", "18 notes"), pct 0..1.
+   */
+  solo(s) {
+    let el = document.getElementById('hud-solo');
+    if (!s) { if (el) el.hidden = true; this.cache.solo = null; return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'hud-solo';
+      el.className = 'hud-solo';
+      el.innerHTML = '<span class="hs-name"></span><b class="hs-count"></b><em class="hs-pct"></em>';
+      this.root.querySelector('.hud-top').appendChild(el); // under the progress bar: the left column is full
+    }
+    el.hidden = false;
+    const pct = Math.round((s.pct || 0) * 100);
+    const key = `${s.name}|${s.value}|${pct}`;
+    if (this.cache.solo === key) return;
+    this.cache.solo = key;
+    el.querySelector('.hs-name').innerHTML = `${fa('guitar')} ${escapeHtml(s.name)}`;
+    el.querySelector('.hs-count').textContent = s.value;
+    el.querySelector('.hs-pct').textContent = `${pct}%`;
   }
 
   // ---------------------------------------------------------------- world bosses (game/boss.js)

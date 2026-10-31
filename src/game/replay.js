@@ -71,8 +71,10 @@ export function ghostAt(timeline, t) {
 /** The rules that change judgement; a replay is played back under the rules it was recorded with. */
 export const currentRules = () => (settings.proMode
   // Pro: tight timing windows, overstrums break the streak, and no assists or no-fail
-  ? { pro: true, ghostPenalty: true, noFail: false, laneAssist: 'off', autoSustain: false }
+  ? { pro: true, ghostPenalty: true, noFail: false, laneAssist: 'off', autoSustain: false, fills: true }
   : {
+    fills: true, // v3: drum fills at section changes launch overdrive (older replays play back without them)
+    freestyle: !!settings.freestyle, // v3: guitar / keys solos are improvised (game/player.js)
     ghostPenalty: !!settings.ghostPenalty, noFail: !!settings.noFail,
     laneAssist: settings.laneAssist || 'off', autoSustain: !!settings.autoSustain, // accessibility assists
   });

@@ -1,6 +1,7 @@
 // Playback engine: sample-accurate song clock, player stem vs band mix, miss muffling, crowd bed and SFX.
 import { settings, onSettingsChange } from '../settings.js';
 import { EQ_FREQUENCIES, equalizerGains } from './equalizer.js';
+import { LiveStem } from './live-notes.js';
 
 export const STEM_RATE = 44100;
 export const STEM_FOR = { guitar: 'guitar', bass: 'bass', drums: 'drums', keys: 'keys', vocals: 'vocals' };
@@ -20,6 +21,42 @@ function noiseBuffer(ctx, seconds, color = 'white') {
     }
   }
   return buf;
+}
+
+const ENV_HOP = 1024; // ~23 ms
+
+/**
+ * Loudness envelopes of the song's stems (and the kick: the drums under ~150 Hz) for the visuals, each scaled so its
+ * loud parts (95th percentile) sit at 1. pcm: { name: Int16Array of L then R }.
+ */
+function stemEnvelopes(stems, n) {
+  const frames = Math.max(1, Math.floor(n / ENV_HOP));
+  const out = { frames };
+  const norm = (e) => {
+    const sorted = Float32Array.from(e).sort();
+    const p = sorted[Math.floor(sorted.length * 0.95)] || 1;
+    for (let f = 0; f < e.length; f++) e[f] = Math.min(1.5, e[f] / p);
+    return e;
+  };
+  const a = 1 - Math.exp((-2 * Math.PI * 150 * 2) / STEM_RATE); // one-pole low-pass on every 2nd sample
+  for (const [name, pcm] of Object.entries(stems || {})) {
+    if (!pcm?.length) continue;
+    const e = new Float32Array(frames), kick = name === 'drums' ? new Float32Array(frames) : null;
+    let lp = 0;
+    for (let f = 0; f < frames; f++) {
+      let s = 0, k = 0;
+      for (let i = f * ENV_HOP, end = i + ENV_HOP; i < end; i += 2) {
+        const x = (pcm[i] + pcm[n + i]) / 65536;
+        s += x * x;
+        if (kick) { lp += a * (x - lp); k += lp * lp; }
+      }
+      e[f] = Math.sqrt(s / (ENV_HOP / 2));
+      if (kick) kick[f] = Math.sqrt(k / (ENV_HOP / 2));
+    }
+    out[name] = norm(e);
+    if (kick) out.kick = norm(kick);
+  }
+  return out;
 }
 
 export class AudioEngine {
@@ -51,6 +88,7 @@ export class AudioEngine {
     this.bandGain.connect(this.master);
     this.playerGain.connect(this.master);
     this.stemChains = new Map();
+    this.live = new Map();
     this.sfxGain.connect(this.master);
     this.crowdGain.connect(this.master);
 
@@ -89,6 +127,7 @@ export class AudioEngine {
     this.stop();
     for (const ch of this.stemChains.values()) { ch.filter.disconnect(); ch.mute.disconnect(); }
     this.stemChains.clear();
+    this.live.clear();
     const n = song.length;
     const ctx = this.ctx;
     const played = new Set(instruments.map((i) => STEM_FOR[i]));
@@ -112,6 +151,16 @@ export class AudioEngine {
     this.duration = n / STEM_RATE;
     this.pausedSongTime = 0;
     this.rate = 1;
+    this.envelopes = stemEnvelopes(audio.stems, n);
+  }
+
+  /** How loud each stem is at song time t, 0..~1 (each against its own loud parts), plus the kick (drums < 150 Hz). */
+  stemLevels(t = this.songTime) {
+    const E = this.envelopes;
+    if (!E) return null;
+    const i = Math.max(0, Math.min(E.frames - 1, Math.floor((t * STEM_RATE) / ENV_HOP)));
+    const at = (name) => E[name]?.[i] || 0;
+    return { kick: at('kick'), drums: at('drums'), bass: at('bass'), guitar: at('guitar'), keys: at('keys'), vocals: at('vocals') };
   }
 
   /** Practice mode: replace every playback buffer with a pitch-preserving time-stretched copy. */
@@ -127,6 +176,18 @@ export class AudioEngine {
       nb.copyToChannel(out.R, 1);
       this.buffers[keys[i]] = nb;
     }
+  }
+
+  /**
+   * Live notes: from now on this stem plays only the slices its player hits (audio/live-notes.js). Call after
+   * stretchTo, with the song times of the player's chord groups (see LiveStem).
+   */
+  liveStem(stem, times, sustained, onsets, cuts) {
+    const ch = this.stemChains.get(stem);
+    if (!ch || !this.buffers?.[stem]) return null;
+    const live = new LiveStem(this, this.buffers[stem], ch.filter, times, sustained, onsets, cuts);
+    this.live.set(stem, live);
+    return live;
   }
 
   /** One four-channel USB output per local player: front-right = speaker, rear pair = voice-coil haptics. */
@@ -254,6 +315,7 @@ export class AudioEngine {
     const when = Math.max(now, this.startCtx);
     const offset = Math.max(0, fromTime) / rate;
     for (const [key, buf] of Object.entries(this.buffers)) {
+      if (this.live.has(key)) { this.live.get(key).start(when, offset); continue; }
       const src = ctx.createBufferSource();
       src.buffer = buf;
       src.connect(key === 'band' ? this.bandGain : this.stemChains.get(key).filter);
@@ -306,6 +368,7 @@ export class AudioEngine {
   stopSources() {
     for (const s of this.sources) { try { s.stop(); } catch { /* already stopped */ } s.disconnect(); }
     this.sources = [];
+    for (const live of this.live.values()) live.stop();
     for (const output of this.controllerOutputs) { try { output.source?.stop(); } catch { /* already stopped */ } output.source?.disconnect(); output.source = null; }
   }
 
@@ -325,14 +388,16 @@ export class AudioEngine {
     this._fadeTimer = setTimeout(() => { this.stop(); this.applyVolumes(); }, seconds * 1000);
   }
 
-  /** Muffle + duck a played stem while its player(s) are missing. */
+  /** Muffle + duck a played stem while its player(s) are missing (a live stem silences its own misses). */
   setStemAudible(stem, on, instant = false) {
     const ch = this.stemChains.get(stem);
     if (!ch) return;
     const t = this.ctx.currentTime;
     const tc = instant ? 0.001 : on ? 0.02 : 0.05;
-    ch.mute.gain.setTargetAtTime(on ? 1 : 0.1, t, tc);
-    ch.filter.frequency.setTargetAtTime(on ? 20000 : 650, t, tc);
+    if (!this.live.has(stem)) {
+      ch.mute.gain.setTargetAtTime(on ? 1 : 0.1, t, tc);
+      ch.filter.frequency.setTargetAtTime(on ? 20000 : 650, t, tc);
+    }
     for (const output of this.controllerOutputs) if (output.stem === stem) output.level.gain.setTargetAtTime(on ? 1 : 0.1, output.ctx.currentTime, tc);
   }
 

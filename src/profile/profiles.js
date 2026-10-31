@@ -242,7 +242,7 @@ class Profiles {
         songId: song.id, songTitle: song.title, songArtist: song.artist, instrument: r.instrument, difficulty: r.difficulty,
         score: r.score, stars: r.stars, gold: !!r.gold, accuracy: +r.accuracy.toFixed(4), maxStreak: r.maxStreak,
         hits: r.hits, total: r.total, miss: r.miss, fc, failed: !!r.failed, od: r.odActivations || 0, mode, assist: !!r.assist, real: r.real || null, pro: !!r.pro,
-        seconds: Math.round(song.duration || 0), date: Date.now(), gear: !!r.gear,
+        seconds: Math.round(song.duration || 0), date: Date.now(), gear: !!r.gear, freestyle: !!r.freestyle,
         boss: boss?.outcome ? { id: boss.id, outcome: boss.outcome } : null,
       };
       entries.push(entry);
@@ -270,7 +270,7 @@ class Profiles {
       if (mode === 'online') this._unlock(p, 'online_play', fresh);
       if (mode === 'online' && onlineWinnerId && r.onlineId === onlineWinnerId) this._unlock(p, 'online_win', fresh);
       // cash for the run, plus the boss's bounty (more the first time)
-      let cash = Math.round(cashForRun({ ...r, miss: r.miss }) * (1 + (r.cashBonus || 0)));
+      let cash = Math.round(cashForRun({ ...r, miss: r.miss }) * (1 + (r.cashBonus || 0))) + Math.max(0, Math.round(r.eventCash || 0));
       let bossWin = null;
       if (boss?.outcome === 'defeated') {
         const rec = recordBoss(p, boss.id, boss);

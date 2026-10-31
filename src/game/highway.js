@@ -951,7 +951,7 @@ export class Highway {
         const z = -(n.t - t) * speed * warpK;
         const tailEnd = n.len > 0 ? -(n.t + n.len - t) * speed * warpK : z;
         const swayX = this.sway ? this.sway * Math.sin(z * 0.22 + this.time * 2.6) * Math.min(1, -z / 12) : 0;
-        const odNote = n.p >= 0 && st.odPhraseAlive?.(n.p);
+        const odNote = (n.p >= 0 && st.odPhraseAlive?.(n.p)) || (n.fill && st.fillReady);
         // sustain tail
         if (n.len > 0 && !n.sus?.done && si < MAX_SUS && tailEnd < 0.5) {
           const m = this.sustains[si++];

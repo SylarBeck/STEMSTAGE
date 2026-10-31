@@ -50,6 +50,7 @@
         <nav class="menu-main">
           <button class="menu-item big" data-nav data-action="solo" data-hero="play"><b>Play</b><em>Pick a song and an instrument</em></button>
           <button class="menu-item big" data-nav data-action="tour" data-hero="tour"><b>Tour</b><em>Gigs, stars and daily challenges</em></button>
+          <button class="menu-item big" data-nav data-action="runs" data-hero="runs"><b>Runs</b><em>A different night every time</em></button>
           <button class="menu-item big" data-nav data-action="band" data-hero="band"><b>Band</b><em>Local multiplayer · up to 4 players</em></button>
           <button class="menu-item big" data-nav data-action="creator" data-hero="creator"><b>Backstage</b><em>Dress your character, build your instruments</em></button>
           <button class="menu-item big" data-nav data-action="online" data-hero="online"><b>Online</b><em>Play with friends anywhere</em></button>
@@ -58,6 +59,7 @@
         <nav class="menu-sub">
           <button class="menu-item" data-nav data-action="setlists" data-hero="setlists"><b>Setlists</b></button>
           <button class="menu-item" data-nav data-action="career" data-hero="career"><b>Career</b></button>
+          <button class="menu-item" data-nav data-action="discover" data-hero="discover"><b>Discover</b></button>
           <button class="menu-item" data-nav data-action="leaderboard" data-hero="leaderboard"><b>Leaderboards</b></button>
           <button class="menu-item" data-nav data-action="chartlib" data-hero="chartlib"><b>Chart library</b></button>
           <button class="menu-item" data-nav data-action="stream" data-hero="stream"><b>Stream</b></button>
@@ -334,6 +336,7 @@
         <h1>Practice</h1>
         <p class="small-note" id="pr-song"></p>
         <div class="picker" data-nav data-picker="pr-speed"><label>Speed (pitch preserved)</label><div class="picker-options" id="pr-speed"></div></div>
+        <div class="picker" data-nav data-picker="pr-section"><label>Section</label><div class="pr-section"><button class="pr-step" data-step="-1" tabindex="-1" aria-label="Previous section"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><b id="pr-section-label">Intro</b><button class="pr-step" data-step="1" tabindex="-1" aria-label="Next section"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div></div>
         <div class="picker" data-nav data-picker="pr-start"><label>Start at</label><div class="pr-start"><input type="range" id="pr-start-range" min="0" max="95" step="1" value="0" tabindex="-1" /><b id="pr-start-label">0:00</b></div></div>
         <p class="small-note">No fail · nothing saved</p>
         <div class="btn-row"><button class="nav-btn primary" data-nav data-action="pr-go">Start practice</button><button class="nav-btn" data-nav data-action="pr-cancel">Cancel</button></div>
@@ -444,6 +447,18 @@
       <div class="tour" id="tour"></div>
     </section>
 
+    <!-- RUNS (v3: roguelike setlists) -->
+    <section class="screen" id="screen-runs">
+      <div class="screen-title"><h1>Runs</h1><p>Eight floors of your own songs · three hearts</p></div>
+      <div class="runs" id="runs"></div>
+    </section>
+
+    <!-- DISCOVER (v3: the library brain) -->
+    <section class="screen" id="screen-discover">
+      <div class="screen-title"><h1>Discover</h1><p>Your library, thinking</p></div>
+      <div class="discover" id="discover"></div>
+    </section>
+
     <!-- SETLISTS -->
     <section class="screen" id="screen-setlists">
       <div class="screen-title"><h1>Setlists</h1><p>Play songs back to back as a marathon</p></div>
@@ -475,11 +490,13 @@
         <div class="res-verdict" id="res-verdict" hidden></div>
         <div class="res-boss" id="res-boss" hidden></div>
         <div class="res-grid" id="res-grid"></div>
+        <div class="res-events" id="res-events"></div>
         <div class="res-players" id="res-players"></div>
         <div class="res-progress" id="res-progress"></div>
         <div class="btn-row center">
           <button class="nav-btn primary" data-nav data-action="retry">Play again</button>
           <button class="nav-btn primary" data-nav data-action="ol-rematch" id="res-rematch" hidden>Rematch</button>
+          <button class="nav-btn primary" data-nav data-action="run-continue" id="res-run" hidden>Continue run</button>
           <button class="nav-btn" data-nav data-action="watch-replay">Watch replay</button>
           <button class="nav-btn" data-nav data-action="library">Setlist</button>
         </div>

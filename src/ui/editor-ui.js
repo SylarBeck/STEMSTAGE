@@ -49,7 +49,8 @@ export function installEditor(ui) {
     loop();
   }
 
-  const clean = (n) => ({ t: n.t, lane: n.lane, len: n.len || 0, m: n.m ?? 60, s: n.s ?? 1, p: n.p ?? -1, q: n.q });
+  // o (the note's onset in the stem, for live notes) stays: the editor adds and deletes notes but never moves one
+  const clean = (n) => ({ t: n.t, lane: n.lane, len: n.len || 0, m: n.m ?? 60, s: n.s ?? 1, p: n.p ?? -1, q: n.q, ...(n.o != null ? { o: n.o } : {}) });
 
   function close() {
     stop();
