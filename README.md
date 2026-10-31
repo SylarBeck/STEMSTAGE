@@ -29,6 +29,19 @@
   <img src="docs/screenshots/controllers.png" width="49%" alt="Controllers hub with a DualSense" />
 </p>
 
+## New in 3.0
+
+- **Live notes**: your part sounds note by note as you hit it. Early and late hits sound early and late, a missed note goes quiet while the one before it rings out, a sustain stops when you let go, and the whammy bends the real audio. The stem is cut at each note's real attack (`src/audio/live-notes.js`). Settings → Audio → Live notes.
+- **Song sections**: intro, verses, choruses and solos are worked out from the charts of any song (`src/game/sections.js`). Solos get a counter and a bonus, drum fills at a new section launch overdrive, songs that ring out end with a big rock ending, and Practice starts at any section.
+- **Freestyle solos** (Settings → Gameplay): a guitar or keys solo drops its notes and you improvise with the stem's own notes, in the song's key, graded on groove, flow and melody.
+- **Runs**: a roguelike climb through eight floors of your own songs to a headliner: hearts, perks, curses, the merch stand, a daily run.
+- **Discover**: smart setlists from your library and plays, "because you play…" suggestions with YouTube import, and your stats.
+- **Graphics**: stage-light reflections (High, Ultra), key-light shadows (Ultra), and each stem moves the stage.
+- **Feel the band**: kick and bass in the controller's rumble, trigger tension per note.
+- **Tighter charts**: notes snap to the coarsest grid step within 20 ms of their sound, and keep their real onset.
+
+Bonuses pay cash and XP only, so scores stay comparable; freestyle and Runs results aren't ranked. Online play needs everyone on 3.0.
+
 ## New in 2.0.1
 
 - **Real people on stage** — every band member is a fully rigged MakeHuman person (made with MPFB in Blender: `tools/mpfb/build_band.py`): two body types, four face shapes, three builds, three heights, ten hair styles, beards, and real clothes (tees, long sleeves, shirts, blouses, jackets, suits, jeans, skirts, overalls, six kinds of shoes) in any colour. Covered skin is never drawn, so nothing clips; every look always wears a top, bottoms and shoes.
