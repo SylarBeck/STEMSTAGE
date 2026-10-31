@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- only this site's scripts, the leaderboard API and the fonts / icons it loads (a page can't be made to load or send anything else) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self' https://api.stemstage.varconstint.com https://api.github.com http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>STEMSTAGE Player</title>
+  <meta name="description" content="A STEMSTAGE player's level, achievements, stats and world records." />
+  <meta property="og:title" content="🎸 My STEMSTAGE profile" />
+  <meta property="og:description" content="Level, rank, achievements, stats and world records in STEMSTAGE, the rhythm game that plays any song." />
+  <meta property="og:image" content="https://stemstage.varconstint.com/img/hero.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#0b0a09" />
+  <link rel="icon" href="../img/favicon.png" />
+  <link rel="apple-touch-icon" href="../img/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,800&family=Big+Shoulders+Stencil+Display:wght@900&family=Permanent+Marker&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <link rel="stylesheet" href="../css/site.css" />
+  <style>
+    :root { --pc: #e2432f; }
+    main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; padding-top: 30px; padding-bottom: 64px; }
+    @media (min-width: 720px) { main { padding-top: 48px; gap: 26px; } }
+    /* the profile head is a laminated backstage pass */
+    .pass { position: relative; display: grid; gap: 18px; justify-items: center; text-align: center; padding: 40px 20px 24px; border-top: 16px solid var(--pc); }
+    .pass::before { content: ''; position: absolute; top: 8px; left: 50%; width: 54px; height: 11px; margin-left: -27px; border-radius: 6px; background: var(--bg); }
+    .pass::after { content: 'Backstage'; position: absolute; top: 22px; left: 0; right: 0; text-align: center; font-weight: 800; font-size: 12px; letter-spacing: 0.4em; text-transform: uppercase; color: #8a8171; }
+    .avatar { width: 112px; height: 112px; border-radius: 50%; flex: none; display: grid; place-items: center; font: 44px var(--display); color: var(--dark); background: var(--pc); object-fit: cover; box-shadow: 0 0 0 4px #f5f1e6, 0 6px 14px rgba(0,0,0,0.3); margin-top: 8px; }
+    .who { min-width: 0; width: 100%; }
+    .who h1 { font-family: var(--display); text-transform: uppercase; font-size: clamp(38px, 10vw, 60px); line-height: 1; overflow-wrap: anywhere; }
+    .who .scrawl { color: #a1321f; font-size: 21px; margin-top: 8px; }
+    .xp { height: 9px; background: rgba(21, 18, 14, 0.14); margin: 14px auto 6px; max-width: 420px; overflow: hidden; }
+    .xp div { height: 100%; background: #b3261b; }
+    .who small { color: #5b5346; font-size: 16px; font-weight: 600; }
+    .you { display: inline-flex; align-items: center; gap: 6px; margin: 10px 0 0; padding: 2px 10px; background: var(--discord); color: #fff; font: 800 14px var(--body); letter-spacing: 0.08em; text-transform: uppercase; vertical-align: middle; }
+    .pass .btn-row { justify-content: center; width: 100%; }
+    .pass .btn { border-color: rgba(21, 18, 14, 0.4); color: var(--dark); flex: 1 1 200px; }
+    .pass .btn.primary { color: #fff5ea; border-color: var(--red); }
+    @media (min-width: 720px) {
+      .pass { grid-template-columns: auto 1fr auto; justify-items: start; text-align: left; align-items: center; gap: 26px; padding: 42px 30px 28px; transform: rotate(-0.5deg); }
+      .xp { margin-left: 0; }
+      .pass .btn-row { flex-direction: column; width: auto; }
+      .pass .btn { flex: none; }
+    }
+    .panel h2 { font-family: var(--display); font-size: 28px; line-height: 1.05; text-transform: uppercase; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+    .panel h2 i { color: var(--gold); font-size: 22px; }
+    .count { margin-left: auto; color: var(--dim); font: 700 17px var(--body); }
+    .grid2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
+    @media (min-width: 900px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+    .achs { display: grid; gap: 8px; }
+    @media (min-width: 560px) { .achs { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1000px) { .achs { grid-template-columns: repeat(3, 1fr); } }
+    .ach { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; padding: 10px 12px; background: rgba(40, 30, 10, 0.85); border-left: 5px solid var(--gold); }
+    .ach i { font-size: 20px; color: var(--gold); text-align: center; }
+    .ach b { display: block; font-weight: 800; font-size: 18px; text-transform: uppercase; line-height: 1.15; }
+    .ach small { color: var(--dim); font-size: 15px; line-height: 1.25; display: block; }
+    .ach.locked { background: rgba(236, 229, 211, 0.04); border-left-color: var(--line-2); opacity: 0.5; }
+    .ach.locked i { color: var(--dim); }
+    .state { text-align: center; padding: 70px 16px; color: var(--dim); font-size: 20px; }
+    .since { text-align: center; color: var(--dim); margin: 0; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="wrap">
+      <a class="brand" href="../">STEMSTAGE</a>
+      <div class="links"><a href="../">Home</a><a href="../leaderboard/">Leaderboard</a><a href="https://github.com/SylarBeck/STEMSTAGE/wiki">Wiki</a></div>
+      <div class="right">
+        <a class="btn primary nav-dl" href="../#download"><i class="fa-solid fa-download"></i> Download</a>
+        <button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav-panel"><i class="fa-solid fa-bars"></i><span>Menu</span></button>
+      </div>
+    </div>
+    <div class="nav-panel" id="nav-panel">
+      <a href="../">Home</a>
+      <a href="../leaderboard/">Leaderboard</a>
+      <a href="../#screens">Screenshots</a>
+      <hr />
+      <a class="small" href="https://github.com/SylarBeck/STEMSTAGE/wiki"><i class="fa-solid fa-book"></i> Wiki</a>
+      <a class="btn primary block" href="../#download"><i class="fa-solid fa-download"></i> Download</a>
+    </div>
+  </nav>
+
+  <main class="wrap" id="main"><div class="state">Loading profile…</div></main>
+
+  <footer>
+    <div class="wrap">
+      <a class="brand" href="../">STEMSTAGE</a>
+      <div class="flinks"><a href="../leaderboard/">Leaderboard</a><a href="../#download">Download</a><a href="https://github.com/SylarBeck/STEMSTAGE">GitHub</a></div>
+    </div>
+  </footer>
+
+  <script src="../js/site.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    // ?api= points the page at a local copy of the API (npx wrangler dev) for testing; localhost only
+    const localApi = params.get('api');
+    const API = /^http:\/\/(127\.0\.0\.1|localhost):\d+\/v1$/.test(localApi || '') ? localApi : 'https://api.stemstage.varconstint.com/v1';
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const n = (v) => Number(v || 0).toLocaleString();
+    const stars = (k) => `<span class="stars">${'★'.repeat(Math.max(0, Math.min(5, k || 0)))}</span>`;
+    const hours = (s) => (s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m` : `${Math.floor(s / 60)}m`);
+    const INST = { guitar: 'fa-guitar', bass: 'fa-guitar', drums: 'fa-drum', keys: 'fa-music', vocals: 'fa-microphone' };
+    const main = document.getElementById('main');
+    const id = params.get('id') || '';
+
+    if (!/^[\w-]{8,64}$/.test(id)) main.innerHTML = '<div class="state">This profile link is incomplete. Ask for the link again, or browse the <a href="../leaderboard/">leaderboard</a>.</div>';
+    else fetch(`${API}/player?id=${encodeURIComponent(id)}`).then((r) => r.json().then((j) => ({ ok: r.ok, j }))).then(({ ok, j }) => {
+      if (!ok) { main.innerHTML = `<div class="state">${j.error === 'no such player' ? 'No player with this link.' : 'The profile can\'t be loaded right now.'} See the <a href="../leaderboard/">leaderboard</a>.</div>`; return; }
+      const pr = j.profile || {};
+      const st = pr.stats || {};
+      const w = j.world || {};
+      document.title = `${j.name} · STEMSTAGE`;
+      if (/^#[0-9a-f]{6}$/i.test(pr.color || '')) document.documentElement.style.setProperty('--pc', pr.color);
+      const achs = pr.achievements || [];
+      const got = achs.filter((a) => a.at).sort((a, b) => b.at - a.at);
+      const locked = achs.filter((a) => !a.at);
+      const inst = Object.entries(pr.instruments || {}).sort((a, b) => b[1].plays - a[1].plays);
+      main.innerHTML = `
+        <section class="pass paper">
+          ${j.avatar ? `<img class="avatar" src="${esc(j.avatar.replace('size=64', 'size=256'))}" alt="">` : `<div class="avatar">${esc(String(j.name)[0]?.toUpperCase() || '?')}</div>`}
+          <div class="who">
+            <h1>${esc(j.name)}</h1>
+            <div class="scrawl">${pr.level ? `Level ${n(pr.level)} · ${esc(pr.rank || '')}` : 'STEMSTAGE player'}</div>
+            ${pr.level ? `<div class="xp"><div style="width:${Math.round((pr.progress || 0) * 100)}%"></div></div><small>${n(pr.xp)} XP${pr.favorite ? ` · plays <b>${esc(pr.favorite)}</b> the most` : ''}</small>` : ''}
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" id="copy" type="button"><i class="fa-solid fa-link"></i> Share profile</button>
+            <a class="btn" href="../#download"><i class="fa-solid fa-download"></i> Get STEMSTAGE</a>
+          </div>
+        </section>
+        <section class="sheet" aria-label="Stats">
+          <div class="gold"><b>${w.rank ? `#${n(w.rank)}` : '—'}</b><span>World rank</span></div>
+          <div class="gold"><b>${n(w.records)}</b><span>World records</span></div>
+          <div><b>${n(w.total)}</b><span>World score</span></div>
+          <div><b>${n(st.plays)}</b><span>Songs played</span></div>
+          <div><b>${n(st.songs)}</b><span>Different songs</span></div>
+          <div><b>${n(st.stars)}</b><span>Stars earned</span></div>
+          <div><b>${n(st.fcs)}</b><span>Full combos</span></div>
+          <div><b>${n(st.bestStreak)}</b><span>Best streak</span></div>
+          <div><b>${Math.round((st.accuracy || 0) * 100)}%</b><span>Avg accuracy</span></div>
+          <div><b>${hours(st.seconds || 0)}</b><span>Time played</span></div>
+          ${pr.versus ? `<div><b>${n(pr.versus.wins)}–${n(pr.versus.losses)}${pr.versus.draws ? `–${n(pr.versus.draws)}` : ''}</b><span>Versus W–L</span></div>` : ''}
+        </section>
+        <div class="grid2">
+          <section class="panel"><h2><i class="fa-solid fa-trophy"></i> Best world runs</h2><table class="table">
+            <tr><th>Song</th><th class="wide-only">Part</th><th class="num">Score</th><th class="wide-only">Stars</th></tr>
+            ${(j.best || []).map((r) => {
+              const part = `<i class="fa-solid ${INST[r.instrument] || 'fa-music'}"></i> ${esc(r.instrument)} · ${esc(r.difficulty)}`;
+              const st5 = `${stars(r.stars)}${r.fc ? '<i class="fa-solid fa-gem gem" title="Full combo"></i>' : ''}`;
+              return `<tr><td>${esc(r.song.title)}${r.ranked ? '<span class="stamp mini">Ranked</span>' : ''}<small>${esc(r.song.artist || '')}</small><small class="narrow-only">${part}</small></td><td class="wide-only" style="white-space:nowrap">${part}</td>
+              <td class="num"><a href="../leaderboard/?${new URLSearchParams({ song: r.song.key, inst: r.instrument, diff: r.difficulty, ...(r.chart && !r.ranked ? { chart: r.chart } : {}) })}">${n(r.score)}</a><small class="narrow-only">${st5}</small></td><td class="wide-only">${st5}</td></tr>`;
+            }).join('') || '<tr><td colspan="4" class="muted">No world runs yet.</td></tr>'}
+          </table></section>
+          <section class="panel"><h2><i class="fa-solid fa-guitar"></i> Instruments</h2><table class="table">
+            <tr><th>Part</th><th class="num">Plays</th><th class="num">Best</th><th class="num wide-only">Accuracy</th><th class="num">FCs</th></tr>
+            ${inst.map(([k, x]) => `<tr><td style="white-space:nowrap"><i class="fa-solid ${INST[k] || 'fa-music'}"></i> ${esc(k)}</td><td class="num">${n(x.plays)}</td><td class="num">${n(x.best)}</td><td class="num wide-only">${Math.round((x.accuracy || 0) * 100)}%</td><td class="num">${n(x.fcs)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No plays shared yet.</td></tr>'}
+          </table></section>
+        </div>
+        <section class="panel"><h2><i class="fa-solid fa-medal"></i> Achievements <span class="count">${got.length} / ${achs.length || '—'}</span></h2>
+          <div class="achs">
+            ${got.map((a) => `<div class="ach"><i class="fa-solid fa-${esc(a.icon)}"></i><div><b>${esc(a.name)}</b><small>${esc(a.desc)} · ${new Date(a.at).toLocaleDateString()}</small></div></div>`).join('')}
+            ${locked.map((a) => `<div class="ach locked"><i class="fa-solid fa-${esc(a.icon)}"></i><div><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div></div>`).join('')}
+            ${achs.length ? '' : '<p class="muted">Achievements appear once this player shares their profile from the game.</p>'}
+          </div>
+        </section>
+        <p class="since">Player since ${new Date((j.since || 0) * 1000).toLocaleDateString()}${j.updated ? ` · updated ${new Date(j.updated * 1000).toLocaleDateString()}` : ''}</p>`;
+      // logged in with Discord and this is one of your profiles
+      // (the profile can arrive before js/auth.js has loaded: then wait for its event)
+      const onMe = (fn) => (window.stemstageMe ? window.stemstageMe.then(fn) : document.addEventListener('stemstage:me', (e) => fn(e.detail), { once: true }));
+      onMe((me) => {
+        if (me?.players?.some((p) => p.playerId === id)) document.querySelector('.who h1').insertAdjacentHTML('afterend', '<span class="you"><i class="fa-brands fa-discord"></i> This is you</span>');
+      });
+      // share sheet on phones, copy the link elsewhere
+      const url = `https://stemstage.varconstint.com/player/?id=${encodeURIComponent(id)}`;
+      document.getElementById('copy').onclick = (e) => window.stemstageSend(e.currentTarget, url, `${j.name} on STEMSTAGE`);
+    }).catch(() => { main.innerHTML = '<div class="state">The profile can\'t be loaded right now. Try again in a moment.</div>'; });
+  </script>
+  <script src="../js/auth.js"></script>
+</body>
+</html>
